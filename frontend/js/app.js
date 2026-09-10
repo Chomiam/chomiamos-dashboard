@@ -273,7 +273,7 @@ async function loadGenerations() {
   try {
     const summary = await invoke("get_generations");
     if (!summary || !summary.generations) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--red); padding: 20px;">Impossible de charger les générations système</td></tr>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--red); padding: 20px;">Impossible de charger les générations système</td></tr>`;
       return;
     }
 
@@ -288,12 +288,18 @@ async function loadGenerations() {
     if (!tbody) return;
 
     if (summary.generations.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--subtext0); padding: 20px;">Aucune image de génération trouvée</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--subtext0); padding: 20px;">Aucune image de génération trouvée</td></tr>`;
       return;
     }
 
     tbody.innerHTML = summary.generations.map(g => `
-      <tr style="${g.current ? "background-color: rgba(166, 227, 161, 0.08); font-weight: 500;" : ""}">
+      <tr class="${g.current ? 'gen-row-active' : 'gen-row'}" data-gen-id="${g.id}" data-gen-current="${g.current}">
+        <td class="gen-checkbox-col">
+          ${g.current
+            ? '<input type="checkbox" disabled title="Impossible de sélectionner la génération active" class="gen-checkbox-disabled">'
+            : `<input type="checkbox" class="gen-checkbox" value="${g.id}" onchange="updateGenActionBar()" title="Sélectionner la génération #${g.id}">`
+          }
+        </td>
         <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">#${g.id}</td>
         <td>${g.date}</td>
         <td><span class="metric-tag" style="background: var(--surface0);">${g.nixos_version}</span></td>
@@ -305,9 +311,12 @@ async function loadGenerations() {
         </td>
       </tr>
     `).join("");
+
+    // Reset action bar on reload
+    updateGenActionBar();
   } catch (err) {
     console.error("Erreur générations:", err);
-    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--red); padding: 20px;">Erreur : ${err}</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--red); padding: 20px;">Erreur : ${err}</td></tr>`;
   }
 }
 
@@ -1317,8 +1326,108 @@ window.selectFormatFs = selectFormatFs;
 window.toggleFormatSubmitButton = toggleFormatSubmitButton;
 window.submitFormat = submitFormat;
 window.openFileManager = openFileManager;
+
+// ==========================================================================
+// 3b. Generations Selection & Management
+// ==========================================================================
+
+function getSelectedGenIds() {
+  return Array.from(document.querySelectorAll(".gen-checkbox:checked")).map(cb => parseInt(cb.value));
+}
+
+function updateGenActionBar() {
+  const selected = getSelectedGenIds();
+  const bar = document.getElementById("gen-action-bar");
+  const countEl = document.getElementById("gen-selected-count");
+  const switchBtn = document.getElementById("btn-gen-switch");
+  const selectAll = document.getElementById("gen-select-all");
+
+  if (!bar) return;
+
+  if (selected.length > 0) {
+    bar.classList.remove("hidden");
+    if (countEl) countEl.textContent = `${selected.length} sélectionnée${selected.length > 1 ? "s" : ""}`;
+
+    // Bouton "Rebooter" visible uniquement si 1 seule sélectionnée
+    if (switchBtn) {
+      if (selected.length === 1) {
+        switchBtn.classList.remove("hidden");
+        switchBtn.innerHTML = `<span class="btn-icon">🔄</span> Rebooter sur l'image #${selected[0]}`;
+      } else {
+        switchBtn.classList.add("hidden");
+      }
+    }
+  } else {
+    bar.classList.add("hidden");
+  }
+
+  // Update "select all" checkbox state
+  const allCheckboxes = document.querySelectorAll(".gen-checkbox");
+  const allChecked = allCheckboxes.length > 0 && Array.from(allCheckboxes).every(cb => cb.checked);
+  if (selectAll) selectAll.checked = allChecked;
+}
+
+function toggleSelectAllGens() {
+  const selectAll = document.getElementById("gen-select-all");
+  const checkboxes = document.querySelectorAll(".gen-checkbox");
+  checkboxes.forEach(cb => { cb.checked = selectAll.checked; });
+  updateGenActionBar();
+}
+
+function clearGenSelection() {
+  const checkboxes = document.querySelectorAll(".gen-checkbox");
+  checkboxes.forEach(cb => { cb.checked = false; });
+  const selectAll = document.getElementById("gen-select-all");
+  if (selectAll) selectAll.checked = false;
+  updateGenActionBar();
+}
+
+async function deleteSelectedGenerations() {
+  const ids = getSelectedGenIds();
+  if (ids.length === 0) return;
+
+  const plural = ids.length > 1 ? "s" : "";
+  const idsStr = ids.map(id => `#${id}`).join(", ");
+  if (!confirm(`Voulez-vous vraiment supprimer ${ids.length} génération${plural} ?\n\n${idsStr}\n\n⚠️ Cette action est irréversible.`)) {
+    return;
+  }
+
+  try {
+    const res = await invoke("delete_nix_generations", { ids });
+    alert(res || "Générations supprimées avec succès.");
+    clearGenSelection();
+    loadGenerations();
+  } catch (err) {
+    alert("Erreur lors de la suppression : " + err);
+  }
+}
+
+async function switchToSelectedGeneration() {
+  const ids = getSelectedGenIds();
+  if (ids.length !== 1) return;
+
+  const id = ids[0];
+  if (!confirm(`Voulez-vous rebooter sur la génération #${id} ?\n\nLa génération sera activée au prochain redémarrage du système.`)) {
+    return;
+  }
+
+  try {
+    const res = await invoke("switch_nix_generation", { id });
+    alert(res || `Génération #${id} activée pour le prochain reboot.`);
+    clearGenSelection();
+    loadGenerations();
+  } catch (err) {
+    alert("Erreur lors du changement de génération : " + err);
+  }
+}
+
 window.resetConfig = resetConfig;
 window.submitConfigDeploy = submitConfigDeploy;
+window.updateGenActionBar = updateGenActionBar;
+window.toggleSelectAllGens = toggleSelectAllGens;
+window.clearGenSelection = clearGenSelection;
+window.deleteSelectedGenerations = deleteSelectedGenerations;
+window.switchToSelectedGeneration = switchToSelectedGeneration;
 
 
 // ==========================================================================

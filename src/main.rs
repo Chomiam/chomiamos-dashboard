@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
 
 use config::{get_vars_path, read_vars_nix, save_vars_nix, ChomiamConfig};
-use generations::{list_generations, GenerationsSummary};
+use generations::{list_generations, delete_generations as do_delete_generations, switch_to_generation as do_switch_to_generation, GenerationsSummary};
 use pty::PtyManager;
 use system::{SystemCollector, SystemMetrics};
 
@@ -22,6 +22,16 @@ fn get_system_metrics(collector: State<'_, Arc<Mutex<SystemCollector>>>) -> Syst
 #[tauri::command]
 fn get_generations() -> Result<GenerationsSummary, String> {
     list_generations()
+}
+
+#[tauri::command]
+fn delete_nix_generations(ids: Vec<u32>) -> Result<String, String> {
+    do_delete_generations(ids)
+}
+
+#[tauri::command]
+fn switch_nix_generation(id: u32) -> Result<String, String> {
+    do_switch_to_generation(id)
 }
 
 #[tauri::command]
@@ -138,14 +148,10 @@ if [ "$DID_STASH" = "1" ]; then
   fi
 fi
 
-# 5. GARANTIE ABSOLUE : Vérifier et protéger le compte utilisateur et le matériel
+# 5. GARANTIE ABSOLUE : Préservation intégrale de vos paramètres personnels (vars.nix)
 if [ -f /etc/nixos/.vars.nix.backup ]; then
-  BACKUP_USER=$(grep -E 'username\s*=' /etc/nixos/.vars.nix.backup | head -n 1)
-  CURRENT_USER=$(grep -E 'username\s*=' /etc/nixos/vars.nix | head -n 1)
-  if [ -n "$BACKUP_USER" ] && [ "$BACKUP_USER" != "$CURRENT_USER" ]; then
-    echo -e "\033[1;33m⚠️ Détection d'un écrasement de votre compte utilisateur ! Restauration immédiate...\033[0m"
-    cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
-  fi
+  echo -e "\033[1;34m🛡️ Préservation de vos paramètres locaux et choix de bureau (vars.nix)...\033[0m"
+  cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
 fi
 
 # Détection de sécurité avancée : vérifier avec l'UID 1000 du système local
@@ -162,6 +168,15 @@ if [ -n "$REAL_USER" ] && [ "$REAL_USER" != "chomiam" ]; then
     fi
   fi
 fi
+
+# 6. FUSION INTELLIGENTE : injecter les nouvelles variables de vars-defaults.nix sans toucher à vos réglages
+echo -e "\n\033[1;35m✨ Synchronisation & fusion des variables système (vars-defaults.nix ➔ vars.nix)...\033[0m"
+if [ -f /etc/nixos/scripts/merge-vars.py ]; then
+  python3 /etc/nixos/scripts/merge-vars.py /etc/nixos/vars-defaults.nix /etc/nixos/vars.nix
+else
+  echo -e "\033[1;33mℹ️ Script merge-vars.py introuvable, fusion différée.\033[0m"
+fi
+git add vars.nix 2>/dev/null || true
 
 # Restauration automatique de hardware-configuration.nix si altéré
 if [ -f /etc/nixos/.hardware-configuration.nix.backup ]; then
@@ -349,6 +364,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_system_metrics,
             get_generations,
+            delete_nix_generations,
+            switch_nix_generation,
             get_chomiamos_config,
             save_chomiamos_config,
             start_terminal_task,

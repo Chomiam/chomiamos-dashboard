@@ -281,11 +281,30 @@
           </div>
         </div>
 
+        <!-- Barre d'actions contextuelle (masquée par défaut) -->
+        <div id="gen-action-bar" class="card gen-action-bar hidden">
+          <div class="gen-action-info">
+            <span id="gen-selected-count">0 sélectionnée(s)</span>
+          </div>
+          <div class="gen-action-buttons">
+            <button id="btn-gen-switch" class="btn btn-primary hidden" onclick="switchToSelectedGeneration()">
+              <span class="btn-icon">🔄</span> Rebooter sur cette image
+            </button>
+            <button class="btn btn-danger" onclick="deleteSelectedGenerations()">
+              <span class="btn-icon">🗑️</span> Supprimer la sélection
+            </button>
+            <button class="btn btn-outline" onclick="clearGenSelection()">
+              <span class="btn-icon">✕</span> Annuler
+            </button>
+          </div>
+        </div>
+
         <!-- Generations Table -->
         <div class="card table-card">
           <table class="generations-table">
             <thead>
               <tr>
+                <th class="gen-checkbox-col"><input type="checkbox" id="gen-select-all" onchange="toggleSelectAllGens()" title="Tout sélectionner"></th>
                 <th>Génération</th>
                 <th>Date de Création</th>
                 <th>Version NixOS</th>
@@ -294,7 +313,7 @@
               </tr>
             </thead>
             <tbody id="generations-tbody">
-              <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Chargement des générations...</td></tr>
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chargement des générations...</td></tr>
             </tbody>
           </table>
         </div>

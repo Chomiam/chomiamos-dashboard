@@ -1649,3 +1649,83 @@ body {
   background: var(--blue);
   color: #fff;
 }
+
+/* ==========================================================================
+   Generations Selection & Action Bar
+   ========================================================================== */
+
+/* Checkbox column */
+.gen-checkbox-col {
+  width: 40px;
+  text-align: center !important;
+  padding: 10px 8px !important;
+}
+
+.gen-checkbox,
+.gen-checkbox-disabled,
+#gen-select-all {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--mauve);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.gen-checkbox-disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+/* Active row highlight */
+.gen-row-active {
+  background-color: rgba(166, 227, 161, 0.08);
+  font-weight: 500;
+}
+
+/* Action bar */
+.gen-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.08), rgba(137, 180, 250, 0.06));
+  border: 1px solid rgba(203, 166, 247, 0.25);
+  animation: genBarSlideIn 0.2s ease-out;
+}
+
+.gen-action-bar.hidden {
+  display: none;
+}
+
+@keyframes genBarSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.gen-action-info {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mauve);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.gen-action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* Selected row visual feedback */
+.generations-table tr:has(.gen-checkbox:checked) {
+  background-color: rgba(203, 166, 247, 0.08) !important;
+}
+
+.generations-table tr:has(.gen-checkbox:checked):hover {
+  background-color: rgba(203, 166, 247, 0.14) !important;
+}

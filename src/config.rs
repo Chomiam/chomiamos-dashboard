@@ -166,84 +166,108 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Impossible de lire {}: {}", path.display(), e))?;
 
+    // Charger vars-defaults.nix en tant que schéma de référence fallback
+    let defaults_content = path.parent()
+        .map(|p| p.join("vars-defaults.nix"))
+        .and_then(|p| fs::read_to_string(p).ok());
+
+    let get_str = |key: &str| -> Option<String> {
+        extract_string_var(&content, key)
+            .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var(d, key)))
+    };
+    let get_bool = |key: &str, default_val: bool| -> bool {
+        extract_bool_var(&content, key)
+            .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var(d, key)))
+            .unwrap_or(default_val)
+    };
+    let get_bool_in_block = |block: &str, key: &str, default_val: bool| -> bool {
+        extract_bool_var_in_block(&content, block, key)
+            .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, block, key)))
+            .unwrap_or(default_val)
+    };
+
     let mut cfg = ChomiamConfig::default();
 
     // Preserve exact user block
     if let Some(user) = extract_user_block(&content) {
         cfg.user_block = user;
+    } else if let Some(ref d) = defaults_content {
+        if let Some(user) = extract_user_block(d) {
+            cfg.user_block = user;
+        }
     }
 
     // Hardware & system variables
-    if let Some(val) = extract_string_var(&content, "gpuDriver") {
+    if let Some(val) = get_str("gpuDriver") {
         cfg.gpu_driver = val;
     }
-    if let Some(val) = extract_string_var(&content, "hostName") {
+    if let Some(val) = get_str("hostName") {
         cfg.host_name = val;
     }
-    if let Some(val) = extract_string_var(&content, "timeZone") {
+    if let Some(val) = get_str("timeZone") {
         cfg.time_zone = val;
     }
-    if let Some(val) = extract_string_var(&content, "defaultLocale") {
+    if let Some(val) = get_str("defaultLocale") {
         cfg.default_locale = val;
     }
-    if let Some(val) = extract_string_var(&content, "stateVersion") {
+    if let Some(val) = get_str("stateVersion") {
         cfg.state_version = val;
     }
 
-    if let Some(val) = extract_string_var(&content, "browser") {
+    if let Some(val) = get_str("browser") {
         cfg.browser = val;
     }
-    if let Some(val) = extract_string_var(&content, "discordClient") {
+    if let Some(val) = get_str("discordClient") {
         cfg.discord_client = val;
     }
-    if let Some(val) = extract_string_var(&content, "desktopEnv") {
+    if let Some(val) = get_str("desktopEnv") {
         cfg.desktop_env = val;
     }
-    if let Some(val) = extract_string_var(&content, "davinciResolve") {
+    if let Some(val) = get_str("davinciResolve") {
         cfg.creation.davinci_resolve = val;
     }
 
     // Gaming
-    cfg.gaming.steam = extract_bool_var(&content, "steam").unwrap_or(true);
-    cfg.gaming.lutris = extract_bool_var(&content, "lutris").unwrap_or(true);
-    cfg.gaming.heroic = extract_bool_var(&content, "heroic").unwrap_or(true);
-    cfg.gaming.faugus = extract_bool_var(&content, "faugus").unwrap_or(true);
-    cfg.gaming.decky_loader = extract_bool_var(&content, "deckyLoader").unwrap_or(true);
-    cfg.gaming.geforce_now = extract_bool_var(&content, "geforceNow").unwrap_or(true);
-    cfg.gaming.steering_wheels = extract_bool_var(&content, "steeringWheelSupport").unwrap_or(true);
+    cfg.gaming.steam = get_bool("steam", true);
+    cfg.gaming.lutris = get_bool("lutris", true);
+    cfg.gaming.heroic = get_bool("heroic", true);
+    cfg.gaming.faugus = get_bool("faugus", true);
+    cfg.gaming.decky_loader = get_bool("deckyLoader", false);
+    cfg.gaming.geforce_now = get_bool("geforceNow", true);
+    cfg.gaming.steering_wheels = get_bool("steeringWheelSupport", true);
 
     // Emulation
-    if let Some(val) = extract_string_var(&content, "frontend") {
+    if let Some(val) = get_str("frontend") {
         cfg.emulation.frontend = val;
     }
-    cfg.emulation.enable = extract_bool_var_in_block(&content, "emulation", "enable").unwrap_or(true);
-    cfg.emulation.retroarch = extract_bool_var_in_block(&content, "retroarch", "enable").unwrap_or(true);
-    cfg.emulation.eden = extract_bool_var(&content, "eden").unwrap_or(true);
-    cfg.emulation.dolphin = extract_bool_var(&content, "dolphin").unwrap_or(true);
-    cfg.emulation.pcsx2 = extract_bool_var(&content, "pcsx2").unwrap_or(true);
-    cfg.emulation.ppsspp = extract_bool_var(&content, "ppsspp").unwrap_or(true);
-    cfg.emulation.melonds = extract_bool_var(&content, "melonds").unwrap_or(true);
-    cfg.emulation.azahar = extract_bool_var(&content, "azahar").unwrap_or(true);
-    cfg.emulation.mgba = extract_bool_var(&content, "mgba").unwrap_or(true);
-    cfg.emulation.rpcs3 = extract_bool_var(&content, "rpcs3").unwrap_or(false);
+    cfg.emulation.enable = get_bool_in_block("emulation", "enable", false);
+    cfg.emulation.retroarch = get_bool_in_block("retroarch", "enable", true);
+    cfg.emulation.eden = get_bool("eden", true);
+    cfg.emulation.dolphin = get_bool("dolphin", true);
+    cfg.emulation.pcsx2 = get_bool("pcsx2", true);
+    cfg.emulation.ppsspp = get_bool("ppsspp", true);
+    cfg.emulation.melonds = get_bool("melonds", true);
+    cfg.emulation.azahar = get_bool("azahar", true);
+    cfg.emulation.mgba = get_bool("mgba", true);
+    cfg.emulation.rpcs3 = get_bool("rpcs3", false);
 
     // Media & Network
-    cfg.media.stremio = extract_bool_var(&content, "stremio").unwrap_or(true);
-    cfg.media.vlc = extract_bool_var(&content, "vlc").unwrap_or(true);
-    cfg.media.mpv = extract_bool_var(&content, "mpv").unwrap_or(true);
-    cfg.media.tailscale = extract_bool_var(&content, "tailscale").unwrap_or(true);
-    cfg.media.localsend = extract_bool_var(&content, "localsend").unwrap_or(true);
-    cfg.media.motrix = extract_bool_var(&content, "motrix").unwrap_or(true);
+    cfg.media.stremio = get_bool("stremio", true);
+    cfg.media.vlc = get_bool("vlc", true);
+    cfg.media.mpv = get_bool("mpv", true);
+    cfg.media.tailscale = get_bool("tailscale", true);
+    cfg.media.localsend = get_bool("localsend", true);
+    cfg.media.motrix = get_bool("motrix", true);
 
     // Creation & Tools
-    cfg.creation.blender = extract_bool_var(&content, "blender").unwrap_or(true);
-    cfg.creation.godot = extract_bool_var(&content, "godot").unwrap_or(true);
-    cfg.creation.kdenlive = extract_bool_var(&content, "kdenlive").unwrap_or(true);
-    cfg.creation.obs_studio = extract_bool_var(&content, "obsStudio").unwrap_or(true);
-    cfg.creation.antigravity = extract_bool_var(&content, "antigravity").unwrap_or(true);
-    cfg.creation.pear_desktop = extract_bool_var(&content, "pearDesktop").unwrap_or(true);
-    cfg.creation.virtualisation = extract_bool_var_in_block(&content, "virtualisation", "enable").unwrap_or(true);
-    cfg.creation.ai_suite = extract_bool_var_in_block(&content, "aiSuite", "enable").unwrap_or(false);
+    cfg.creation.blender = get_bool("blender", false);
+    cfg.creation.godot = get_bool("godot", false);
+    cfg.creation.kdenlive = get_bool("kdenlive", false);
+    cfg.creation.obs_studio = get_bool("obsStudio", true);
+    cfg.creation.antigravity = get_bool("antigravity", true);
+    cfg.creation.pear_desktop = get_bool("pearDesktop", true);
+    cfg.creation.virtualisation = get_bool_in_block("virtualisation", "enable", false);
+    cfg.creation.ai_suite = get_bool_in_block("aiSuite", "enable", false);
 
     Ok(cfg)
 }

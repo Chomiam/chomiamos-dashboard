@@ -49,7 +49,13 @@ fn get_sync_script(mode: &str) -> String {
 r#"echo -e '\033[1;35m🐙 Synchronisation de la configuration NixOS depuis GitHub ({desc})...\033[0m\n'
 cd /etc/nixos || exit 1
 
-echo -e '\033[1;34m📦 Sauvegarde temporaire des modifications locales (git stash)...\033[0m'
+# 1. Sauvegarde inviolable et permanente du vars.nix LOCAL
+if [ -f /etc/nixos/vars.nix ]; then
+  echo -e '\033[1;34m🛡️ Sauvegarde et protection de votre configuration locale et compte utilisateur...\033[0m'
+  cp -f /etc/nixos/vars.nix /etc/nixos/.vars.nix.backup
+fi
+
+# 2. Sauvegarde dans le stash git
 STASH_OUT=$(git stash 2>&1)
 echo "$STASH_OUT"
 DID_STASH=0
@@ -57,32 +63,57 @@ if [[ "$STASH_OUT" != *"No local changes to save"* ]]; then
   DID_STASH=1
 fi
 
+# 3. Pull depuis GitHub
 echo -e '\n\033[1;34m⬇️ Récupération des dernières modifications depuis GitHub (git pull --no-rebase)...\033[0m'
 if ! git pull --no-rebase origin main; then
-  echo -e '\n\033[1;33m⚠️ Conflit détecté lors du pull. Vérification de flake.lock...\033[0m'
+  echo -e '\n\033[1;33m⚠️ Conflit détecté lors du pull...\033[0m'
+
+  # Si flake.lock a un conflit, écraser depuis origin/main
   if git status --porcelain | grep -q "flake\.lock"; then
-    echo -e '\033[1;33m🔧 Résolution automatique du conflit : restauration de flake.lock depuis origin/main...\033[0m'
+    echo -e '\033[1;33m🔧 Résolution automatique du conflit flake.lock depuis origin/main...\033[0m'
     git checkout origin/main -- flake.lock
     git add flake.lock
-    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve flake.lock conflict" || true
-  else
-    echo -e '\033[1;31m❌ Conflit sur d'\''autres fichiers que flake.lock. Abandon.\033[0m'
-    [ $DID_STASH -eq 1 ] && git stash pop || true
-    exit 1
   fi
+
+  # Si vars.nix a un conflit lors du pull, NE JAMAIS PRENDRE origin/main ! Garder ou restaurer la version locale !
+  if git status --porcelain | grep -q "vars\.nix"; then
+    echo -e '\033[1;33m🛡️ Préservation de votre fichier vars.nix personnel...\033[0m'
+    if [ -f /etc/nixos/.vars.nix.backup ]; then
+      cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
+    fi
+    git add vars.nix
+  fi
+
+  git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" || true
 fi
 
+# 4. Restauration du stash
 if [ $DID_STASH -eq 1 ]; then
   echo -e '\n\033[1;34m📤 Restauration des modifications locales (git stash pop)...\033[0m'
   if ! git stash pop; then
-    echo -e '\033[1;33m⚠️ Conflit lors de la réapplication du stash. Vérification de flake.lock...\033[0m'
+    echo -e '\033[1;33m⚠️ Conflit lors de la réapplication du stash...\033[0m'
     if git status --porcelain | grep -E "flake\.lock"; then
-      echo -e '\033[1;33m🔧 Résolution automatique du conflit de stash sur flake.lock...\033[0m'
       git checkout origin/main -- flake.lock
       git add flake.lock
-      git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve flake.lock conflict" || true
-      git stash drop || true
     fi
+    if git status --porcelain | grep -E "vars\.nix"; then
+      if [ -f /etc/nixos/.vars.nix.backup ]; then
+        cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
+      fi
+      git add vars.nix
+    fi
+    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" || true
+    git stash drop || true
+  fi
+fi
+
+# 5. GARANTIE ABSOLUE : Vérifier que le vars.nix local n'a pas été remplacé par celui de GitHub
+if [ -f /etc/nixos/.vars.nix.backup ]; then
+  BACKUP_USER=$(grep -E 'username\s*=' /etc/nixos/.vars.nix.backup | head -n 1)
+  CURRENT_USER=$(grep -E 'username\s*=' /etc/nixos/vars.nix | head -n 1)
+  if [ -n "$BACKUP_USER" ] && [ "$BACKUP_USER" != "$CURRENT_USER" ]; then
+    echo -e '\033[1;33m⚠️ Détection d'\''un écrasement de votre compte utilisateur ! Restauration immédiate...\033[0m'
+    cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
   fi
 fi
 

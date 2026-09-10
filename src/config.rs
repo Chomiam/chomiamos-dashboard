@@ -54,6 +54,16 @@ pub struct CreationConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChomiamConfig {
     pub host_name: String,
+    #[serde(default)]
+    pub user_block: String,
+    #[serde(default = "default_gpu")]
+    pub gpu_driver: String,
+    #[serde(default = "default_timezone")]
+    pub time_zone: String,
+    #[serde(default = "default_locale")]
+    pub default_locale: String,
+    #[serde(default = "default_state_ver")]
+    pub state_version: String,
     pub browser: String,
     pub discord_client: String,
     pub desktop_env: String,
@@ -63,10 +73,39 @@ pub struct ChomiamConfig {
     pub creation: CreationConfig,
 }
 
+fn default_gpu() -> String { "amd".to_string() }
+fn default_timezone() -> String { "Europe/Paris".to_string() }
+fn default_locale() -> String { "fr_FR.UTF-8".to_string() }
+fn default_state_ver() -> String { "26.05".to_string() }
+
+fn default_user_block() -> String {
+    let username = std::env::var("USER").unwrap_or_else(|_| "chomiam".to_string());
+    format!(
+r#"user = {{
+    username = "{username}";
+    fullName = "ChomiamOS User";
+    homeDirectory = "/home/{username}";
+    shell = "fish";
+    initialHashedPassword = null;
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+      "docker"
+      "video"
+    ];
+  }};"#
+    )
+}
+
 impl Default for ChomiamConfig {
     fn default() -> Self {
         Self {
             host_name: "chomiamos".to_string(),
+            user_block: default_user_block(),
+            gpu_driver: "amd".to_string(),
+            time_zone: "Europe/Paris".to_string(),
+            default_locale: "fr_FR.UTF-8".to_string(),
+            state_version: "26.05".to_string(),
             browser: "chrome".to_string(),
             discord_client: "discord".to_string(),
             desktop_env: "gnome".to_string(),
@@ -129,10 +168,28 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
 
     let mut cfg = ChomiamConfig::default();
 
-    // Parse simple string assignments
+    // Preserve exact user block
+    if let Some(user) = extract_user_block(&content) {
+        cfg.user_block = user;
+    }
+
+    // Hardware & system variables
+    if let Some(val) = extract_string_var(&content, "gpuDriver") {
+        cfg.gpu_driver = val;
+    }
     if let Some(val) = extract_string_var(&content, "hostName") {
         cfg.host_name = val;
     }
+    if let Some(val) = extract_string_var(&content, "timeZone") {
+        cfg.time_zone = val;
+    }
+    if let Some(val) = extract_string_var(&content, "defaultLocale") {
+        cfg.default_locale = val;
+    }
+    if let Some(val) = extract_string_var(&content, "stateVersion") {
+        cfg.state_version = val;
+    }
+
     if let Some(val) = extract_string_var(&content, "browser") {
         cfg.browser = val;
     }
@@ -192,7 +249,29 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
 }
 
 pub fn save_vars_nix(path: &Path, cfg: &ChomiamConfig) -> Result<(), String> {
-    let nix_code = generate_vars_nix_content(cfg);
+    let mut config_to_save = cfg.clone();
+
+    // CRITICAL SECURITY & STABILITY RULE:
+    // Never overwrite an existing user block with default or empty user block!
+    // If the file on disk has an existing user block, ALWAYS preserve it!
+    if path.exists() {
+        if let Ok(disk_content) = fs::read_to_string(path) {
+            if let Some(existing_user) = extract_user_block(&disk_content) {
+                config_to_save.user_block = existing_user;
+            }
+            if config_to_save.gpu_driver.is_empty() {
+                if let Some(existing_gpu) = extract_string_var(&disk_content, "gpuDriver") {
+                    config_to_save.gpu_driver = existing_gpu;
+                }
+            }
+        }
+    }
+
+    if config_to_save.user_block.trim().is_empty() {
+        config_to_save.user_block = default_user_block();
+    }
+
+    let nix_code = generate_vars_nix_content(&config_to_save);
 
     // Atomic write
     let tmp_path = path.with_extension("nix.tmp");
@@ -217,26 +296,14 @@ r#"{{
   hostName = "{hostname}";
 
   # Localisation & Fuseau horaire
-  timeZone = "Europe/Paris";
-  defaultLocale = "fr_FR.UTF-8";
+  timeZone = "{time_zone}";
+  defaultLocale = "{default_locale}";
 
   # Version de l'état système NixOS / Home Manager
-  stateVersion = "26.05";
+  stateVersion = "{state_version}";
 
-  # Profil utilisateur principal
-  user = {{
-    username = "chomiam";
-    fullName = "ChomiamOS User";
-    homeDirectory = "/home/chomiam";
-    shell = "fish";
-    initialHashedPassword = null;
-    extraGroups = [
-      "networkmanager"
-      "wheel"
-      "docker"
-      "video"
-    ];
-  }};
+  # Profil utilisateur principal (Préservé automatiquement)
+  {user_block}
 
   # Virtualisation
   virtualisation = {{
@@ -255,8 +322,8 @@ r#"{{
   # Environnement de bureau
   desktopEnv = "{desktop_env}";
 
-  # Matériel GPU
-  gpuDriver = "amd";
+  # Matériel GPU (Préservé automatiquement)
+  gpuDriver = "{gpu_driver}";
 
   # Options du mode Gaming
   gaming = {{
@@ -331,10 +398,15 @@ r#"{{
 }}
 "#,
         hostname = c.host_name,
+        time_zone = c.time_zone,
+        default_locale = c.default_locale,
+        state_version = c.state_version,
+        user_block = c.user_block.trim(),
         virtualisation = c.creation.virtualisation,
         browser = c.browser,
         discord_client = c.discord_client,
         desktop_env = c.desktop_env,
+        gpu_driver = c.gpu_driver,
         steam = c.gaming.steam,
         lutris = c.gaming.lutris,
         heroic = c.gaming.heroic,
@@ -368,6 +440,33 @@ r#"{{
         obs_studio = c.creation.obs_studio,
         ai_suite = c.creation.ai_suite,
     )
+}
+
+fn extract_user_block(text: &str) -> Option<String> {
+    let start_idx = text.find("user = {")?;
+    let brace_start = text[start_idx..].find('{')? + start_idx;
+    let mut depth = 0;
+    let mut end_idx = None;
+
+    for (i, c) in text[brace_start..].char_indices() {
+        if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                let rest = &text[brace_start + i + 1..];
+                let semi = rest.find(';').unwrap_or(0);
+                end_idx = Some(brace_start + i + 1 + semi + 1);
+                break;
+            }
+        }
+    }
+
+    if let Some(end) = end_idx {
+        Some(text[start_idx..end].trim().to_string())
+    } else {
+        None
+    }
 }
 
 fn extract_string_var(text: &str, var_name: &str) -> Option<String> {

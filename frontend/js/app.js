@@ -562,6 +562,59 @@ function initTerminal() {
   });
 }
 
+// Keyboard Lock Indicators (Caps Lock / Num Lock)
+let lockStateInterval = null;
+
+function setLockStates(capsOn, numOn) {
+  const capsBadge = document.getElementById("kb-caps-badge");
+  const numBadge = document.getElementById("kb-num-badge");
+
+  if (capsBadge) {
+    if (capsOn) {
+      capsBadge.classList.add("caps-active");
+      capsBadge.textContent = "⇪ MAJ : ACTIF";
+      capsBadge.setAttribute("title", "Attention : Verrouillage Majuscule activé");
+    } else {
+      capsBadge.classList.remove("caps-active");
+      capsBadge.textContent = "⇪ MAJ";
+      capsBadge.setAttribute("title", "Verrouillage Majuscule inactif");
+    }
+  }
+
+  if (numBadge) {
+    if (numOn) {
+      numBadge.classList.add("num-active");
+      numBadge.textContent = "🔢 NUM : ON";
+      numBadge.setAttribute("title", "Pavé numérique activé");
+    } else {
+      numBadge.classList.remove("num-active");
+      numBadge.textContent = "🔢 NUM : OFF";
+      numBadge.setAttribute("title", "Attention : Pavé numérique désactivé");
+    }
+  }
+}
+
+async function refreshLockStateFromHardware() {
+  try {
+    const state = await invoke("get_keyboard_lock_state");
+    if (state) {
+      setLockStates(state.caps_lock, state.num_lock);
+    }
+  } catch (err) {
+    // Non-fatal
+  }
+}
+
+function handleKeyModifierEvent(e) {
+  if (!e || typeof e.getModifierState !== "function") return;
+  const capsOn = e.getModifierState("CapsLock");
+  const numOn = e.getModifierState("NumLock");
+  setLockStates(capsOn, numOn);
+}
+
+window.addEventListener("keydown", handleKeyModifierEvent, true);
+window.addEventListener("keyup", handleKeyModifierEvent, true);
+
 function openTerminal(title = "Exécution en direct") {
   const modal = document.getElementById("terminal-modal");
   const titleEl = document.getElementById("term-title");
@@ -573,6 +626,10 @@ function openTerminal(title = "Exécution en direct") {
   if (statusText) statusText.textContent = "Exécution en cours...";
 
   modal.classList.remove("hidden");
+
+  refreshLockStateFromHardware();
+  if (lockStateInterval) clearInterval(lockStateInterval);
+  lockStateInterval = setInterval(refreshLockStateFromHardware, 1000);
 
   if (!termInitialized) {
     initTerminal();
@@ -590,6 +647,10 @@ function openTerminal(title = "Exécution en direct") {
 }
 
 function closeTerminal() {
+  if (lockStateInterval) {
+    clearInterval(lockStateInterval);
+    lockStateInterval = null;
+  }
   const modal = document.getElementById("terminal-modal");
   if (modal) modal.classList.add("hidden");
 }

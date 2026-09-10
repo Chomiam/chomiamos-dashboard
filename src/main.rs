@@ -97,6 +97,42 @@ fn resize_pty(pty: State<'_, PtyManager>, cols: u16, rows: u16) -> Result<(), St
     pty.resize(cols, rows)
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct KeyboardLockState {
+    pub caps_lock: bool,
+    pub num_lock: bool,
+}
+
+#[tauri::command]
+fn get_keyboard_lock_state() -> KeyboardLockState {
+    let mut caps_lock = false;
+    let mut num_lock = false;
+
+    if let Ok(entries) = std::fs::read_dir("/sys/class/leds") {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with("::capslock") {
+                if let Ok(content) = std::fs::read_to_string(entry.path().join("brightness")) {
+                    if content.trim() != "0" {
+                        caps_lock = true;
+                    }
+                }
+            } else if name.ends_with("::numlock") {
+                if let Ok(content) = std::fs::read_to_string(entry.path().join("brightness")) {
+                    if content.trim() != "0" {
+                        num_lock = true;
+                    }
+                }
+            }
+        }
+    }
+
+    KeyboardLockState {
+        caps_lock,
+        num_lock,
+    }
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -111,7 +147,8 @@ fn main() {
             save_chomiamos_config,
             start_terminal_task,
             write_pty,
-            resize_pty
+            resize_pty,
+            get_keyboard_lock_state
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

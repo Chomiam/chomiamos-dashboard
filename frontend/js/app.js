@@ -765,8 +765,26 @@ function clearTerminal() {
   if (term) term.reset();
 }
 
+function runTerminalTask(task, title, extra = null) {
+  lastExecutedTask = task;
+  openTerminal(title);
+
+  setTimeout(() => {
+    if (fitAddon && term) {
+      fitAddon.fit();
+    }
+    const cols = term ? term.cols : 100;
+    const rows = term ? term.rows : 24;
+
+    invoke("start_terminal_task", { task, extra, cols, rows }).catch(err => {
+      if (term) term.write(`\r\n\x1b[31mErreur : ${err}\x1b[0m\r\n`);
+      const statusDot = document.getElementById("term-status-icon");
+      if (statusDot) statusDot.className = "status-dot error";
+    });
+  }, 100);
+}
+
 function runAction(action) {
-  lastExecutedTask = action;
   let task = "";
   let title = "";
   let extra = null;
@@ -814,21 +832,7 @@ function runAction(action) {
       return;
   }
 
-  openTerminal(title);
-
-  setTimeout(() => {
-    if (fitAddon && term) {
-      fitAddon.fit();
-    }
-    const cols = term ? term.cols : 100;
-    const rows = term ? term.rows : 24;
-
-    invoke("start_terminal_task", { task, extra, cols, rows }).catch(err => {
-      if (term) term.write(`\r\n\x1b[31mErreur : ${err}\x1b[0m\r\n`);
-      const statusDot = document.getElementById("term-status-icon");
-      if (statusDot) statusDot.className = "status-dot error";
-    });
-  }, 100);
+  runTerminalTask(task, title, extra);
 }
 
 
@@ -1383,7 +1387,7 @@ function clearGenSelection() {
   updateGenActionBar();
 }
 
-async function deleteSelectedGenerations() {
+function deleteSelectedGenerations() {
   const ids = getSelectedGenIds();
   if (ids.length === 0) return;
 
@@ -1393,33 +1397,30 @@ async function deleteSelectedGenerations() {
     return;
   }
 
-  try {
-    const res = await invoke("delete_nix_generations", { ids });
-    alert(res || "Générations supprimées avec succès.");
-    clearGenSelection();
-    loadGenerations();
-  } catch (err) {
-    alert("Erreur lors de la suppression : " + err);
-  }
+  const idsParam = ids.join(" ");
+  runTerminalTask(
+    "delete-generations",
+    `Suppression de ${ids.length} génération${plural} (${idsStr})`,
+    idsParam
+  );
+  clearGenSelection();
 }
 
-async function switchToSelectedGeneration() {
+function switchToSelectedGeneration() {
   const ids = getSelectedGenIds();
   if (ids.length !== 1) return;
 
   const id = ids[0];
-  if (!confirm(`Voulez-vous rebooter sur la génération #${id} ?\n\nLa génération sera activée au prochain redémarrage du système.`)) {
+  if (!confirm(`Voulez-vous rebooter sur la génération #${id} ?\n\nLa génération sera activée dans le bootloader au prochain redémarrage du système.`)) {
     return;
   }
 
-  try {
-    const res = await invoke("switch_nix_generation", { id });
-    alert(res || `Génération #${id} activée pour le prochain reboot.`);
-    clearGenSelection();
-    loadGenerations();
-  } catch (err) {
-    alert("Erreur lors du changement de génération : " + err);
-  }
+  runTerminalTask(
+    "switch-generation",
+    `Bascule sur la génération #${id} pour le prochain reboot`,
+    String(id)
+  );
+  clearGenSelection();
 }
 
 window.resetConfig = resetConfig;

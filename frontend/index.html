@@ -184,13 +184,13 @@
               </div>
             </div>
             <div class="banner-actions">
-              <button class="btn btn-primary" onclick="runAction('switch-update')">
-                <span class="btn-icon">⚡</span> Mettre à jour tout de suite
-                <small>nh os switch -u</small>
+              <button class="btn btn-primary" onclick="runAction('sync-github')">
+                <span class="btn-icon">🐙</span> Synchroniser avec GitHub
+                <small>git pull & nh os switch -u</small>
               </button>
-              <button class="btn btn-secondary" onclick="runAction('boot-update')">
-                <span class="btn-icon">🔄</span> Mettre à jour au reboot
-                <small>nh os boot -u</small>
+              <button class="btn btn-secondary" onclick="runAction('boot-sync-github')">
+                <span class="btn-icon">🔄</span> Sync GitHub au reboot
+                <small>git pull & nh os boot -u</small>
               </button>
               <button class="btn btn-outline" onclick="runAction('switch')">
                 <span class="btn-icon">🔨</span> Recompiler la config locale
@@ -281,6 +281,9 @@
             </button>
             <button class="btn btn-primary" onclick="saveConfig(true, false)">
               <span>🚀</span> Sauvegarder & Déployer (Live)
+            </button>
+            <button class="btn btn-outline" onclick="runAction('sync-github')" title="Synchroniser la configuration depuis GitHub">
+              <span>🐙</span> Sync GitHub
             </button>
           </div>
         </div>

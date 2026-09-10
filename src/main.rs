@@ -35,6 +35,65 @@ fn save_chomiamos_config(config: ChomiamConfig) -> Result<(), String> {
     save_vars_nix(&path, &config)
 }
 
+fn get_sync_script(mode: &str) -> String {
+    let deploy_cmd = match mode {
+        "boot" => "nh os boot -u /etc/nixos",
+        _ => "nh os switch -u /etc/nixos",
+    };
+    let mode_desc = match mode {
+        "boot" => "au prochain redémarrage (nh os boot -u)",
+        _ => "immédiate (nh os switch -u)",
+    };
+
+    format!(
+r#"echo -e '\033[1;35m🐙 Synchronisation de la configuration NixOS depuis GitHub ({desc})...\033[0m\n'
+cd /etc/nixos || exit 1
+
+echo -e '\033[1;34m📦 Sauvegarde temporaire des modifications locales (git stash)...\033[0m'
+STASH_OUT=$(git stash 2>&1)
+echo "$STASH_OUT"
+DID_STASH=0
+if [[ "$STASH_OUT" != *"No local changes to save"* ]]; then
+  DID_STASH=1
+fi
+
+echo -e '\n\033[1;34m⬇️ Récupération des dernières modifications depuis GitHub (git pull --no-rebase)...\033[0m'
+if ! git pull --no-rebase origin main; then
+  echo -e '\n\033[1;33m⚠️ Conflit détecté lors du pull. Vérification de flake.lock...\033[0m'
+  if git status --porcelain | grep -q "flake\.lock"; then
+    echo -e '\033[1;33m🔧 Résolution automatique du conflit : restauration de flake.lock depuis origin/main...\033[0m'
+    git checkout origin/main -- flake.lock
+    git add flake.lock
+    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve flake.lock conflict" || true
+  else
+    echo -e '\033[1;31m❌ Conflit sur d'\''autres fichiers que flake.lock. Abandon.\033[0m'
+    [ $DID_STASH -eq 1 ] && git stash pop || true
+    exit 1
+  fi
+fi
+
+if [ $DID_STASH -eq 1 ]; then
+  echo -e '\n\033[1;34m📤 Restauration des modifications locales (git stash pop)...\033[0m'
+  if ! git stash pop; then
+    echo -e '\033[1;33m⚠️ Conflit lors de la réapplication du stash. Vérification de flake.lock...\033[0m'
+    if git status --porcelain | grep -E "flake\.lock"; then
+      echo -e '\033[1;33m🔧 Résolution automatique du conflit de stash sur flake.lock...\033[0m'
+      git checkout origin/main -- flake.lock
+      git add flake.lock
+      git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve flake.lock conflict" || true
+      git stash drop || true
+    fi
+  fi
+fi
+
+echo -e '\n\033[1;32m🚀 Déploiement du système avec {deploy_cmd}...\033[0m\n'
+{deploy_cmd}
+"#,
+        desc = mode_desc,
+        deploy_cmd = deploy_cmd
+    )
+}
+
 #[tauri::command]
 fn start_terminal_task(
     app: AppHandle,
@@ -48,19 +107,13 @@ fn start_terminal_task(
     let rows = rows.unwrap_or(24);
 
     let (program, args): (String, Vec<String>) = match task.as_str() {
-        "update-now" => (
+        "sync-github" | "update-now" => (
             "bash".into(),
-            vec![
-                "-c".into(),
-                "echo -e '\\033[1;35m🚀 Mise à jour du système ChomiamOS (Immédiate)...\\033[0m\\n' ; cd /etc/nixos && git stash && git pull --no-rebase && git stash pop ; nh os switch -u /etc/nixos".into(),
-            ],
+            vec!["-c".into(), get_sync_script("switch")],
         ),
-        "update-boot" => (
+        "boot-sync-github" | "update-boot" => (
             "bash".into(),
-            vec![
-                "-c".into(),
-                "echo -e '\\033[1;35m🚀 Mise à jour du système ChomiamOS (Au prochain boot)...\\033[0m\\n' ; cd /etc/nixos && git stash && git pull --no-rebase && git stash pop ; nh os boot -u /etc/nixos".into(),
-            ],
+            vec!["-c".into(), get_sync_script("boot")],
         ),
         "clean-generations" => {
             let keep = extra.unwrap_or_else(|| "3".into());

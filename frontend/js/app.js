@@ -708,6 +708,14 @@ function runAction(action) {
       task = "boot-config";
       title = "Application au prochain redémarrage (nh os boot)";
       break;
+    case "sync-github":
+      task = "sync-github";
+      title = "Synchronisation NixOS depuis GitHub";
+      break;
+    case "boot-sync-github":
+      task = "boot-sync-github";
+      title = "Synchronisation GitHub au prochain reboot (nh os boot)";
+      break;
     case "switch-update":
       task = "update-now";
       title = "Mise à jour complète du système (Immédiate)";

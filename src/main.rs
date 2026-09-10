@@ -1,4 +1,5 @@
 mod config;
+mod disks;
 mod generations;
 mod pty;
 mod system;
@@ -64,6 +65,9 @@ fi
 if [ -f /etc/nixos/hosts/desktop/hardware-configuration.nix ]; then
   cp -f /etc/nixos/hosts/desktop/hardware-configuration.nix /etc/nixos/.hardware-configuration.nix.backup
 fi
+if [ -f /etc/nixos/hosts/desktop/mount.nix ]; then
+  cp -f /etc/nixos/hosts/desktop/mount.nix /etc/nixos/.mount.nix.backup
+fi
 
 # 2. Sauvegarde dans le stash git
 STASH_OUT=$(git stash 2>&1)
@@ -94,6 +98,15 @@ if ! git pull --no-rebase --no-edit origin main; then
     git add vars.nix
   fi
 
+  # Si mount.nix a un conflit lors du pull, préserver les disques locaux
+  if git status --porcelain | grep -q "mount\.nix"; then
+    echo -e '\033[1;33m🛡️ Préservation de vos montages de disques personnels (mount.nix)...\033[0m'
+    if [ -f /etc/nixos/.mount.nix.backup ]; then
+      cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
+    fi
+    git add hosts/desktop/mount.nix
+  fi
+
   git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
 fi
 
@@ -111,6 +124,12 @@ if [ $DID_STASH -eq 1 ]; then
         cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
       fi
       git add vars.nix
+    fi
+    if git status --porcelain | grep -E "mount\.nix"; then
+      if [ -f /etc/nixos/.mount.nix.backup ]; then
+        cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
+      fi
+      git add hosts/desktop/mount.nix
     fi
     git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
     git stash drop || true
@@ -147,6 +166,14 @@ if [ -f /etc/nixos/.hardware-configuration.nix.backup ]; then
   if grep -qE '^(<{{7}}|=<{{7}}|>{{7}})' /etc/nixos/hosts/desktop/hardware-configuration.nix 2>/dev/null; then
     echo -e '\033[1;33m🛡️ Restauration de hardware-configuration.nix depuis la sauvegarde...\033[0m'
     cp -f /etc/nixos/.hardware-configuration.nix.backup /etc/nixos/hosts/desktop/hardware-configuration.nix
+  fi
+fi
+
+# Restauration automatique de mount.nix si altéré
+if [ -f /etc/nixos/.mount.nix.backup ]; then
+  if grep -qE '^(<{{7}}|=<{{7}}|>{{7}})' /etc/nixos/hosts/desktop/mount.nix 2>/dev/null; then
+    echo -e '[1;33m🛡️ Restauration de mount.nix depuis la sauvegarde...[0m'
+    cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
   fi
 fi
 
@@ -262,6 +289,40 @@ fn get_keyboard_lock_state() -> KeyboardLockState {
     }
 }
 
+#[tauri::command]
+fn get_storage_devices() -> Result<Vec<disks::DiskDevice>, String> {
+    disks::list_storage_devices()
+}
+
+#[tauri::command]
+fn mount_storage_device(uuid: String, mount_point: String, fs_type: String) -> Result<String, String> {
+    disks::mount_storage_device(uuid, mount_point, fs_type)
+}
+
+#[tauri::command]
+fn unmount_storage_device(mount_point: String, uuid: Option<String>) -> Result<String, String> {
+    disks::unmount_storage_device(mount_point, uuid)
+}
+
+#[tauri::command]
+fn format_storage_device(device_path: String, fs_type: String, label: String) -> Result<String, String> {
+    disks::format_storage_device(device_path, fs_type, label)
+}
+
+#[tauri::command]
+fn get_current_user() -> String {
+    std::env::var("USER").unwrap_or_else(|_| "chomiam".to_string())
+}
+
+#[tauri::command]
+fn open_in_file_manager(path: String) -> Result<(), String> {
+    let _ = std::process::Command::new("xdg-open")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| format!("Impossible d'ouvrir le dossier : {}", e))?;
+    Ok(())
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -277,7 +338,13 @@ fn main() {
             start_terminal_task,
             write_pty,
             resize_pty,
-            get_keyboard_lock_state
+            get_keyboard_lock_state,
+            get_storage_devices,
+            mount_storage_device,
+            unmount_storage_device,
+            format_storage_device,
+            open_in_file_manager,
+            get_current_user
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

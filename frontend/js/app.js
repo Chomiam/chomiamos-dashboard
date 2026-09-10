@@ -52,6 +52,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadGenerations();
   loadConfig();
   initTerminal();
+  loadStorageDevices();
 });
 
 // 1. Tab Navigation
@@ -67,6 +68,9 @@ function initTabs() {
       const targetContent = document.getElementById(targetId);
       if (targetContent) {
         targetContent.classList.add("active");
+        if (targetId === "tab-disks") {
+          loadStorageDevices();
+        }
       }
     });
   });
@@ -758,3 +762,500 @@ function runAction(action) {
     });
   }, 100);
 }
+
+
+// ==========================================================================
+// 6. Storage & Disk Management Controller
+// ==========================================================================
+
+let currentStorageDevices = [];
+let currentUsername = "chomiam";
+let selectedMountPartition = null;
+let selectedFormatPartition = null;
+let currentMountPreset = "mnt";
+let currentFormatFs = "btrfs";
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+async function loadStorageDevices() {
+  const container = document.getElementById("storage-devices-container");
+  if (!container) return;
+
+  try {
+    try {
+      const u = await invoke("get_current_user");
+      if (u) currentUsername = u;
+    } catch (_) {}
+
+    const devices = await invoke("get_storage_devices");
+    currentStorageDevices = devices || [];
+    renderStorageDevices(currentStorageDevices);
+  } catch (err) {
+    console.error("Erreur lors de la récupération des disques :", err);
+    container.innerHTML = `
+      <div class="card" style="text-align: center; color: var(--red); padding: 36px;">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">⚠️</span>
+        <strong>Erreur de détection des disques</strong>
+        <p style="color: var(--subtext0); margin-top: 6px; font-size: 13px;">${err}</p>
+        <button class="btn btn-outline" onclick="loadStorageDevices()" style="margin-top: 14px;">Réessayer</button>
+      </div>
+    `;
+  }
+}
+
+function renderStorageDevices(devices) {
+  const container = document.getElementById("storage-devices-container");
+  if (!container) return;
+
+  if (!devices || devices.length === 0) {
+    container.innerHTML = `
+      <div class="card" style="text-align: center; color: var(--subtext0); padding: 36px;">
+        <span style="font-size: 32px; display: block; margin-bottom: 8px;">📭</span>
+        <p>Aucun disque de stockage physique secondaire ou amovible détecté.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+
+  devices.forEach(dev => {
+    const modelText = dev.model ? escapeHtml(dev.model) : "Disque de stockage";
+    const devName = escapeHtml(dev.name);
+    const devPath = escapeHtml(dev.path);
+    const devSize = escapeHtml(dev.size);
+
+    html += `
+      <div class="disk-card">
+        <div class="disk-card-header">
+          <div class="disk-header-left">
+            <span class="disk-icon">💽</span>
+            <div>
+              <div class="disk-title-row">
+                <h3 class="disk-name">${devName}</h3>
+                <span class="disk-path">${devPath}</span>
+              </div>
+              <p class="disk-model">${modelText} — <strong style="color: var(--text);">${devSize}</strong></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="partitions-table-wrap">
+          <table class="partitions-table">
+            <thead>
+              <tr>
+                <th>Partition</th>
+                <th>Système de Fichiers</th>
+                <th>Label / Nom</th>
+                <th>Taille</th>
+                <th>État de Montage</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
+
+    if (!dev.partitions || dev.partitions.length === 0) {
+      html += `
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--subtext0); padding: 18px;">
+            Aucune partition détectée sur ce périphérique (disque non initialisé).
+          </td>
+        </tr>
+      `;
+    } else {
+      dev.partitions.forEach(p => {
+        const pName = escapeHtml(p.name);
+        const pPath = escapeHtml(p.path);
+        const pFs = p.fstype ? escapeHtml(p.fstype) : "--";
+        const pLabel = p.label ? escapeHtml(p.label) : "--";
+        const pSize = escapeHtml(p.size);
+
+        let statusBadge = "";
+        let isSystemProtected = p.is_root || p.is_boot || p.is_swap;
+
+        if (p.is_root) {
+          statusBadge = `<span class="badge badge-accent">🔒 Système NixOS (/)</span>`;
+        } else if (p.is_boot) {
+          statusBadge = `<span class="badge badge-warning">⚡ Boot EFI (/boot)</span>`;
+        } else if (p.is_swap) {
+          statusBadge = `<span class="badge badge-muted">🔄 Swap</span>`;
+        } else if (p.is_persistent_nix && p.persistent_mount_path) {
+          statusBadge = `<span class="badge badge-success" title="Montage permanent déclaré dans NixOS">🛡️ Fixe : ${escapeHtml(p.persistent_mount_path)}</span>`;
+        } else if (p.mountpoints && p.mountpoints.length > 0) {
+          const firstMnt = escapeHtml(p.mountpoints[0]);
+          statusBadge = `<span class="badge badge-info" title="${escapeHtml(p.mountpoints.join(', '))}">📍 Monté : ${firstMnt}</span>`;
+        } else {
+          statusBadge = `<span class="badge badge-muted">Non monté</span>`;
+        }
+
+        let actionsHtml = "";
+        const jsonPart = JSON.stringify(p).replace(/"/g, '&quot;');
+
+        if (isSystemProtected) {
+          actionsHtml = `<span class="action-locked">Système protégé 🔒</span>`;
+        } else {
+          const mountPath = p.persistent_mount_path || (p.mountpoints && p.mountpoints.length > 0 ? p.mountpoints[0] : null);
+
+          let openBtn = "";
+          let unmountBtn = "";
+          let mountBtn = "";
+          let formatBtn = "";
+
+          if (mountPath) {
+            openBtn = `
+              <button class="btn btn-sm btn-outline" title="Ouvrir dans l'explorateur" onclick="openFileManager('${escapeHtml(mountPath)}')">
+                📂 Ouvrir
+              </button>
+            `;
+            const pUuidArg = p.uuid ? `'${p.uuid}'` : "null";
+            unmountBtn = `
+              <button class="btn btn-sm btn-outline" title="Démonter la partition" onclick="unmountDisk('${escapeHtml(mountPath)}', ${pUuidArg})">
+                ⏏️ Démonter
+              </button>
+            `;
+          }
+
+          if (!p.is_persistent_nix) {
+            mountBtn = `
+              <button class="btn btn-sm btn-primary" title="Monter ce disque en dur de manière permanente" onclick="openMountModal(${jsonPart})">
+                🔗 Monter en dur
+              </button>
+            `;
+          }
+
+          formatBtn = `
+            <button class="btn btn-sm btn-danger-outline" title="Formater cette partition" onclick="openFormatModal(${jsonPart})">
+              🧹 Formater
+            </button>
+          `;
+
+          actionsHtml = `
+            <div class="action-btns-wrap">
+              ${openBtn}
+              ${mountBtn}
+              ${unmountBtn}
+              ${formatBtn}
+            </div>
+          `;
+        }
+
+        html += `
+          <tr class="partition-row">
+            <td>
+              <div class="part-name-cell">
+                <span class="part-icon">📁</span>
+                <div>
+                  <strong>${pName}</strong>
+                  <div class="part-subpath">${pPath}</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="fs-badge">${pFs}</span></td>
+            <td>${pLabel}</td>
+            <td><strong>${pSize}</strong></td>
+            <td>${statusBadge}</td>
+            <td style="text-align: right;">${actionsHtml}</td>
+          </tr>
+        `;
+      });
+    }
+
+    html += `
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function openMountModal(part) {
+  selectedMountPartition = part;
+  const modal = document.getElementById("mount-modal");
+  if (!modal) return;
+
+  const devEl = document.getElementById("mount-modal-dev");
+  const sizeEl = document.getElementById("mount-modal-size");
+  const fsEl = document.getElementById("mount-modal-fs");
+
+  if (devEl) devEl.textContent = part.path;
+  if (sizeEl) sizeEl.textContent = part.size;
+  if (fsEl) fsEl.textContent = part.fstype || "auto";
+
+  let defaultName = "Games";
+  if (part.label && part.label.trim().length > 0) {
+    defaultName = part.label.trim().replace(/[^a-zA-Z0-9_\-]/g, "");
+  }
+  const inputEl = document.getElementById("mount-name-input");
+  if (inputEl) inputEl.value = defaultName || "Games";
+
+  selectMountPreset("mnt");
+  modal.classList.remove("hidden");
+}
+
+function closeMountModal() {
+  const modal = document.getElementById("mount-modal");
+  if (modal) modal.classList.add("hidden");
+  selectedMountPartition = null;
+}
+
+function selectMountPreset(preset) {
+  currentMountPreset = preset;
+
+  ["mnt", "home", "custom"].forEach(p => {
+    const card = document.getElementById(`preset-card-${p}`);
+    const radio = card ? card.querySelector("input") : null;
+    if (card) {
+      if (p === preset) {
+        card.classList.add("active");
+        if (radio) radio.checked = true;
+      } else {
+        card.classList.remove("active");
+        if (radio) radio.checked = false;
+      }
+    }
+  });
+
+  const labelEl = document.getElementById("mount-name-label");
+  const inputEl = document.getElementById("mount-name-input");
+
+  if (preset === "custom") {
+    if (labelEl) labelEl.textContent = "Chemin absolu personnalisé :";
+    if (inputEl) {
+      inputEl.placeholder = "/chemin/personnalise";
+      if (!inputEl.value.startsWith("/")) {
+        inputEl.value = "/mnt/" + (inputEl.value || "Games");
+      }
+    }
+  } else if (preset === "home") {
+    if (labelEl) labelEl.textContent = `Nom du sous-dossier dans /home/${currentUsername}/ :`;
+    if (inputEl) {
+      inputEl.placeholder = "ex: Games, Stockage";
+      inputEl.value = inputEl.value.replace(/^\/.*?\//, "").replace(/^\/+/, "") || "Games";
+    }
+  } else {
+    if (labelEl) labelEl.textContent = "Nom du dossier dans /mnt/ :";
+    if (inputEl) {
+      inputEl.placeholder = "ex: Games, Stockage, SSD2";
+      inputEl.value = inputEl.value.replace(/^\/.*?\//, "").replace(/^\/+/, "") || "Games";
+    }
+  }
+
+  updateMountPreview();
+}
+
+function updateMountPreview() {
+  const previewEl = document.getElementById("mount-preview-path");
+  const inputEl = document.getElementById("mount-name-input");
+  if (!previewEl || !inputEl) return;
+
+  const val = inputEl.value.trim();
+
+  let finalPath = "";
+  if (currentMountPreset === "custom") {
+    finalPath = val.startsWith("/") ? val : "/" + val;
+  } else if (currentMountPreset === "home") {
+    const cleanSub = val.replace(/^\/+/, "");
+    finalPath = `/home/${currentUsername}/${cleanSub}`;
+  } else {
+    const cleanSub = val.replace(/^\/+/, "");
+    finalPath = `/mnt/${cleanSub}`;
+  }
+
+  previewEl.textContent = finalPath;
+}
+
+async function submitMount() {
+  if (!selectedMountPartition) return;
+
+  if (!selectedMountPartition.uuid) {
+    alert("Impossible de monter ce disque en dur : Aucun identifiant UUID trouvé pour cette partition. Formatez-la d'abord si elle est neuve.");
+    return;
+  }
+
+  const previewEl = document.getElementById("mount-preview-path");
+  const mountPoint = previewEl ? previewEl.textContent.trim() : "";
+
+  if (!mountPoint || !mountPoint.startsWith("/")) {
+    alert("Veuillez saisir un chemin de montage valide débutant par '/'.");
+    return;
+  }
+
+  const btn = document.getElementById("btn-confirm-mount");
+  const originalText = btn ? btn.innerHTML : "Valider";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Montage en cours...";
+  }
+
+  try {
+    const fsType = selectedMountPartition.fstype || "auto";
+    const res = await invoke("mount_storage_device", {
+      uuid: selectedMountPartition.uuid,
+      mountPoint: mountPoint,
+      fsType: fsType
+    });
+
+    closeMountModal();
+    await loadStorageDevices();
+    alert(res || "Disque monté avec succès de manière permanente !");
+  } catch (err) {
+    alert("Erreur lors du montage : " + err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+
+async function unmountDisk(mountPoint, uuid) {
+  if (!confirm(`Voulez-vous vraiment démonter le disque monté sur "${mountPoint}" ?\n\nS'il s'agit d'un montage permanent NixOS, il sera retiré de mount.nix.`)) {
+    return;
+  }
+
+  try {
+    const res = await invoke("unmount_storage_device", {
+      mountPoint: mountPoint,
+      uuid: uuid || null
+    });
+    await loadStorageDevices();
+    alert(res || "Disque démonté avec succès.");
+  } catch (err) {
+    alert("Erreur lors du démontage : " + err);
+  }
+}
+
+function openFormatModal(part) {
+  selectedFormatPartition = part;
+  const modal = document.getElementById("format-modal");
+  if (!modal) return;
+
+  const devEl = document.getElementById("format-modal-dev");
+  const sizeEl = document.getElementById("format-modal-size");
+  const fsEl = document.getElementById("format-modal-current-fs");
+
+  if (devEl) devEl.textContent = part.path;
+  if (sizeEl) sizeEl.textContent = part.size;
+  if (fsEl) fsEl.textContent = `Actuel : ${part.fstype || "Inconnu"}`;
+
+  let defaultLabel = "Games";
+  if (part.label && part.label.trim().length > 0) {
+    defaultLabel = part.label.trim().replace(/[^a-zA-Z0-9_\-]/g, "");
+  }
+  const labelInput = document.getElementById("format-label-input");
+  if (labelInput) labelInput.value = defaultLabel || "Games";
+
+  const confirmCheck = document.getElementById("format-confirm-check");
+  if (confirmCheck) confirmCheck.checked = false;
+
+  const btn = document.getElementById("btn-confirm-format");
+  if (btn) btn.disabled = true;
+
+  selectFormatFs("btrfs");
+  modal.classList.remove("hidden");
+}
+
+function closeFormatModal() {
+  const modal = document.getElementById("format-modal");
+  if (modal) modal.classList.add("hidden");
+  selectedFormatPartition = null;
+}
+
+function selectFormatFs(fs) {
+  currentFormatFs = fs;
+  ["btrfs", "ext4"].forEach(f => {
+    const card = document.getElementById(`fs-card-${f}`);
+    const radio = card ? card.querySelector("input") : null;
+    if (card) {
+      if (f === fs) {
+        card.classList.add("active");
+        if (radio) radio.checked = true;
+      } else {
+        card.classList.remove("active");
+        if (radio) radio.checked = false;
+      }
+    }
+  });
+}
+
+function toggleFormatSubmitButton() {
+  const confirmCheck = document.getElementById("format-confirm-check");
+  const btn = document.getElementById("btn-confirm-format");
+  if (btn && confirmCheck) {
+    btn.disabled = !confirmCheck.checked;
+  }
+}
+
+async function submitFormat() {
+  if (!selectedFormatPartition) return;
+
+  const confirmCheck = document.getElementById("format-confirm-check");
+  if (!confirmCheck || !confirmCheck.checked) {
+    alert("Veuillez cocher la case de confirmation pour continuer.");
+    return;
+  }
+
+  const labelInput = document.getElementById("format-label-input");
+  const label = labelInput ? labelInput.value.trim() : "Storage";
+
+  const btn = document.getElementById("btn-confirm-format");
+  const originalText = btn ? btn.innerHTML : "Formater";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Formatage en cours...";
+  }
+
+  try {
+    const res = await invoke("format_storage_device", {
+      devicePath: selectedFormatPartition.path,
+      fsType: currentFormatFs,
+      label: label
+    });
+
+    closeFormatModal();
+    await loadStorageDevices();
+    alert(res || "Partition formatée avec succès !");
+  } catch (err) {
+    alert("Erreur lors du formatage : " + err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+
+async function openFileManager(path) {
+  try {
+    await invoke("open_in_file_manager", { path });
+  } catch (err) {
+    alert("Impossible d'ouvrir l'explorateur de fichiers : " + err);
+  }
+}
+
+// Window bindings for HTML event handlers
+window.loadStorageDevices = loadStorageDevices;
+window.openMountModal = openMountModal;
+window.closeMountModal = closeMountModal;
+window.selectMountPreset = selectMountPreset;
+window.updateMountPreview = updateMountPreview;
+window.submitMount = submitMount;
+window.unmountDisk = unmountDisk;
+window.openFormatModal = openFormatModal;
+window.closeFormatModal = closeFormatModal;
+window.selectFormatFs = selectFormatFs;
+window.toggleFormatSubmitButton = toggleFormatSubmitButton;
+window.submitFormat = submitFormat;
+window.openFileManager = openFileManager;

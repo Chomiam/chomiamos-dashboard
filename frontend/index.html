@@ -32,7 +32,11 @@
         </button>
         <button class="tab-btn" data-tab="tab-disks">
           <span class="tab-icon">💾</span>
-          <span class="tab-label">Disques & Générations</span>
+          <span class="tab-label">Gestion des Disques</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-generations">
+          <span class="tab-icon">📜</span>
+          <span class="tab-label">Générations NixOS</span>
         </button>
         <button class="tab-btn" data-tab="tab-config">
           <span class="tab-icon">⚙️</span>
@@ -201,19 +205,29 @@
         </div>
       </section>
 
-      <!-- ==================== TAB 2: DISKS & GENERATIONS ==================== -->
+      <!-- ==================== TAB 2: DISK MANAGEMENT & MOUNTING ==================== -->
       <section id="tab-disks" class="tab-content">
-        <!-- Disks Breakdown -->
-        <div class="section-title">
-          <h2>Disques & Partitions</h2>
-          <p>Surveillance de l'espace de stockage disponible sur les différents volumes</p>
-        </div>
-        <div id="disks-list" class="disks-grid">
-          <!-- Populated dynamically -->
+        <div class="section-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2>Gestion des Disques & Montages Permanents</h2>
+            <p>Détection du matériel, formatage (Ext4 / Btrfs) et montage permanent dans NixOS (protégé contre les mises à jour GitHub).</p>
+          </div>
+          <button class="btn btn-outline" onclick="loadStorageDevices()">
+            <span>🔄</span> Rafraîchir les disques
+          </button>
         </div>
 
-        <!-- Generations & Cleanup -->
-        <div class="section-title" style="margin-top: 32px;">
+        <!-- Storage Disks Container -->
+        <div id="storage-devices-container" class="storage-devices-container">
+          <div class="card" style="text-align: center; color: var(--subtext0); padding: 36px;">
+            <span>⏳</span> Détection des disques connectés au système...
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: GENERATIONS & CLEANUP ==================== -->
+      <section id="tab-generations" class="tab-content">
+        <div class="section-title">
           <h2>Gestion des Images & Profils NixOS</h2>
           <p>Chaque modification de configuration crée une génération bootable. Nettoyez les anciennes images pour récupérer de l'espace disque.</p>
         </div>
@@ -914,6 +928,154 @@
     </div>
 
   </div>
+
+    <!-- ==================== MODALS DISQUES ==================== -->
+    <!-- Modal de Montage Permanent -->
+    <div id="mount-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">🔗</span>
+            <div>
+              <h3>Monter un Disque en Dur</h3>
+              <p class="modal-subtitle">Configuration permanente déclarée dans NixOS</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeMountModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mount-target-summary">
+            <span class="summary-label">Partition sélectionnée :</span>
+            <strong id="mount-modal-dev">/dev/sdb1</strong>
+            <span id="mount-modal-size" class="badge">-- Go</span>
+            <span id="mount-modal-fs" class="badge badge-accent">ext4</span>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">Emplacement du montage :</label>
+            <div class="mount-presets">
+              <label class="preset-card active" id="preset-card-mnt" onclick="selectMountPreset('mnt')">
+                <input type="radio" name="mount-preset" value="mnt" checked>
+                <div class="preset-content">
+                  <strong>/mnt/ (Recommandé)</strong>
+                  <small>Idéal pour disques de jeux (Steam/Lutris), bibliothèques et partages système.</small>
+                </div>
+              </label>
+
+              <label class="preset-card" id="preset-card-home" onclick="selectMountPreset('home')">
+                <input type="radio" name="mount-preset" value="home">
+                <div class="preset-content">
+                  <strong>Dossier Personnel (/home/$USER/...)</strong>
+                  <small>Intégré directement dans votre répertoire utilisateur (ex: /home/chomiam/Games).</small>
+                </div>
+              </label>
+
+              <label class="preset-card" id="preset-card-custom" onclick="selectMountPreset('custom')">
+                <input type="radio" name="mount-preset" value="custom">
+                <div class="preset-content">
+                  <strong>Chemin absolu personnalisé</strong>
+                  <small>Spécifiez manuellement le chemin de montage complet souhaité.</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group" id="mount-name-group" style="margin-top: 14px;">
+            <label class="form-label" id="mount-name-label">Nom du dossier de montage :</label>
+            <input type="text" id="mount-name-input" class="form-input" placeholder="ex: Games, Stockage, SSD2" value="Games" oninput="updateMountPreview()">
+            <small class="form-help">Chemin final : <code id="mount-preview-path">/mnt/Games</code></small>
+          </div>
+
+          <div class="info-alert" style="margin-top: 16px;">
+            <span style="font-size: 20px;">🛡️</span>
+            <div>
+              <strong>Immunité GitHub & Rebuild</strong> : Le montage est inscrit dans <code>mount.nix</code> avec permissions utilisateur complètes. Il est sauvegardé et ne sera jamais écrasé par les synchronisations GitHub.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeMountModal()">Annuler</button>
+          <button class="btn btn-primary" id="btn-confirm-mount" onclick="submitMount()">
+            <span>🔗</span> Valider le montage
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Formatage Sécurisé -->
+    <div id="format-modal" class="modal-overlay hidden">
+      <div class="modal-card modal-card-danger">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">🧹</span>
+            <div>
+              <h3>Formater une Partition</h3>
+              <p class="modal-subtitle">Création d'un nouveau système de fichiers</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeFormatModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="danger-banner">
+            <span class="danger-icon">⚠️</span>
+            <div>
+              <strong>ATTENTION : DESTRUCTION DES DONNÉES</strong>
+              <p>Toutes les données présentes sur cette partition seront définitivement supprimées.</p>
+            </div>
+          </div>
+
+          <div class="mount-target-summary" style="margin-top: 16px;">
+            <span class="summary-label">Partition cible :</span>
+            <strong id="format-modal-dev">/dev/sdb1</strong>
+            <span id="format-modal-size" class="badge">-- Go</span>
+            <span id="format-modal-current-fs" class="badge">Actuel: ext4</span>
+          </div>
+
+          <div class="form-group" style="margin-top: 16px;">
+            <label class="form-label">Système de fichiers souhaité :</label>
+            <div class="fs-options-grid">
+              <label class="fs-card active" id="fs-card-btrfs" onclick="selectFormatFs('btrfs')">
+                <input type="radio" name="format-fs" value="btrfs" checked>
+                <div class="fs-card-content">
+                  <strong>Btrfs (Recommandé Gaming)</strong>
+                  <small>Compression transparente Zstd (gain d'espace disques jeux), snapshots instantanés et intégrité des données.</small>
+                </div>
+              </label>
+
+              <label class="fs-card" id="fs-card-ext4" onclick="selectFormatFs('ext4')">
+                <input type="radio" name="format-fs" value="ext4">
+                <div class="fs-card-content">
+                  <strong>Ext4 (Standard Linux)</strong>
+                  <small>Le système de fichiers Linux traditionnel le plus robuste et universellement compatible.</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 14px;">
+            <label class="form-label">Nom du volume (Label) :</label>
+            <input type="text" id="format-label-input" class="form-input" placeholder="ex: Games, Stockage" value="Games">
+          </div>
+
+          <div class="confirm-checkbox-box" style="margin-top: 16px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="format-confirm-check" onchange="toggleFormatSubmitButton()">
+              <span>Je confirme avoir sauvegardé mes données et vouloir formater ce volume.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeFormatModal()">Annuler</button>
+          <button class="btn btn-danger" id="btn-confirm-format" disabled onclick="submitFormat()">
+            <span>🗑️</span> Formater définitivement
+          </button>
+        </div>
+      </div>
+    </div>
 
   <script src="js/xterm.js"></script>
   <script src="js/addon-fit.js"></script>

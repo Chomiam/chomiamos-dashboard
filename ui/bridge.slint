@@ -97,6 +97,9 @@ export global DashboardBridge {
     in-out property <string> terminal_title: "Opération en cours...";
     in-out property <string> terminal_output: "";
     in-out property <bool> operation_running: false;
+    in-out property <bool> password_required: false;
+    in-out property <bool> auto_scroll: true;
+
 
     // Callbacks to Rust
     callback update_now();
@@ -106,6 +109,7 @@ export global DashboardBridge {
     callback optimise_store();
     callback save_and_apply();
     callback close_terminal();
+    callback send_terminal_input(string);
     callback set_browser(string);
     callback set_discord(string);
     callback set_davinci(string);

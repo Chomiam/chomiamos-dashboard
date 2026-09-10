@@ -452,7 +452,7 @@ export component AppWindow inherits Window {
                                 alignment: start;
 
                                 ActionBtn {
-                                    text: "⚡ Mettre à jour maintenant (nh os switch -u)";
+                                    text: "⚡ Mettre à jour maintenant";
                                     bg-color: Theme.mauve;
                                     text-color: Theme.crust;
                                     hover-color: Theme.pink;
@@ -460,7 +460,7 @@ export component AppWindow inherits Window {
                                 }
 
                                 ActionBtn {
-                                    text: "🔄 Mettre à jour au reboot (nh os boot -u)";
+                                    text: "🔄 Mettre à jour au redémarrage";
                                     bg-color: Theme.surface1;
                                     text-color: Theme.text;
                                     hover-color: Theme.surface2;
@@ -639,7 +639,7 @@ export component AppWindow inherits Window {
                         }
 
                         ActionBtn {
-                            text: "💾 Enregistrer & Appliquer (nh os switch)";
+                            text: "💾 Enregistrer & Appliquer";
                             bg-color: Theme.green;
                             text-color: Theme.crust;
                             hover-color: Theme.teal;
@@ -880,8 +880,8 @@ export component AppWindow inherits Window {
         Card {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: 860px;
-            height: 540px;
+            width: 880px;
+            height: 590px;
             background: Theme.crust;
             border-color: Theme.surface1;
 
@@ -909,24 +909,54 @@ export component AppWindow inherits Window {
                         }
                     }
 
-                    Rectangle {
-                        width: 100px;
-                        height: 24px;
-                        border-radius: 12px;
-                        background: DashboardBridge.operation_running ? Theme.peach : Theme.green;
+                    HorizontalLayout {
+                        spacing: 10px;
 
-                        Text {
-                            text: DashboardBridge.operation_running ? "EN COURS..." : "TERMINÉ";
-                            color: Theme.crust;
-                            font-size: 10px;
-                            font-weight: 800;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+                        // Auto-scroll toggle badge
+                        Rectangle {
+                            width: 130px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: DashboardBridge.auto_scroll ? Theme.surface1 : Theme.surface0;
+                            border-width: 1px;
+                            border-color: DashboardBridge.auto_scroll ? Theme.mauve : Theme.surface2;
+
+                            Text {
+                                text: DashboardBridge.auto_scroll ? "Défilement: AUTO" : "Défilement: MANUEL";
+                                color: DashboardBridge.auto_scroll ? Theme.mauve : Theme.subtext0;
+                                font-size: 10px;
+                                font-weight: 700;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            TouchArea {
+                                clicked => {
+                                    DashboardBridge.auto_scroll = !DashboardBridge.auto_scroll;
+                                }
+                            }
+                        }
+
+                        // Status badge
+                        Rectangle {
+                            width: 100px;
+                            height: 24px;
+                            border-radius: 12px;
+                            background: DashboardBridge.operation_running ? Theme.peach : Theme.green;
+
+                            Text {
+                                text: DashboardBridge.operation_running ? "EN COURS..." : "TERMINÉ";
+                                color: Theme.crust;
+                                font-size: 10px;
+                                font-weight: 800;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
                         }
                     }
                 }
 
-                // Terminal Output Area
+                // Terminal Output Area with reactive auto-scroll
                 Rectangle {
                     background: #0c0c14;
                     border-radius: 8px;
@@ -934,18 +964,82 @@ export component AppWindow inherits Window {
                     border-color: Theme.surface0;
 
                     ScrollView {
+                        viewport-y: DashboardBridge.auto_scroll ? Math.min(0px, parent.height - self.viewport-height) : 0px;
+
                         VerticalLayout {
                             padding: 12px;
-                        TextInput {
-                            text: DashboardBridge.terminal_output;
-                            color: #a6e3a1;
-                            font-size: 11px;
-                            font-family: "monospace";
-                            read-only: true;
-                            single-line: false;
-                            wrap: word-wrap;
+                            TextInput {
+                                text: DashboardBridge.terminal_output;
+                                color: #a6e3a1;
+                                font-size: 11px;
+                                font-family: "monospace";
+                                read-only: true;
+                                single-line: false;
+                                wrap: word-wrap;
+                            }
                         }
                     }
+                }
+
+                // Interactive input section (active when command is running)
+                if DashboardBridge.operation_running: VerticalLayout {
+                    spacing: 6px;
+
+                    if DashboardBridge.password_required: HorizontalLayout {
+                        spacing: 6px;
+                        alignment: start;
+                        Text {
+                            text: "🔐 Mot de passe administrateur requis pour continuer :";
+                            color: Theme.peach;
+                            font-size: 12px;
+                            font-weight: 700;
+                        }
+                    }
+
+                    HorizontalLayout {
+                        spacing: 10px;
+
+                        Rectangle {
+                            background: Theme.surface0;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: DashboardBridge.password_required ? Theme.peach : Theme.surface2;
+                            height: 38px;
+
+                            HorizontalLayout {
+                                padding-left: 12px;
+                                padding-right: 12px;
+
+                                cmd_input := TextInput {
+                                    text: "";
+                                    color: Theme.text;
+                                    font-size: 13px;
+                                    vertical-alignment: center;
+                                    input-type: DashboardBridge.password_required ? password : text;
+                                    accepted => {
+                                        if self.text != "" {
+                                            DashboardBridge.send_terminal_input(self.text);
+                                            self.text = "";
+                                            DashboardBridge.password_required = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        ActionBtn {
+                            text: "Envoyer ↵";
+                            bg-color: DashboardBridge.password_required ? Theme.peach : Theme.mauve;
+                            text-color: Theme.crust;
+                            hover-color: Theme.pink;
+                            clicked => {
+                                if cmd_input.text != "" {
+                                    DashboardBridge.send_terminal_input(cmd_input.text);
+                                    cmd_input.text = "";
+                                    DashboardBridge.password_required = false;
+                                }
+                            }
+                        }
                     }
                 }
 

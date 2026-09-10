@@ -7,8 +7,8 @@ slint::include_modules!();
 
 use regex::Regex;
 use slint::{ComponentHandle, ModelRc, VecModel};
-use std::io::{BufRead, BufReader};
-use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader, Write};
+use std::process::{ChildStdin, Command, Stdio};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -17,6 +17,10 @@ use std::time::Duration;
 use crate::config::{get_vars_path, read_vars_nix, save_vars_nix};
 use crate::generations::list_generations;
 use crate::system::SystemCollector;
+
+static ACTIVE_STDIN: Mutex<Option<ChildStdin>> = Mutex::new(None);
+
+const SUDO_WRAPPER: &str = "/home/chomiam/Projects/dashboard-chomiamos/scripts/sudo-stdin";
 
 fn format_bytes(bytes: u64) -> String {
     const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -44,6 +48,7 @@ fn run_command_in_terminal(
         let bridge = ui.global::<DashboardBridge>();
         bridge.set_terminal_open(true);
         bridge.set_operation_running(true);
+        bridge.set_password_required(false);
         bridge.set_terminal_title(title.into());
         bridge.set_terminal_output(format!("🚀 Commande : {} {}\n\n", program, args.join(" ")).into());
     }
@@ -53,6 +58,7 @@ fn run_command_in_terminal(
 
         let mut child = match Command::new(program)
             .args(&args)
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -72,6 +78,11 @@ fn run_command_in_terminal(
             }
         };
 
+        if let Some(stdin) = child.stdin.take() {
+            let mut lock = ACTIVE_STDIN.lock().unwrap();
+            *lock = Some(stdin);
+        }
+
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
@@ -82,12 +93,19 @@ fn run_command_in_terminal(
                 let reader = BufReader::new(stdout);
                 for line in reader.lines().flatten() {
                     let clean_line = ansi_out.replace_all(&line, "").to_string();
+                    let is_pw_prompt = clean_line.contains("[sudo]")
+                        || clean_line.to_lowercase().contains("mot de passe")
+                        || clean_line.to_lowercase().contains("password");
+
                     let ui = ui_handle_out.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui.upgrade() {
                             let bridge = ui.global::<DashboardBridge>();
                             let cur = bridge.get_terminal_output().to_string();
                             bridge.set_terminal_output((cur + &clean_line + "\n").into());
+                            if is_pw_prompt {
+                                bridge.set_password_required(true);
+                            }
                         }
                     });
                 }
@@ -101,12 +119,19 @@ fn run_command_in_terminal(
                 let reader = BufReader::new(stderr);
                 for line in reader.lines().flatten() {
                     let clean_line = ansi_err.replace_all(&line, "").to_string();
+                    let is_pw_prompt = clean_line.contains("[sudo]")
+                        || clean_line.to_lowercase().contains("mot de passe")
+                        || clean_line.to_lowercase().contains("password");
+
                     let ui = ui_handle_err.clone();
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui.upgrade() {
                             let bridge = ui.global::<DashboardBridge>();
                             let cur = bridge.get_terminal_output().to_string();
                             bridge.set_terminal_output((cur + &clean_line + "\n").into());
+                            if is_pw_prompt {
+                                bridge.set_password_required(true);
+                            }
                         }
                     });
                 }
@@ -116,6 +141,11 @@ fn run_command_in_terminal(
         let _ = out_thread.join();
         let _ = err_thread.join();
         let status = child.wait();
+
+        {
+            let mut lock = ACTIVE_STDIN.lock().unwrap();
+            *lock = None;
+        }
 
         let _ = slint::invoke_from_event_loop(move || {
             if let Some(ui) = ui_handle.upgrade() {
@@ -128,6 +158,7 @@ fn run_command_in_terminal(
                 };
                 bridge.set_terminal_output((cur + &conclusion).into());
                 bridge.set_operation_running(false);
+                bridge.set_password_required(false);
             }
         });
     });
@@ -272,16 +303,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui_weak = ui.as_weak();
     let bridge = ui.global::<DashboardBridge>();
 
+    // Callback: send_terminal_input (for interactive input and sudo password)
+    let weak = ui_weak.clone();
+    bridge.on_send_terminal_input(move |text| {
+        let mut lock = ACTIVE_STDIN.lock().unwrap();
+        if let Some(stdin) = lock.as_mut() {
+            let _ = stdin.write_all(text.as_bytes());
+            let _ = stdin.write_all(b"\n");
+            let _ = stdin.flush();
+        }
+        if let Some(ui) = weak.upgrade() {
+            let bridge = ui.global::<DashboardBridge>();
+            let cur = bridge.get_terminal_output().to_string();
+            let display_msg = if bridge.get_password_required() {
+                "********\n".to_string()
+            } else {
+                format!("{}\n", text)
+            };
+            bridge.set_terminal_output((cur + &display_msg).into());
+            bridge.set_password_required(false);
+        }
+    });
+
     // Callback: update_now
     let weak = ui_weak.clone();
     bridge.on_update_now(move || {
-        run_command_in_terminal(weak.clone(), "Mise à jour du système (Immédiate)", "nh", vec!["os".into(), "switch".into(), "-u".into()]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Mise à jour du système (Immédiate)",
+            "nh",
+            vec!["os".into(), "switch".into(), "-u".into(), "-e".into(), SUDO_WRAPPER.into()],
+        );
     });
 
     // Callback: update_on_boot
     let weak = ui_weak.clone();
     bridge.on_update_on_boot(move || {
-        run_command_in_terminal(weak.clone(), "Mise à jour du système (Au prochain boot)", "nh", vec!["os".into(), "boot".into(), "-u".into()]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Mise à jour du système (Au prochain boot)",
+            "nh",
+            vec!["os".into(), "boot".into(), "-u".into(), "-e".into(), SUDO_WRAPPER.into()],
+        );
     });
 
     // Callback: clean_generations
@@ -289,7 +352,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     bridge.on_clean_generations(move |keep| {
         let keep_str = keep.to_string();
         let weak_for_refresh = weak.clone();
-        run_command_in_terminal(weak.clone(), "Nettoyage des générations NixOS", "nh", vec!["clean".into(), "all".into(), "--keep".into(), keep_str]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Nettoyage des générations NixOS",
+            "nh",
+            vec!["clean".into(), "all".into(), "--keep".into(), keep_str, "-e".into(), SUDO_WRAPPER.into()],
+        );
         load_generations(weak_for_refresh);
     });
 
@@ -297,7 +365,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let weak = ui_weak.clone();
     bridge.on_clean_all(move || {
         let weak_for_refresh = weak.clone();
-        run_command_in_terminal(weak.clone(), "Nettoyage complet du Garbage Collector", "nh", vec!["clean".into(), "all".into()]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Nettoyage complet du Garbage Collector",
+            "nh",
+            vec!["clean".into(), "all".into(), "-e".into(), SUDO_WRAPPER.into()],
+        );
         load_generations(weak_for_refresh);
     });
 
@@ -305,7 +378,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let weak = ui_weak.clone();
     bridge.on_optimise_store(move || {
         let weak_for_refresh = weak.clone();
-        run_command_in_terminal(weak.clone(), "Optimisation des hardlinks du Nix Store", "nix-store", vec!["--optimise".into()]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Optimisation des hardlinks du Nix Store",
+            SUDO_WRAPPER,
+            vec!["nix-store".into(), "--optimise".into()],
+        );
         load_generations(weak_for_refresh);
     });
 
@@ -318,7 +396,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return;
             }
         }
-        run_command_in_terminal(weak.clone(), "Application de la configuration ChomiamOS", "nh", vec!["os".into(), "switch".into()]);
+        run_command_in_terminal(
+            weak.clone(),
+            "Application de la configuration ChomiamOS",
+            "nh",
+            vec!["os".into(), "switch".into(), "-e".into(), SUDO_WRAPPER.into()],
+        );
     });
 
     // Callback: close_terminal

@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChomiamOS Dashboard</title>
+  <link rel="icon" type="image/png" href="/assets/logo.png">
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="theme-mocha">
+  <div class="app-container">
+    <!-- Top Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-left">
+        <div class="logo-box">
+          <img src="/assets/logo.png" alt="ChomiamOS" class="app-logo">
+          <div class="logo-text">
+            <span class="brand-name">Chomiam<span class="brand-accent">OS</span></span>
+            <span class="brand-badge">Dashboard</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="tab-btn active" data-tab="tab-system">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">Système & MAJ</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-disks">
+          <span class="tab-icon">💾</span>
+          <span class="tab-label">Disques & Générations</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-config">
+          <span class="tab-icon">⚙️</span>
+          <span class="tab-label">Gestionnaire d'Apps</span>
+          <span id="config-dirty-badge" class="badge-dot hidden"></span>
+        </button>
+      </nav>
+
+      <div class="nav-right">
+        <div class="system-status-pill">
+          <span class="status-indicator online"></span>
+          <span id="nav-kernel">Linux</span>
+        </div>
+        <div class="uptime-pill">
+          <span class="pill-icon">⏱️</span>
+          <span id="nav-uptime">--</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+
+      <!-- ==================== TAB 1: SYSTEM & UPDATES ==================== -->
+      <section id="tab-system" class="tab-content active">
+        <!-- Top Metrics Row -->
+        <div class="metrics-grid">
+          <!-- CPU Card -->
+          <div class="card metric-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon cpu-icon">⚡</span>
+                <div>
+                  <h3>Processeur</h3>
+                  <p id="cpu-model" class="card-subtitle">Détection...</p>
+                </div>
+              </div>
+              <span id="cpu-freq" class="metric-tag">-- GHz</span>
+            </div>
+            <div class="gauge-container">
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"></circle>
+                <circle id="cpu-gauge" class="gauge-fill cpu-fill" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="gauge-center">
+                <span id="cpu-percent" class="gauge-val">0%</span>
+                <span class="gauge-sub">Charge</span>
+              </div>
+            </div>
+            <div id="cpu-cores-bar" class="cores-meter"></div>
+          </div>
+
+          <!-- GPU Card -->
+          <div class="card metric-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon gpu-icon">🎮</span>
+                <div>
+                  <h3 id="gpu-name">Carte Graphique</h3>
+                  <p id="gpu-driver" class="card-subtitle">amdgpu (RADV)</p>
+                </div>
+              </div>
+              <span id="gpu-temp" class="metric-tag temp-tag">-- °C</span>
+            </div>
+            <div class="gauge-container">
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"></circle>
+                <circle id="gpu-gauge" class="gauge-fill gpu-fill" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="gauge-center">
+                <span id="gpu-percent" class="gauge-val">--%</span>
+                <span class="gauge-sub">Activité</span>
+              </div>
+            </div>
+            <div class="submetric-box">
+              <span class="submetric-label">VRAM Dédiée :</span>
+              <span id="vram-val" class="submetric-val">-- / -- Go</span>
+            </div>
+          </div>
+
+          <!-- RAM Card -->
+          <div class="card metric-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon ram-icon">🧠</span>
+                <div>
+                  <h3>Mémoire Vive</h3>
+                  <p id="ram-numbers" class="card-subtitle">-- / -- Go</p>
+                </div>
+              </div>
+              <span id="swap-val" class="metric-tag">Swap: --</span>
+            </div>
+            <div class="gauge-container">
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"></circle>
+                <circle id="ram-gauge" class="gauge-fill ram-fill" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="gauge-center">
+                <span id="ram-percent" class="gauge-val">0%</span>
+                <span class="gauge-sub">Utilisée</span>
+              </div>
+            </div>
+            <div class="progress-bar-wrap">
+              <div id="ram-bar" class="progress-bar-inner ram-fill" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Root Storage Card -->
+          <div class="card metric-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon disk-icon">💽</span>
+                <div>
+                  <h3>Système (/)</h3>
+                  <p id="root-disk-numbers" class="card-subtitle">-- / -- Go</p>
+                </div>
+              </div>
+              <span class="metric-tag">Ext4</span>
+            </div>
+            <div class="gauge-container">
+              <svg class="gauge-svg" viewBox="0 0 120 120">
+                <circle class="gauge-bg" cx="60" cy="60" r="50"></circle>
+                <circle id="disk-gauge" class="gauge-fill disk-fill" cx="60" cy="60" r="50"></circle>
+              </svg>
+              <div class="gauge-center">
+                <span id="root-disk-percent" class="gauge-val">0%</span>
+                <span class="gauge-sub">Occupé</span>
+              </div>
+            </div>
+            <div class="progress-bar-wrap">
+              <div id="root-disk-bar" class="progress-bar-inner disk-fill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Updates Center Card -->
+        <div class="card action-banner-card">
+          <div class="banner-content">
+            <div class="banner-icon-box">🚀</div>
+            <div class="banner-text">
+              <h2>Mises à Jour & Maintenance ChomiamOS</h2>
+              <p>Recompilez déclarativement votre système NixOS ou synchronisez les paquets avec les outils optimisés <code>nh</code>.</p>
+              <div class="system-meta-row">
+                <span class="meta-item"><strong id="meta-host">chomiamos</strong></span>
+                <span class="meta-item">•</span>
+                <span class="meta-item">NixOS 26.05</span>
+                <span class="meta-item">•</span>
+                <span class="meta-item" id="meta-commit">Commit: Détection...</span>
+              </div>
+            </div>
+            <div class="banner-actions">
+              <button class="btn btn-primary" onclick="runAction('switch-update')">
+                <span class="btn-icon">⚡</span> Mettre à jour tout de suite
+                <small>nh os switch -u</small>
+              </button>
+              <button class="btn btn-secondary" onclick="runAction('boot-update')">
+                <span class="btn-icon">🔄</span> Mettre à jour au reboot
+                <small>nh os boot -u</small>
+              </button>
+              <button class="btn btn-outline" onclick="runAction('switch')">
+                <span class="btn-icon">🔨</span> Recompiler la config locale
+                <small>nh os switch</small>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: DISKS & GENERATIONS ==================== -->
+      <section id="tab-disks" class="tab-content">
+        <!-- Disks Breakdown -->
+        <div class="section-title">
+          <h2>Disques & Partitions</h2>
+          <p>Surveillance de l'espace de stockage disponible sur les différents volumes</p>
+        </div>
+        <div id="disks-list" class="disks-grid">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Generations & Cleanup -->
+        <div class="section-title" style="margin-top: 32px;">
+          <h2>Gestion des Images & Profils NixOS</h2>
+          <p>Chaque modification de configuration crée une génération bootable. Nettoyez les anciennes images pour récupérer de l'espace disque.</p>
+        </div>
+
+        <!-- Quick Maintenance Bar -->
+        <div class="card cleanup-card">
+          <div class="cleanup-info">
+            <div class="cleanup-stat">
+              <span class="stat-label">Taille totale du Store :</span>
+              <span id="store-size-val" class="stat-val">Calcul...</span>
+            </div>
+            <div class="cleanup-stat">
+              <span class="stat-label">Nombre de générations :</span>
+              <span id="generations-count-val" class="stat-val">--</span>
+            </div>
+          </div>
+          <div class="cleanup-buttons">
+            <button class="btn btn-warning" onclick="runAction('clean-generations')">
+              <span class="btn-icon">🧹</span> Nettoyer (Garder 3 générations)
+            </button>
+            <button class="btn btn-danger" onclick="runAction('clean-all')">
+              <span class="btn-icon">🗑️</span> Garbage Collect complet
+            </button>
+            <button class="btn btn-outline" onclick="runAction('optimise')">
+              <span class="btn-icon">⚡</span> Optimiser le Store (Hardlinks)
+            </button>
+          </div>
+        </div>
+
+        <!-- Generations Table -->
+        <div class="card table-card">
+          <table class="generations-table">
+            <thead>
+              <tr>
+                <th>Génération</th>
+                <th>Date de Création</th>
+                <th>Version NixOS</th>
+                <th>Kernel</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody id="generations-tbody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Chargement des générations...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: APPS & OPTIONS CONFIG ==================== -->
+      <section id="tab-config" class="tab-content">
+        <div class="config-header-sticky">
+          <div class="config-header-text">
+            <h2>Gestionnaire de Modules & Applications</h2>
+            <p>Activez ou désactivez les applications optionnelles de votre système. Les modifications sont enregistrées dans <code>/etc/nixos/vars.nix</code>.</p>
+          </div>
+          <div class="config-header-actions">
+            <button class="btn btn-outline" onclick="resetConfig()">
+              <span>↩️</span> Annuler
+            </button>
+            <button class="btn btn-secondary" onclick="saveConfig(false)">
+              <span>💾</span> Sauvegarder
+            </button>
+            <button class="btn btn-primary" onclick="saveConfig(true)">
+              <span>🚀</span> Sauvegarder & Déployer
+            </button>
+          </div>
+        </div>
+
+        <div class="config-sections">
+
+          <!-- Section: Navigateur -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">🌐</span>
+                <div>
+                  <h3>Navigateur Web Principal</h3>
+                  <p class="card-subtitle">Navigateur préconfiguré par défaut dans le système</p>
+                </div>
+              </div>
+            </div>
+            <div class="radio-grid">
+              <label class="radio-card">
+                <input type="radio" name="browser" value="chrome">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🟡</span>
+                  <strong>Google Chrome</strong>
+                  <small>Paquet Nix</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="browser" value="firefox">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🦊</span>
+                  <strong>Mozilla Firefox</strong>
+                  <small>Paquet Nix</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="browser" value="zen">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🧘</span>
+                  <strong>Zen Browser</strong>
+                  <small>Flatpak</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="browser" value="librewolf">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🐺</span>
+                  <strong>LibreWolf</strong>
+                  <small>Paquet Nix</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="browser" value="opera">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🔴</span>
+                  <strong>Opera</strong>
+                  <small>Flatpak</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="browser" value="opera-gx">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🎮</span>
+                  <strong>Opera GX</strong>
+                  <small>Flatpak</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section: Discord -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">💬</span>
+                <div>
+                  <h3>Client de Communication (Discord)</h3>
+                  <p class="card-subtitle">Choisissez votre client Discord favori</p>
+                </div>
+              </div>
+            </div>
+            <div class="radio-grid">
+              <label class="radio-card">
+                <input type="radio" name="discord_client" value="discord">
+                <div class="radio-card-body">
+                  <span class="radio-icon">💬</span>
+                  <strong>Discord Officiel</strong>
+                  <small>Paquet Nix Natif</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="discord_client" value="equibop">
+                <div class="radio-card-body">
+                  <span class="radio-icon">✨</span>
+                  <strong>Equibop</strong>
+                  <small>Flatpak Client Moddé</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="discord_client" value="vesktop">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🛡️</span>
+                  <strong>Vesktop</strong>
+                  <small>Flatpak Vencord</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="discord_client" value="none">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🚫</span>
+                  <strong>Aucun</strong>
+                  <small>Pas de client Discord</small>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section: Gaming -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">🎮</span>
+                <div>
+                  <h3>Suite Gaming & Lanceurs de Jeux</h3>
+                  <p class="card-subtitle">Lanceurs, outils et périphériques de simulation</p>
+                </div>
+              </div>
+            </div>
+            <div class="toggles-grid">
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-steam">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">💨</span>
+                  <div class="toggle-text">
+                    <strong>Steam</strong>
+                    <small>Plateforme Valve avec Proton intégré</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-lutris">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🍷</span>
+                  <div class="toggle-text">
+                    <strong>Lutris</strong>
+                    <small>Gestionnaire universel de jeux Windows & runners</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-heroic">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">⚔️</span>
+                  <div class="toggle-text">
+                    <strong>Heroic Games Launcher</strong>
+                    <small>Client Epic Games, GOG & Prime Gaming</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-faugus">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🦅</span>
+                  <div class="toggle-text">
+                    <strong>Faugus Launcher</strong>
+                    <small>Lanceur rapide avec intégration Steam</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-decky">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🧩</span>
+                  <div class="toggle-text">
+                    <strong>Decky Loader</strong>
+                    <small>Gestionnaire de plugins pour Steam Gaming Mode</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-geforce">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">☁️</span>
+                  <div class="toggle-text">
+                    <strong>GeForce NOW</strong>
+                    <small>Cloud Gaming NVIDIA en haute fidélité</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-wheels">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🏎️</span>
+                  <div class="toggle-text">
+                    <strong>Volants & Simracing (Oversteer)</strong>
+                    <small>Pilotes Logitech, Thrustmaster, Fanatec + FFB</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section: Émulation -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">🕹️</span>
+                <div>
+                  <h3>Émulation & Rétrogaming</h3>
+                  <p class="card-subtitle">Suite rétro avec cœurs 2D et émulateurs autonomes</p>
+                </div>
+              </div>
+            </div>
+            <div class="toggles-grid">
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-esde">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">👾</span>
+                  <div class="toggle-text">
+                    <strong>Frontend ES-DE</strong>
+                    <small>Interface plein écran EmulationStation Desktop</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-retroarch">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🎯</span>
+                  <div class="toggle-text">
+                    <strong>RetroArch</strong>
+                    <small>Pack de cœurs 2D/Arcade, SNES, GBA, PS1</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-eden">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🔴</span>
+                  <div class="toggle-text">
+                    <strong>Eden (Nintendo Switch)</strong>
+                    <small>Émulateur Switch ultra-performant</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-dolphin">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🐬</span>
+                  <div class="toggle-text">
+                    <strong>Dolphin (GameCube / Wii)</strong>
+                    <small>Émulateur haute résolution avec manettes GameCube</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-pcsx2">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">💿</span>
+                  <div class="toggle-text">
+                    <strong>PCSX2 (PlayStation 2)</strong>
+                    <small>Émulateur PS2 avec rendu Vulkan 4K</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-ppsspp">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">📱</span>
+                  <div class="toggle-text">
+                    <strong>PPSSPP (PlayStation Portable)</strong>
+                    <small>Émulateur PSP fluide avec texture scaling</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-azahar">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🔷</span>
+                  <div class="toggle-text">
+                    <strong>Azahar (Nintendo 3DS)</strong>
+                    <small>Émulateur 3DS moderne unstable</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-melonds">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🎮</span>
+                  <div class="toggle-text">
+                    <strong>melonDS (Nintendo DS)</strong>
+                    <small>Émulation précise double écran et tactile</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-mgba">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🔋</span>
+                  <div class="toggle-text">
+                    <strong>mGBA (Game Boy / GBA)</strong>
+                    <small>Émulateur GB / GBC / GBA natif Qt</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-rpcs3">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">⬛</span>
+                  <div class="toggle-text">
+                    <strong>RPCS3 (PlayStation 3)</strong>
+                    <small>Émulateur PS3 haute compatibilité</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section: Multimédia & Réseau -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">📺</span>
+                <div>
+                  <h3>Multimédia, Réseau & Partage</h3>
+                  <p class="card-subtitle">Lecteurs, VPN maillé et transfert local de fichiers</p>
+                </div>
+              </div>
+            </div>
+            <div class="toggles-grid">
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-stremio">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🎬</span>
+                  <div class="toggle-text">
+                    <strong>Stremio</strong>
+                    <small>Plateforme de streaming de vidéos, séries et films</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-vlc">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🧡</span>
+                  <div class="toggle-text">
+                    <strong>VLC Media Player</strong>
+                    <small>Lecteur multimédia universel tous formats</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-mpv">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">⚡</span>
+                  <div class="toggle-text">
+                    <strong>MPV</strong>
+                    <small>Lecteur vidéo minimaliste ultra-rapide avec décodage GPU</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-localsend">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">📲</span>
+                  <div class="toggle-text">
+                    <strong>LocalSend</strong>
+                    <small>Partage instantané de fichiers en réseau local (AirDrop libre)</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-tailscale">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🔒</span>
+                  <div class="toggle-text">
+                    <strong>Tailscale VPN</strong>
+                    <small>VPN WireGuard maillé sans ouverture de ports</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-motrix">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🚀</span>
+                  <div class="toggle-text">
+                    <strong>Motrix</strong>
+                    <small>Gestionnaire de téléchargements HTTP, FTP et BitTorrent</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Section: Création & Outils -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">🎨</span>
+                <div>
+                  <h3>Création, Enregistrement & Outils Pro</h3>
+                  <p class="card-subtitle">Logiciels 3D, moteurs de jeu, capture vidéo et productivité</p>
+                </div>
+              </div>
+            </div>
+            <div class="toggles-grid">
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-obs">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">📹</span>
+                  <div class="toggle-text">
+                    <strong>OBS Studio (Plugins Inclus)</strong>
+                    <small>Suite complète : Vulkan vkcapture, PipeWire, IA background</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-kdenlive">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🎞️</span>
+                  <div class="toggle-text">
+                    <strong>Kdenlive</strong>
+                    <small>Montage vidéo multi-pistes open-source complet</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-blender">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🎨</span>
+                  <div class="toggle-text">
+                    <strong>Blender 3D</strong>
+                    <small>Suite de modélisation 3D, animation et rendu GPU</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-godot">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🤖</span>
+                  <div class="toggle-text">
+                    <strong>Godot Engine</strong>
+                    <small>Moteur de jeu vidéo 2D & 3D léger et puissant</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-kvm">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">📦</span>
+                  <div class="toggle-text">
+                    <strong>Virtualisation KVM / Virt-Manager</strong>
+                    <small>Hyperviseur matériel pour machines virtuelles</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-antigravity">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🚀</span>
+                  <div class="toggle-text">
+                    <strong>Antigravity IDE</strong>
+                    <small>Assistant de programmation et IDE agentique IA</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-pear">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🍐</span>
+                  <div class="toggle-text">
+                    <strong>Pear Desktop</strong>
+                    <small>Lecteur YouTube Music enrichi avec bloqueur et égaliseur</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+
+              <label class="toggle-card">
+                <input type="checkbox" id="cfg-aisuite">
+                <div class="toggle-card-body">
+                  <span class="toggle-icon">🧠</span>
+                  <div class="toggle-text">
+                    <strong>Suite IA Locale (Ollama + WebUI)</strong>
+                    <small>LLM locaux accélérés sur VRAM ROCm / CUDA</small>
+                  </div>
+                </div>
+                <div class="switch"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Streaming Terminal Modal / Drawer -->
+    <div id="terminal-modal" class="modal-overlay hidden">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-title">
+            <span id="term-status-icon" class="status-dot running"></span>
+            <span id="term-title">Exécution en direct</span>
+          </div>
+          <div class="terminal-controls">
+            <button class="term-btn" onclick="clearTerminal()">Effacer</button>
+            <button class="term-btn close-btn" onclick="closeTerminal()">Fermer ✕</button>
+          </div>
+        </div>
+        <div id="terminal-output" class="terminal-body">
+          <div class="terminal-prompt">En attente de commandes...</div>
+        </div>
+        <div class="terminal-footer">
+          <span id="term-status-text">Connecté au flux d'événements système</span>
+          <button id="term-autoscroll-btn" class="term-chip active" onclick="toggleAutoScroll()">Auto-scroll: ON</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

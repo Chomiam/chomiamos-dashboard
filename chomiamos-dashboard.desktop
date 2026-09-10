@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ChomiamOS Dashboard
+Comment=Tableau de bord de gestion et de surveillance ChomiamOS
+Exec=/home/chomiam/Projects/dashboard-chomiamos/target/release/chomiamos-dashboard
+Icon=chomiamos-dashboard
+Terminal=false
+Type=Application
+Categories=System;Settings;Monitor;HardwareSettings;
+StartupNotify=true

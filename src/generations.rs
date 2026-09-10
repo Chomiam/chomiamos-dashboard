@@ -125,19 +125,32 @@ pub fn delete_generations(ids: Vec<u32>) -> Result<String, String> {
         "nix-env"
     };
 
-    let output = Command::new(nix_env)
-        .args([
-            "--profile",
-            "/nix/var/nix/profiles/system",
-            "--delete-generations",
-        ])
-        .args(&ids_str)
+    let switch_cmd = if Path::new("/run/current-system/bin/switch-to-configuration").exists() {
+        "/run/current-system/bin/switch-to-configuration"
+    } else {
+        "switch-to-configuration"
+    };
+
+    // Élévation des privilèges via pkexec pour modifier le profil système et actualiser le bootloader
+    let script = format!(
+        "'{nix_env}' --profile /nix/var/nix/profiles/system --delete-generations {ids} && '{switch_cmd}' boot",
+        nix_env = nix_env,
+        ids = ids_str.join(" "),
+        switch_cmd = switch_cmd
+    );
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
         .output()
-        .map_err(|e| format!("Erreur lors de la suppression : {}", e))?;
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Échec de la suppression : {}", stderr));
+        let trimmed = stderr.trim();
+        if trimmed.contains("dismissed") || trimmed.contains("canceled") || trimmed.contains("annulé") {
+            return Err("Action annulée par l'utilisateur.".to_string());
+        }
+        return Err(format!("Échec de la suppression : {}", trimmed));
     }
 
     let count = ids.len();
@@ -168,31 +181,29 @@ pub fn switch_to_generation(id: u32) -> Result<String, String> {
         "nix-env"
     };
 
-    let output = Command::new(nix_env)
-        .args([
-            "--profile",
-            "/nix/var/nix/profiles/system",
-            "--switch-generation",
-            &id.to_string(),
-        ])
-        .output()
-        .map_err(|e| format!("Erreur lors du changement de génération : {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Échec du changement de génération : {}", stderr));
-    }
-
     // Activer la configuration pour le prochain reboot
     let switch_cmd = format!("{}/bin/switch-to-configuration", profile_link);
-    let output = Command::new(&switch_cmd)
-        .arg("boot")
+
+    // Élévation des privilèges via pkexec en une seule demande pour le profil système et le bootloader
+    let script = format!(
+        "'{nix_env}' --profile /nix/var/nix/profiles/system --switch-generation {id} && '{switch_cmd}' boot",
+        nix_env = nix_env,
+        id = id,
+        switch_cmd = switch_cmd
+    );
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
         .output()
-        .map_err(|e| format!("Erreur lors de l'activation boot : {}", e))?;
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Échec de switch-to-configuration boot : {}", stderr));
+        let trimmed = stderr.trim();
+        if trimmed.contains("dismissed") || trimmed.contains("canceled") || trimmed.contains("annulé") {
+            return Err("Action annulée par l'utilisateur.".to_string());
+        }
+        return Err(format!("Échec du changement de génération : {}", trimmed));
     }
 
     Ok(format!(

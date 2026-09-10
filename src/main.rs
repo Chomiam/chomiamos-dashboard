@@ -63,10 +63,12 @@ fn format_uptime(seconds: u64) -> String {
 
 fn run_command_in_terminal(
     ui_handle: slint::Weak<AppWindow>,
-    title: &'static str,
-    program: &'static str,
+    title: impl Into<String>,
+    program: impl Into<String>,
     args: Vec<String>,
 ) {
+    let title = title.into();
+    let program = program.into();
     if let Some(ui) = ui_handle.upgrade() {
         let bridge = ui.global::<DashboardBridge>();
         bridge.set_terminal_open(true);
@@ -404,7 +406,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         run_command_in_terminal(
             weak.clone(),
             "Optimisation des hardlinks du Nix Store",
-            &get_sudo_wrapper_path(),
+            get_sudo_wrapper_path(),
             vec!["nix-store".into(), "--optimise".into()],
         );
         load_generations(weak_for_refresh);

@@ -320,6 +320,7 @@ async function loadConfig() {
 }
 
 function populateConfigUI(c) {
+  setRadioVal("desktop_env", c.desktop_env);
   setRadioVal("browser", c.browser);
   setRadioVal("discord_client", c.discord_client);
 
@@ -388,6 +389,9 @@ function attachConfigChangeListeners() {
 function readConfigFromUI() {
   if (!currentConfig) return;
 
+  const deRadio = document.querySelector('input[name="desktop_env"]:checked');
+  if (deRadio) currentConfig.desktop_env = deRadio.value;
+
   const browserRadio = document.querySelector('input[name="browser"]:checked');
   if (browserRadio) currentConfig.browser = browserRadio.value;
 
@@ -437,12 +441,24 @@ function isChecked(id) {
 
 function checkDirtyState() {
   const dirtyBadge = document.getElementById("config-dirty-badge");
-  if (!dirtyBadge) return;
+  const deWarning = document.getElementById("de-change-warning");
+  const initialCfg = initialConfigStr ? JSON.parse(initialConfigStr) : null;
   const isDirty = JSON.stringify(currentConfig) !== initialConfigStr;
-  if (isDirty) {
-    dirtyBadge.classList.remove("hidden");
-  } else {
-    dirtyBadge.classList.add("hidden");
+
+  if (dirtyBadge) {
+    if (isDirty) {
+      dirtyBadge.classList.remove("hidden");
+    } else {
+      dirtyBadge.classList.add("hidden");
+    }
+  }
+
+  if (deWarning && initialCfg && currentConfig) {
+    if (initialCfg.desktop_env !== currentConfig.desktop_env) {
+      deWarning.style.display = "flex";
+    } else {
+      deWarning.style.display = "none";
+    }
   }
 }
 
@@ -453,15 +469,34 @@ function resetConfig() {
   }
 }
 
-async function saveConfig(andApply = false) {
+async function saveConfig(andApply = false, atBoot = false) {
   readConfigFromUI();
+
+  const initialCfg = initialConfigStr ? JSON.parse(initialConfigStr) : null;
+  const deChanged = initialCfg && initialCfg.desktop_env !== currentConfig.desktop_env;
+
+  if (andApply && !atBoot && deChanged) {
+    const confirmSwitch = confirm(
+      "⚠️ Attention : Vous changez d'environnement de bureau (" + (initialCfg?.desktop_env || "") + " → " + currentConfig.desktop_env + ").\n\n" +
+      "L'application en direct ('nh os switch') va relancer le gestionnaire d'affichage et risque de fermer brutalement votre session graphique.\n\n" +
+      "Voulez-vous plutôt l'appliquer en toute sécurité au prochain redémarrage ('nh os boot') ?"
+    );
+    if (confirmSwitch) {
+      atBoot = true;
+    }
+  }
+
   try {
     await invoke("save_chomiamos_config", { config: currentConfig });
     initialConfigStr = JSON.stringify(currentConfig);
     checkDirtyState();
 
     if (andApply) {
-      runAction("switch");
+      if (atBoot) {
+        runAction("boot-apply");
+      } else {
+        runAction("switch");
+      }
     } else {
       alert("Configuration sauvegardée avec succès dans /etc/nixos/vars.nix !");
     }
@@ -667,7 +702,11 @@ function runAction(action) {
   switch (action) {
     case "switch":
       task = "apply-config";
-      title = "Application de la configuration ChomiamOS";
+      title = "Application de la configuration ChomiamOS (Live)";
+      break;
+    case "boot-apply":
+      task = "boot-config";
+      title = "Application au prochain redémarrage (nh os boot)";
       break;
     case "switch-update":
       task = "update-now";

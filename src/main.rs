@@ -81,6 +81,10 @@ fn start_terminal_task(
             "nh".into(),
             vec!["os".into(), "switch".into(), "/etc/nixos".into()],
         ),
+        "boot-config" => (
+            "nh".into(),
+            vec!["os".into(), "boot".into(), "/etc/nixos".into()],
+        ),
         _ => return Err(format!("Action inconnue : {}", task)),
     };
 

@@ -276,13 +276,62 @@
             <button class="btn btn-secondary" onclick="saveConfig(false)">
               <span>💾</span> Sauvegarder
             </button>
-            <button class="btn btn-primary" onclick="saveConfig(true)">
-              <span>🚀</span> Sauvegarder & Déployer
+            <button id="btn-save-boot" class="btn btn-warning" onclick="saveConfig(true, true)">
+              <span>🔄</span> Appliquer au Reboot (nh os boot)
+            </button>
+            <button class="btn btn-primary" onclick="saveConfig(true, false)">
+              <span>🚀</span> Sauvegarder & Déployer (Live)
             </button>
           </div>
         </div>
 
         <div class="config-sections">
+
+          <!-- Section: Environnement de Bureau -->
+          <div class="card config-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon">🖥️</span>
+                <div>
+                  <h3>Environnement de Bureau</h3>
+                  <p class="card-subtitle">Sélectionnez votre interface graphique principale (reboot recommandé lors d'un changement)</p>
+                </div>
+              </div>
+            </div>
+            <div class="radio-grid">
+              <label class="radio-card">
+                <input type="radio" name="desktop_env" value="gnome">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🖥️</span>
+                  <strong>GNOME</strong>
+                  <small>Défaut (Dash to Dock, Vitals, Blur My Shell)</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="desktop_env" value="cosmic">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🚀</span>
+                  <strong>COSMIC</strong>
+                  <small>Expérimental (Écrit en Rust par System76)</small>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="desktop_env" value="cinnamon">
+                <div class="radio-card-body">
+                  <span class="radio-icon">🌿</span>
+                  <strong>Cinnamon</strong>
+                  <small>Traditionnel, fluide & personnalisable</small>
+                </div>
+              </label>
+            </div>
+            <div id="de-change-warning" class="alert-box alert-warning" style="display: none; margin-top: 14px;">
+              <span>⚠️</span>
+              <div>
+                <strong>Changement d'environnement de bureau sélectionné</strong>
+                <p>Pour éviter l'arrêt brutal de votre session graphique en cours, il est fortement conseillé de déployer cette modification au redémarrage avec <strong>"Appliquer au Reboot (nh os boot)"</strong>.</p>
+              </div>
+            </div>
+          </div>
 
           <!-- Section: Navigateur -->
           <div class="card config-card">

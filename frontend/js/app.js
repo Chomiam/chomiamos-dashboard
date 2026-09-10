@@ -356,6 +356,7 @@ function populateConfigUI(c) {
   // Emulation
   setCheck("cfg-esde", c.emulation.frontend === "es-de");
   setCheck("cfg-retroarch", c.emulation.retroarch);
+  setCheck("cfg-duckstation", c.emulation.duckstation);
   setCheck("cfg-eden", c.emulation.eden);
   setCheck("cfg-dolphin", c.emulation.dolphin);
   setCheck("cfg-pcsx2", c.emulation.pcsx2);
@@ -428,6 +429,7 @@ function readConfigFromUI() {
 
   currentConfig.emulation.frontend = isChecked("cfg-esde") ? "es-de" : "none";
   currentConfig.emulation.retroarch = isChecked("cfg-retroarch");
+  currentConfig.emulation.duckstation = isChecked("cfg-duckstation");
   currentConfig.emulation.eden = isChecked("cfg-eden");
   currentConfig.emulation.dolphin = isChecked("cfg-dolphin");
   currentConfig.emulation.pcsx2 = isChecked("cfg-pcsx2");

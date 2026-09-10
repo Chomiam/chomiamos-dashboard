@@ -297,6 +297,9 @@ pub fn get_system_conflicts() -> HashMap<String, String> {
         if config.emulation.dolphin {
             conflicts.insert("dolphin-emu".into(), "Émulateur Dolphin configuré dans vars.nix".into());
         }
+        if config.emulation.duckstation {
+            conflicts.insert("duckstation".into(), "Émulateur PlayStation 1 DuckStation configuré dans vars.nix".into());
+        }
         if config.emulation.pcsx2 {
             conflicts.insert("pcsx2".into(), "Émulateur PCSX2 configuré dans vars.nix".into());
         }

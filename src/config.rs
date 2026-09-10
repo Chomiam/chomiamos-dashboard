@@ -16,6 +16,7 @@ pub struct GamingConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmulationConfig {
     pub enable: bool,
+    pub duckstation: bool,
     pub frontend: String, // "es-de" or "none"
     pub retroarch: bool,
     pub eden: bool,
@@ -122,6 +123,7 @@ impl Default for ChomiamConfig {
                 enable: true,
                 frontend: "es-de".to_string(),
                 retroarch: true,
+                duckstation: true,
                 eden: true,
                 dolphin: true,
                 pcsx2: true,
@@ -242,6 +244,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     }
     cfg.emulation.enable = get_bool_in_block("emulation", "enable", false);
     cfg.emulation.retroarch = get_bool_in_block("retroarch", "enable", true);
+    cfg.emulation.duckstation = get_bool("duckstation", true);
     cfg.emulation.eden = get_bool("eden", true);
     cfg.emulation.dolphin = get_bool("dolphin", true);
     cfg.emulation.pcsx2 = get_bool("pcsx2", true);
@@ -374,6 +377,7 @@ r#"{{
     }};
 
     standalone = {{
+      duckstation = {duckstation};
       eden = {eden};
       dolphin = {dolphin};
       pcsx2 = {pcsx2};
@@ -441,6 +445,7 @@ r#"{{
         emulation_enable = c.emulation.enable,
         emulation_frontend = c.emulation.frontend,
         retroarch = c.emulation.retroarch,
+        duckstation = c.emulation.duckstation,
         eden = c.emulation.eden,
         dolphin = c.emulation.dolphin,
         pcsx2 = c.emulation.pcsx2,

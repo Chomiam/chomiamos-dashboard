@@ -278,28 +278,9 @@
 
       <!-- ==================== TAB 3: APPS & OPTIONS CONFIG ==================== -->
       <section id="tab-config" class="tab-content">
-        <div class="config-header-sticky">
-          <div class="config-header-text">
-            <h2>Gestionnaire de Modules & Applications</h2>
-            <p>Activez ou désactivez les applications optionnelles de votre système. Les modifications sont enregistrées dans <code>/etc/nixos/vars.nix</code>.</p>
-          </div>
-          <div class="config-header-actions">
-            <button class="btn btn-outline" onclick="resetConfig()">
-              <span>↩️</span> Annuler
-            </button>
-            <button class="btn btn-secondary" onclick="saveConfig(false)">
-              <span>💾</span> Sauvegarder
-            </button>
-            <button id="btn-save-boot" class="btn btn-warning" onclick="saveConfig(true, true)">
-              <span>🔄</span> Appliquer au Reboot (nh os boot)
-            </button>
-            <button class="btn btn-primary" onclick="saveConfig(true, false)">
-              <span>🚀</span> Sauvegarder & Déployer (Live)
-            </button>
-            <button class="btn btn-outline" onclick="runAction('sync-github')" title="Synchroniser la configuration depuis GitHub">
-              <span>🐙</span> Sync GitHub
-            </button>
-          </div>
+        <div class="section-title">
+          <h2>Gestionnaire de Modules & Applications</h2>
+          <p>Activez ou désactivez les applications optionnelles de votre système. Les modifications sont enregistrées dans <code>/etc/nixos/vars.nix</code>.</p>
         </div>
 
         <div class="config-sections">
@@ -893,6 +874,31 @@
                 </div>
                 <div class="switch"></div>
               </label>
+            </div>
+          </div>
+        </div>
+      
+        <!-- Bandeau d'action flottant épinglé en bas (Visible uniquement si modifications) -->
+        <div id="config-floating-bar" class="config-floating-bar hidden">
+          <div class="config-bar-inner">
+            <div class="config-bar-info">
+              <span id="config-bar-icon" class="config-bar-icon">⚡</span>
+              <div>
+                <strong id="config-bar-title">Modifications non appliquées</strong>
+                <p id="config-bar-desc">Prêt à déployer les changements immédiatement (<code>nh os switch</code>).</p>
+              </div>
+            </div>
+            <div class="config-bar-actions">
+              <button class="btn btn-outline btn-sm" onclick="resetConfig()">
+                <span>↩️</span> Annuler
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="saveConfig(false)" title="Sauvegarder dans vars.nix sans déployer immédiatement">
+                <span>💾</span> Sauvegarder seul
+              </button>
+              <button id="config-bar-apply-btn" class="btn btn-primary" onclick="submitConfigDeploy()">
+                <span id="config-bar-apply-icon">🚀</span>
+                <span id="config-bar-apply-text">Valider les modifications (nh os switch)</span>
+              </button>
             </div>
           </div>
         </div>

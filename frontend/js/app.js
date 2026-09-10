@@ -444,25 +444,55 @@ function isChecked(id) {
 }
 
 function checkDirtyState() {
-  const dirtyBadge = document.getElementById("config-dirty-badge");
-  const deWarning = document.getElementById("de-change-warning");
+  const bar = document.getElementById("config-floating-bar");
   const initialCfg = initialConfigStr ? JSON.parse(initialConfigStr) : null;
-  const isDirty = JSON.stringify(currentConfig) !== initialConfigStr;
+  const isDirty = initialConfigStr && JSON.stringify(currentConfig) !== initialConfigStr;
 
-  if (dirtyBadge) {
-    if (isDirty) {
-      dirtyBadge.classList.remove("hidden");
-    } else {
-      dirtyBadge.classList.add("hidden");
-    }
+  if (!bar) return;
+
+  if (!isDirty) {
+    bar.classList.add("hidden");
+    bar.classList.remove("visible", "de-change");
+    return;
   }
 
-  if (deWarning && initialCfg && currentConfig) {
-    if (initialCfg.desktop_env !== currentConfig.desktop_env) {
-      deWarning.style.display = "flex";
-    } else {
-      deWarning.style.display = "none";
+  bar.classList.remove("hidden");
+  bar.classList.add("visible");
+
+  const deChanged = initialCfg && currentConfig && (initialCfg.desktop_env !== currentConfig.desktop_env);
+  const iconEl = document.getElementById("config-bar-icon");
+  const titleEl = document.getElementById("config-bar-title");
+  const descEl = document.getElementById("config-bar-desc");
+  const applyBtn = document.getElementById("config-bar-apply-btn");
+  const applyIcon = document.getElementById("config-bar-apply-icon");
+  const applyText = document.getElementById("config-bar-apply-text");
+
+  if (deChanged) {
+    bar.classList.add("de-change");
+    if (iconEl) iconEl.textContent = "🔄";
+    if (titleEl) titleEl.textContent = "Changement de Bureau Détecté";
+    if (descEl) {
+      const oldDE = (initialCfg.desktop_env || "inconnu").toUpperCase();
+      const newDE = (currentConfig.desktop_env || "").toUpperCase();
+      descEl.innerHTML = "Bascule de <strong>" + oldDE + "</strong> vers <strong>" + newDE + "</strong>. Application sécurisée au prochain redémarrage (<code>nh os boot</code>).";
     }
+    if (applyBtn) {
+      applyBtn.className = "btn btn-warning";
+    }
+    if (applyIcon) applyIcon.textContent = "🔄";
+    if (applyText) applyText.textContent = "Valider & Reboot (nh os boot)";
+  } else {
+    bar.classList.remove("de-change");
+    if (iconEl) iconEl.textContent = "⚡";
+    if (titleEl) titleEl.textContent = "Modifications non appliquées";
+    if (descEl) {
+      descEl.innerHTML = "Prêt à déployer vos modifications immédiatement (<code>nh os switch</code>).";
+    }
+    if (applyBtn) {
+      applyBtn.className = "btn btn-primary";
+    }
+    if (applyIcon) applyIcon.textContent = "🚀";
+    if (applyText) applyText.textContent = "Valider les modifications (nh os switch)";
   }
 }
 
@@ -470,6 +500,19 @@ function resetConfig() {
   if (initialConfigStr) {
     currentConfig = JSON.parse(initialConfigStr);
     populateConfigUI(currentConfig);
+    checkDirtyState();
+  }
+}
+
+async function submitConfigDeploy() {
+  readConfigFromUI();
+  const initialCfg = initialConfigStr ? JSON.parse(initialConfigStr) : null;
+  const deChanged = initialCfg && currentConfig && (initialCfg.desktop_env !== currentConfig.desktop_env);
+
+  if (deChanged) {
+    await saveConfig(true, true);
+  } else {
+    await saveConfig(true, false);
   }
 }
 
@@ -1259,3 +1302,5 @@ window.selectFormatFs = selectFormatFs;
 window.toggleFormatSubmitButton = toggleFormatSubmitButton;
 window.submitFormat = submitFormat;
 window.openFileManager = openFileManager;
+window.resetConfig = resetConfig;
+window.submitConfigDeploy = submitConfigDeploy;

@@ -1469,3 +1469,90 @@ body {
   font-size: 13px;
   color: var(--text);
 }
+
+
+/* ==========================================================================
+   Config Floating Action Bar (Sticky Bottom)
+   ========================================================================== */
+
+#tab-config {
+  padding-bottom: 90px;
+}
+
+.config-floating-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120px);
+  width: calc(100% - 64px);
+  max-width: 900px;
+  background: rgba(24, 24, 37, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(180, 190, 254, 0.35);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(180, 190, 254, 0.15);
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.config-floating-bar.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.config-floating-bar.de-change {
+  border-color: rgba(249, 226, 175, 0.5);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px rgba(249, 226, 175, 0.2);
+}
+
+.config-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.config-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.config-bar-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.config-bar-info strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.config-bar-info p {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: var(--subtext0);
+}
+
+.config-bar-info code {
+  color: var(--lavender);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+
+.config-floating-bar.de-change .config-bar-info code {
+  color: var(--yellow);
+}
+
+.config-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

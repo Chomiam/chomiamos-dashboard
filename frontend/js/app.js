@@ -55,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initTerminal();
   loadStorageDevices();
   checkForUpdates();
+  setInterval(checkForUpdates, 30000);
 });
 
 // 1. Tab Navigation
@@ -1489,6 +1490,26 @@ async function checkForUpdates() {
       if (navIndicator) {
         navIndicator.classList.remove("hidden");
         navIndicator.innerHTML = "<span>✨</span> <span>MAJ Dashboard</span>";
+      }
+    } else if (status.system_needs_switch) {
+      if (alertBanner) {
+        alertBanner.classList.remove("hidden");
+        alertBanner.classList.add("is-github");
+        alertBanner.classList.remove("is-dashboard");
+      }
+      if (alertIcon) alertIcon.textContent = "⚡";
+      if (alertTitle) alertTitle.textContent = "Mise à jour prête à être déployée !";
+      if (alertDesc) {
+        alertDesc.innerHTML = "Une nouvelle version du tableau de bord ou de la configuration est prête. Déployez-la pour l'activer sur votre session.";
+      }
+      if (alertBtn) {
+        alertBtn.innerHTML = "<span>⚡</span> Déployer (nh os switch)";
+        alertBtn.onclick = () => runAction("switch");
+      }
+      if (navIndicator) {
+        navIndicator.classList.remove("hidden");
+        navIndicator.innerHTML = "<span>⚡</span> <span>Déployer MAJ</span>";
+        navIndicator.onclick = () => runAction("switch");
       }
     } else {
       if (alertBanner) alertBanner.classList.add("hidden");

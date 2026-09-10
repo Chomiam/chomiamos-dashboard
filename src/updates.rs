@@ -11,6 +11,7 @@ pub struct UpdateCheckResult {
     pub dashboard_has_updates: bool,
     pub dashboard_remote_commit: Option<String>,
     pub dashboard_locked_commit: Option<String>,
+    pub system_needs_switch: bool,
     pub current_version: String,
     pub message: String,
 }
@@ -100,10 +101,44 @@ pub fn check_system_updates() -> UpdateCheckResult {
         }
     }
 
+    // 4. Vérification si la configuration locale a des modifications non déployées
+    let mut system_needs_switch = false;
+    let sys_profile = std::path::Path::new("/nix/var/nix/profiles/system");
+    if let Ok(sys_meta) = std::fs::symlink_metadata(sys_profile) {
+        if let Ok(sys_time) = sys_meta.modified() {
+            let head_time_output = Command::new("git")
+                .args(["-C", "/etc/nixos", "log", "-1", "--format=%ct"])
+                .output();
+
+            if let Ok(out) = head_time_output {
+                if let Ok(ts_str) = String::from_utf8(out.stdout) {
+                    if let Ok(head_ts) = ts_str.trim().parse::<u64>() {
+                        let head_duration = std::time::Duration::from_secs(head_ts);
+                        if let Ok(sys_duration) = sys_time.duration_since(std::time::UNIX_EPOCH) {
+                            if head_duration > sys_duration {
+                                system_needs_switch = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Ok(lock_meta) = std::fs::metadata("/etc/nixos/flake.lock") {
+                if let Ok(lock_time) = lock_meta.modified() {
+                    if lock_time > sys_time {
+                        system_needs_switch = true;
+                    }
+                }
+            }
+        }
+    }
+
     let message = if github_has_updates {
         "Modifications disponibles sur le dépôt GitHub de ChomiamOS".to_string()
     } else if dashboard_has_updates {
         "Nouvelle version du Dashboard ChomiamOS disponible sur GitHub".to_string()
+    } else if system_needs_switch {
+        "Nouvelle version prête à être déployée (nh os switch)".to_string()
     } else {
         "Votre système et votre tableau de bord sont à jour".to_string()
     };
@@ -115,6 +150,7 @@ pub fn check_system_updates() -> UpdateCheckResult {
         dashboard_has_updates,
         dashboard_remote_commit,
         dashboard_locked_commit,
+        system_needs_switch,
         current_version,
         message,
     }

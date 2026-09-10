@@ -2136,3 +2136,76 @@ body {
   border-color: var(--mauve);
   color: var(--mauve);
 }
+
+
+/* Anchored Bottom-Right Floating Bar for Logithèque Nix */
+.pkg-floating-anchor {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 999;
+  display: flex;
+  pointer-events: auto;
+  animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pkg-anchor-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(24, 24, 37, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(203, 166, 247, 0.4);
+  border-radius: var(--radius-full);
+  padding: 8px 10px 8px 20px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.65), 0 0 24px rgba(203, 166, 247, 0.25);
+  transition: var(--transition-smooth);
+}
+
+.pkg-anchor-card:hover {
+  border-color: var(--mauve);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.75), 0 0 32px rgba(203, 166, 247, 0.35);
+  transform: translateY(-2px);
+}
+
+.pkg-anchor-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pkg-anchor-icon {
+  font-size: 20px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.pkg-anchor-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.pkg-anchor-text strong {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.pkg-anchor-text small {
+  font-size: 11px;
+  color: var(--subtext0);
+}
+
+.btn-apply-packages {
+  border-radius: var(--radius-full) !important;
+  padding: 10px 22px !important;
+  font-weight: 700 !important;
+  font-size: 13.5px !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 16px rgba(203, 166, 247, 0.4);
+}
+
+.btn-apply-packages:hover {
+  box-shadow: 0 6px 24px rgba(203, 166, 247, 0.6);
+}

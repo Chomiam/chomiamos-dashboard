@@ -974,9 +974,6 @@
             <button class="btn btn-outline btn-sm" onclick="loadCustomPackages()" title="Actualiser la liste">
               <span>🔄</span> Actualiser
             </button>
-            <button id="pkg-apply-btn" class="btn btn-primary" onclick="applyCustomPackagesDeploy()">
-              <span>🚀</span> Appliquer les changements (nh os switch)
-            </button>
           </div>
         </div>
 
@@ -1055,6 +1052,22 @@
         <!-- Packages Grid Container -->
         <div id="pkg-cards-grid" class="pkg-cards-grid">
           <!-- Dynamically filled by JS -->
+        </div>
+
+        <!-- Bouton d'action flottant ancré en bas à droite -->
+        <div id="pkg-floating-anchor" class="pkg-floating-anchor">
+          <div class="pkg-anchor-card">
+            <div class="pkg-anchor-info">
+              <span class="pkg-anchor-icon">📦</span>
+              <div class="pkg-anchor-text">
+                <strong>custom-packages.nix</strong>
+                <small id="pkg-anchor-count">0 paquet(s) configuré(s)</small>
+              </div>
+            </div>
+            <button id="pkg-apply-btn" class="btn btn-primary btn-apply-packages" onclick="applyCustomPackagesDeploy()">
+              <span>🚀</span> Appliquer les changements (nh os switch)
+            </button>
+          </div>
         </div>
 
       </section>

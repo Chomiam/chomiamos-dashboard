@@ -7,7 +7,7 @@ mod system;
 mod updates;
 
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 use config::{get_vars_path, read_vars_nix, save_vars_nix, ChomiamConfig};
 use generations::{list_generations, delete_generations as do_delete_generations, switch_to_generation as do_switch_to_generation, GenerationsSummary};
@@ -431,7 +431,38 @@ fn open_in_file_manager(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn restart_dashboard(app: AppHandle) {
-    tauri::process::restart(&app.env());
+    // Sur NixOS, tauri::process::restart() ré-exécute current_exe() qui pointe
+    // vers l'ancien chemin immuable /nix/store/... de l'application qui tournait.
+    // Pour exécuter la NOUVELLE version après un nh os switch, on cible en priorité
+    // le lien système actif /run/current-system/sw/bin/chomiamos-dashboard.
+    let user = std::env::var("USER").unwrap_or_else(|_| "chomiam".into());
+    let per_user_path = format!("/etc/profiles/per-user/{}/bin/chomiamos-dashboard", user);
+
+    let candidates = [
+        "/run/current-system/sw/bin/chomiamos-dashboard",
+        &per_user_path,
+    ];
+
+    let mut target_bin = None;
+    for c in &candidates {
+        let p = std::path::Path::new(c);
+        if p.exists() {
+            target_bin = Some(p.to_path_buf());
+            break;
+        }
+    }
+
+    let binary = target_bin.unwrap_or_else(|| {
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("chomiamos-dashboard"))
+    });
+
+    let _ = std::process::Command::new(&binary)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+
+    app.exit(0);
 }
 
 #[tauri::command]

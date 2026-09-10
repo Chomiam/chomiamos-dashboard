@@ -1741,6 +1741,11 @@ async function loadCustomPackages() {
       elConflicts.textContent = `Protégé (${conflictNames.length} règles)`;
     }
 
+    const elAnchorCount = document.getElementById("pkg-anchor-count");
+    if (elAnchorCount) {
+      elAnchorCount.textContent = `${totalCount} paquet(s) (${stableCount} stable, ${unstableCount} unstable)`;
+    }
+
     const input = document.getElementById("pkg-search-input");
     if (!input || !input.value.trim() || currentFilter === "installed") {
       renderCustomPackagesList();

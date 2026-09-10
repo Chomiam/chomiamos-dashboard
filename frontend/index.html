@@ -46,6 +46,10 @@
           <span class="tab-label">Gestionnaire d'Apps</span>
           <span id="config-dirty-badge" class="badge-dot hidden"></span>
         </button>
+        <button class="tab-btn" data-tab="tab-packages">
+          <span class="tab-icon">📦</span>
+          <span class="tab-label">Logithèque Nix</span>
+        </button>
       </nav>
 
       <div class="nav-right">
@@ -956,6 +960,103 @@
             </div>
           </div>
         </div>
+      </section>
+
+    
+      <!-- ==================== TAB 5: NIXPKGS STORE & CUSTOM PACKAGES ==================== -->
+      <section id="tab-packages" class="tab-content">
+        <div class="section-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px;">
+          <div>
+            <h2>📦 Logithèque Nix & Paquets Personnalisés</h2>
+            <p>Recherchez et gérez vos applications parmi tout le catalogue <strong>Nixpkgs</strong> (branches <strong>Stable 26.05</strong> et <strong>Unstable</strong>). Vos ajouts sont sauvegardés dans <code>/etc/nixos/custom-packages.nix</code>.</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-outline btn-sm" onclick="loadCustomPackages()" title="Actualiser la liste">
+              <span>🔄</span> Actualiser
+            </button>
+            <button id="pkg-apply-btn" class="btn btn-primary" onclick="applyCustomPackagesDeploy()">
+              <span>🚀</span> Appliquer les changements (nh os switch)
+            </button>
+          </div>
+        </div>
+
+        <!-- Metrics & Summary Row -->
+        <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 20px;">
+          <div class="card metric-card" style="padding: 16px 20px;">
+            <div class="metric-top">
+              <span class="metric-label">🌱 Paquets Stable (26.05)</span>
+              <span class="metric-icon" style="font-size: 20px;">📦</span>
+            </div>
+            <div class="metric-value-wrap" style="margin-top: 8px;">
+              <span id="pkg-stat-stable" class="metric-number" style="color: var(--green);">0</span>
+              <span class="metric-unit">paquet(s)</span>
+            </div>
+          </div>
+
+          <div class="card metric-card" style="padding: 16px 20px;">
+            <div class="metric-top">
+              <span class="metric-label">⚡ Paquets Unstable</span>
+              <span class="metric-icon" style="font-size: 20px;">🚀</span>
+            </div>
+            <div class="metric-value-wrap" style="margin-top: 8px;">
+              <span id="pkg-stat-unstable" class="metric-number" style="color: var(--mauve);">0</span>
+              <span class="metric-unit">paquet(s)</span>
+            </div>
+          </div>
+
+          <div class="card metric-card" style="padding: 16px 20px;">
+            <div class="metric-top">
+              <span class="metric-label">🛡️ Contrôle des Conflits</span>
+              <span class="metric-icon" style="font-size: 20px;">🔍</span>
+            </div>
+            <div class="metric-value-wrap" style="margin-top: 8px;">
+              <span id="pkg-stat-conflicts" class="metric-number" style="font-size: 18px; color: var(--green);">0 Conflit</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Bar & Filter Controls Card -->
+        <div class="card" style="margin-bottom: 24px; padding: 20px;">
+          <div class="pkg-search-box">
+            <div class="pkg-input-wrapper">
+              <span class="pkg-search-icon">🔍</span>
+              <input 
+                type="text" 
+                id="pkg-search-input" 
+                class="form-input pkg-search-input" 
+                placeholder="Rechercher un paquet (ex: neovim, spotify, obsidian, heroic, vlc, discord, btop)..."
+                autocomplete="off"
+                spellcheck="false"
+              >
+              <button id="pkg-search-clear" class="pkg-search-clear hidden" onclick="clearPackageSearch()" title="Effacer la recherche">✕</button>
+            </div>
+            <div class="pkg-filter-pills">
+              <button class="filter-pill active" data-filter="all" onclick="setPackageFilter('all')">
+                Tous les résultats
+              </button>
+              <button class="filter-pill" data-filter="installed" onclick="setPackageFilter('installed')">
+                ⭐ Mes paquets installés (<span id="filter-installed-count">0</span>)
+              </button>
+              <button class="filter-pill" data-filter="stable-only" onclick="setPackageFilter('stable-only')">
+                🌱 Stable disponible
+              </button>
+              <button class="filter-pill" data-filter="unstable-only" onclick="setPackageFilter('unstable-only')">
+                ⚡ Unstable disponible
+              </button>
+            </div>
+          </div>
+
+          <div id="pkg-search-status-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 13px; color: var(--subtext0);">
+            <span id="pkg-search-feedback">💡 Tapez un mot-clé pour rechercher en direct dans Nixpkgs Stable & Unstable.</span>
+            <span id="pkg-search-timing" style="font-family: monospace; font-size: 11.5px; opacity: 0.8;"></span>
+          </div>
+        </div>
+
+        <!-- Packages Grid Container -->
+        <div id="pkg-cards-grid" class="pkg-cards-grid">
+          <!-- Dynamically filled by JS -->
+        </div>
+
       </section>
 
     </main>

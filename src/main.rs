@@ -1,6 +1,7 @@
 mod config;
 mod disks;
 mod generations;
+mod packages;
 mod pty;
 mod system;
 mod updates;
@@ -10,6 +11,13 @@ use tauri::{AppHandle, Manager, State};
 
 use config::{get_vars_path, read_vars_nix, save_vars_nix, ChomiamConfig};
 use generations::{list_generations, delete_generations as do_delete_generations, switch_to_generation as do_switch_to_generation, GenerationsSummary};
+use packages::{
+    add_custom_package as do_add_custom_package,
+    get_packages_state as do_get_packages_state,
+    remove_custom_package as do_remove_custom_package,
+    search_nixpkgs as do_search_nixpkgs,
+    PackageEntry, PackagesState,
+};
 use pty::PtyManager;
 use system::{SystemCollector, SystemMetrics};
 
@@ -44,6 +52,27 @@ fn get_chomiamos_config() -> Result<ChomiamConfig, String> {
 fn save_chomiamos_config(config: ChomiamConfig) -> Result<(), String> {
     let path = get_vars_path();
     save_vars_nix(&path, &config)
+}
+
+
+#[tauri::command]
+async fn search_nix_packages(query: String) -> Result<Vec<PackageEntry>, String> {
+    do_search_nixpkgs(query).await
+}
+
+#[tauri::command]
+async fn get_custom_packages() -> Result<PackagesState, String> {
+    do_get_packages_state().await
+}
+
+#[tauri::command]
+fn add_custom_package(name: String, channel: String) -> Result<(), String> {
+    do_add_custom_package(name, channel)
+}
+
+#[tauri::command]
+fn remove_custom_package(name: String, channel: Option<String>) -> Result<(), String> {
+    do_remove_custom_package(name, channel)
 }
 
 fn get_sync_script(mode: &str) -> String {
@@ -298,6 +327,13 @@ fn start_terminal_task(
             "nh".into(),
             vec!["os".into(), "switch".into(), "/etc/nixos".into()],
         ),
+        "apply-packages" => (
+            "bash".into(),
+            vec![
+                "-c".into(),
+                r#"echo -e "\033[1;35m📦 Application des paquets personnalisés NixOS (nh os switch)...\033[0m\n" ; nh os switch /etc/nixos && echo -e "\n\033[1;32m✅ Configuration et paquets personnalisés appliqués avec succès !\033[0m""#.into(),
+            ],
+        ),
         "boot-config" => (
             "nh".into(),
             vec!["os".into(), "boot".into(), "/etc/nixos".into()],
@@ -531,7 +567,11 @@ fn main() {
             get_github_token,
             save_github_token,
             delete_github_token,
-            open_external_url
+            open_external_url,
+            search_nix_packages,
+            get_custom_packages,
+            add_custom_package,
+            remove_custom_package
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

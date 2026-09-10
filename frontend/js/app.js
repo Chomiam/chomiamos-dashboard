@@ -54,6 +54,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadConfig();
   initTerminal();
   loadStorageDevices();
+  loadCustomPackages();
+  initPackageSearch();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
 });
@@ -73,6 +75,8 @@ function initTabs() {
         targetContent.classList.add("active");
         if (targetId === "tab-disks") {
           loadStorageDevices();
+        } else if (targetId === "tab-packages") {
+          loadCustomPackages();
         }
       }
     });
@@ -1680,3 +1684,459 @@ window.toggleTokenVisibility = toggleTokenVisibility;
 window.saveToken = saveToken;
 window.deleteToken = deleteToken;
 window.openExternalUrl = openExternalUrl;
+
+
+// ==========================================================================
+// 📦 Logithèque Nix & Paquets Personnalisés (Stable & Unstable) Controller
+// ==========================================================================
+
+let currentPackagesState = null;
+let currentSearchResults = [];
+let currentFilter = "all";
+let searchDebounceTimeout = null;
+
+function showToast(message, type = "info") {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    container.className = "toast-container";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  const icon = type === "success" ? "✅" : type === "error" ? "❌" : type === "warning" ? "⚠️" : "💡";
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-msg">${escapeHtml(message)}</span>
+  `;
+  container.appendChild(toast);
+  setTimeout(() => toast.classList.add("show"), 10);
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+async function loadCustomPackages() {
+  try {
+    const state = await invoke("get_custom_packages");
+    currentPackagesState = state;
+
+    const stableCount = state.custom && state.custom.stable ? state.custom.stable.length : 0;
+    const unstableCount = state.custom && state.custom.unstable ? state.custom.unstable.length : 0;
+    const totalCount = stableCount + unstableCount;
+
+    const elStable = document.getElementById("pkg-stat-stable");
+    const elUnstable = document.getElementById("pkg-stat-unstable");
+    const elFilterCount = document.getElementById("filter-installed-count");
+    const elConflicts = document.getElementById("pkg-stat-conflicts");
+
+    if (elStable) elStable.textContent = stableCount;
+    if (elUnstable) elUnstable.textContent = unstableCount;
+    if (elFilterCount) elFilterCount.textContent = totalCount;
+
+    if (elConflicts) {
+      const conflictNames = Object.keys(state.system_conflicts || {});
+      elConflicts.textContent = `Protégé (${conflictNames.length} règles)`;
+    }
+
+    const input = document.getElementById("pkg-search-input");
+    if (!input || !input.value.trim() || currentFilter === "installed") {
+      renderCustomPackagesList();
+    }
+  } catch (err) {
+    console.error("Erreur lors du chargement des paquets personnalisés :", err);
+    showToast("Impossible de lire /etc/nixos/custom-packages.nix : " + err, "error");
+  }
+}
+
+function initPackageSearch() {
+  const input = document.getElementById("pkg-search-input");
+  const clearBtn = document.getElementById("pkg-search-clear");
+  if (!input) return;
+
+  input.addEventListener("input", (e) => {
+    const val = e.target.value;
+    if (clearBtn) {
+      if (val.trim()) clearBtn.classList.remove("hidden");
+      else clearBtn.classList.add("hidden");
+    }
+
+    if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
+
+    if (!val.trim()) {
+      const feedback = document.getElementById("pkg-search-feedback");
+      const timing = document.getElementById("pkg-search-timing");
+      if (feedback) feedback.textContent = "💡 Tapez un mot-clé pour rechercher en direct dans Nixpkgs Stable & Unstable.";
+      if (timing) timing.textContent = "";
+      renderCustomPackagesList();
+      return;
+    }
+
+    searchDebounceTimeout = setTimeout(() => {
+      executeSearch(val.trim());
+    }, 320);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout);
+      const val = input.value.trim();
+      if (val) executeSearch(val);
+    }
+  });
+}
+
+function clearPackageSearch() {
+  const input = document.getElementById("pkg-search-input");
+  const clearBtn = document.getElementById("pkg-search-clear");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+  if (clearBtn) clearBtn.classList.add("hidden");
+
+  const feedback = document.getElementById("pkg-search-feedback");
+  const timing = document.getElementById("pkg-search-timing");
+  if (feedback) feedback.textContent = "💡 Tapez un mot-clé pour rechercher en direct dans Nixpkgs Stable & Unstable.";
+  if (timing) timing.textContent = "";
+
+  renderCustomPackagesList();
+}
+
+function quickSearch(query) {
+  const input = document.getElementById("pkg-search-input");
+  const clearBtn = document.getElementById("pkg-search-clear");
+  if (input) {
+    input.value = query;
+    if (clearBtn) clearBtn.classList.remove("hidden");
+    executeSearch(query);
+  }
+}
+
+async function executeSearch(query) {
+  const feedback = document.getElementById("pkg-search-feedback");
+  const timing = document.getElementById("pkg-search-timing");
+  const grid = document.getElementById("pkg-cards-grid");
+
+  if (feedback) feedback.innerHTML = `<span>⏳</span> Recherche de <strong>« ${escapeHtml(query)} »</strong> dans les catalogues Stable 26.05 & Unstable...`;
+  if (timing) timing.textContent = "";
+
+  if (grid) {
+    grid.innerHTML = `
+      <div class="pkg-empty-state">
+        <div class="pkg-empty-icon">⏳</div>
+        <h3>Interrogation des index NixOS Search...</h3>
+        <p>Comparaison des versions Stable 26.05 et Unstable en cours.</p>
+      </div>
+    `;
+  }
+
+  const startTime = performance.now();
+  try {
+    const results = await invoke("search_nix_packages", { query });
+    const elapsed = Math.round(performance.now() - startTime);
+
+    currentSearchResults = results;
+
+    if (timing) timing.textContent = `${elapsed} ms`;
+    if (feedback) {
+      if (results.length === 0) {
+        feedback.innerHTML = `❌ Aucun paquet trouvé pour <strong>« ${escapeHtml(query)} »</strong>.`;
+      } else {
+        feedback.innerHTML = `✅ <strong>${results.length} paquet(s)</strong> trouvé(s) pour « ${escapeHtml(query)} ».`;
+      }
+    }
+
+    applyFilterAndRender();
+  } catch (err) {
+    console.error("Erreur de recherche Nix :", err);
+    if (feedback) feedback.innerHTML = `<span style="color: var(--red);">❌ Erreur de recherche : ${escapeHtml(String(err))}</span>`;
+    showToast("Échec de la recherche dans Nixpkgs : " + err, "error");
+  }
+}
+
+function setPackageFilter(filter) {
+  currentFilter = filter;
+  const pills = document.querySelectorAll(".pkg-filter-pills .filter-pill");
+  pills.forEach(p => {
+    if (p.getAttribute("data-filter") === filter) p.classList.add("active");
+    else p.classList.remove("active");
+  });
+
+  if (filter === "installed") {
+    renderCustomPackagesList();
+  } else {
+    const input = document.getElementById("pkg-search-input");
+    if (input && input.value.trim()) {
+      applyFilterAndRender();
+    } else {
+      renderCustomPackagesList();
+    }
+  }
+}
+
+function applyFilterAndRender() {
+  let list = currentSearchResults;
+  if (currentFilter === "stable-only") {
+    list = list.filter(p => !!p.stable_version);
+  } else if (currentFilter === "unstable-only") {
+    list = list.filter(p => !!p.unstable_version);
+  } else if (currentFilter === "installed") {
+    list = list.filter(p => p.is_custom_stable || p.is_custom_unstable);
+  }
+
+  renderPackageCards(list, false);
+}
+
+function renderCustomPackagesList() {
+  const grid = document.getElementById("pkg-cards-grid");
+  if (!grid) return;
+
+  if (!currentPackagesState || !currentPackagesState.custom_details || currentPackagesState.custom_details.length === 0) {
+    grid.innerHTML = `
+      <div class="pkg-empty-state">
+        <div class="pkg-empty-icon">📦</div>
+        <h3 style="color: var(--text); margin-bottom: 8px;">Aucun paquet personnalisé configuré</h3>
+        <p style="color: var(--subtext0); max-width: 500px; margin: 0 auto 18px auto; line-height: 1.5;">
+          Votre fichier <code>/etc/nixos/custom-packages.nix</code> est vierge. Recherchez une application dans la barre ci-dessus pour l'ajouter en version Stable ou Unstable !
+        </p>
+        <div style="font-size: 13px; color: var(--subtext1); margin-bottom: 8px;">💡 Recherches populaires :</div>
+        <div class="pkg-quick-tags">
+          <button class="pkg-quick-tag" onclick="quickSearch('neovim')">neovim</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('spotify')">spotify</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('obsidian')">obsidian</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('btop')">btop</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('micro')">micro</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('fastfetch')">fastfetch</button>
+          <button class="pkg-quick-tag" onclick="quickSearch('zen-browser')">zen-browser</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  renderPackageCards(currentPackagesState.custom_details, true);
+}
+
+function renderPackageCards(packages, isCustomView) {
+  const grid = document.getElementById("pkg-cards-grid");
+  if (!grid) return;
+
+  if (packages.length === 0) {
+    grid.innerHTML = `
+      <div class="pkg-empty-state">
+        <div class="pkg-empty-icon">🔍</div>
+        <h3>Aucun paquet ne correspond au filtre</h3>
+        <p>Essayez de changer de filtre ou de modifier votre terme de recherche.</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  for (const pkg of packages) {
+    const isStable = pkg.is_custom_stable;
+    const isUnstable = pkg.is_custom_unstable;
+    const isConflict = pkg.is_system_conflict;
+
+    let cardClass = "pkg-card";
+    if (isStable) cardClass += " installed-stable";
+    else if (isUnstable) cardClass += " installed-unstable";
+    else if (isConflict) cardClass += " conflict";
+
+    let badgeStatus = "";
+    if (isStable) {
+      badgeStatus = `<span class="badge" style="background: rgba(166, 227, 161, 0.18); color: var(--green); border: 1px solid var(--green); font-size: 11px;">🌱 Custom Stable</span>`;
+    } else if (isUnstable) {
+      badgeStatus = `<span class="badge" style="background: rgba(203, 166, 247, 0.18); color: var(--mauve); border: 1px solid var(--mauve); font-size: 11px;">⚡ Custom Unstable</span>`;
+    } else if (isConflict) {
+      badgeStatus = `<span class="badge" style="background: rgba(249, 226, 175, 0.18); color: var(--yellow); border: 1px solid var(--yellow); font-size: 11px;">⚠️ Système</span>`;
+    }
+
+    const stableAvail = !!pkg.stable_version;
+    const unstableAvail = !!pkg.unstable_version;
+
+    const stableClass = stableAvail ? "stable available" : "stable unavailable";
+    const unstableClass = unstableAvail ? "unstable available" : "unstable unavailable";
+
+    const stableVal = pkg.stable_version || "Non disponible";
+    const unstableVal = pkg.unstable_version || "Non disponible";
+
+    let conflictHtml = "";
+    if (isConflict) {
+      conflictHtml = `
+        <div class="pkg-conflict-box">
+          <span>⚠️</span>
+          <div>
+            <strong>Conflit avec le système :</strong> ${escapeHtml(pkg.conflict_reason || "Paquet système")}
+          </div>
+        </div>
+      `;
+    }
+
+    let actionsHtml = "";
+    if (isConflict) {
+      actionsHtml = `
+        <button class="btn btn-outline btn-sm" disabled title="Ce paquet est déjà géré par la configuration système">
+          🔒 Géré par le système
+        </button>
+      `;
+    } else if (isStable) {
+      actionsHtml = `
+        <button class="btn btn-outline btn-sm" onclick="switchPackageBranch('${escapeHtml(pkg.attr_name)}', 'unstable')" title="Basculer vers la version Unstable">
+          ⚡ Basculer Unstable
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCustomPackage('${escapeHtml(pkg.attr_name)}')" title="Retirer du fichier custom-packages.nix">
+          🗑️ Retirer
+        </button>
+      `;
+    } else if (isUnstable) {
+      actionsHtml = `
+        <button class="btn btn-outline btn-sm" onclick="switchPackageBranch('${escapeHtml(pkg.attr_name)}', 'stable')" title="Basculer vers la version Stable">
+          🌱 Basculer Stable
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteCustomPackage('${escapeHtml(pkg.attr_name)}')" title="Retirer du fichier custom-packages.nix">
+          🗑️ Retirer
+        </button>
+      `;
+    } else {
+      let addStableBtn = "";
+      let addUnstableBtn = "";
+
+      if (stableAvail) {
+        addStableBtn = `
+          <button class="btn btn-success btn-sm" onclick="installCustomPackage('${escapeHtml(pkg.attr_name)}', 'stable')">
+            🌱 + Stable
+          </button>
+        `;
+      }
+      if (unstableAvail) {
+        addUnstableBtn = `
+          <button class="btn btn-primary btn-sm" onclick="installCustomPackage('${escapeHtml(pkg.attr_name)}', 'unstable')">
+            ⚡ + Unstable
+          </button>
+        `;
+      }
+
+      actionsHtml = `${addStableBtn} ${addUnstableBtn}`;
+      if (!actionsHtml.trim()) {
+        actionsHtml = `<span style="font-size: 11.5px; color: var(--subtext0);">Indisponible</span>`;
+      }
+    }
+
+    html += `
+      <div class="${cardClass}">
+        <div class="pkg-card-header">
+          <div class="pkg-title-wrap">
+            <div class="pkg-icon">📦</div>
+            <div>
+              <h4 class="pkg-attr-name">${escapeHtml(pkg.attr_name)}</h4>
+              <span class="pkg-pname">${escapeHtml(pkg.pname)}</span>
+            </div>
+          </div>
+          <div>${badgeStatus}</div>
+        </div>
+
+        <p class="pkg-description" title="${escapeHtml(pkg.description)}">
+          ${escapeHtml(pkg.description || "Aucune description fournie dans Nixpkgs.")}
+        </p>
+
+        <div class="pkg-versions-grid">
+          <div class="pkg-version-pill ${stableClass}">
+            <span class="version-label">🌱 Stable (26.05)</span>
+            <span class="version-val" title="${escapeHtml(stableVal)}">${escapeHtml(stableVal)}</span>
+          </div>
+          <div class="pkg-version-pill ${unstableClass}">
+            <span class="version-label">⚡ Unstable</span>
+            <span class="version-val" title="${escapeHtml(unstableVal)}">${escapeHtml(unstableVal)}</span>
+          </div>
+        </div>
+
+        ${conflictHtml}
+
+        <div class="pkg-card-actions">
+          ${actionsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+async function installCustomPackage(name, channel) {
+  try {
+    await invoke("add_custom_package", { name, channel });
+    const channelLabel = channel === "stable" ? "Stable (26.05)" : "Unstable";
+    showToast(`Paquet « ${name} » ajouté en ${channelLabel} !`, "success");
+
+    await loadCustomPackages();
+
+    for (const item of currentSearchResults) {
+      if (item.attr_name === name) {
+        item.is_custom_stable = channel === "stable";
+        item.is_custom_unstable = channel === "unstable";
+      }
+    }
+    applyFilterAndRender();
+  } catch (err) {
+    console.error("Erreur ajout paquet :", err);
+    showToast("Erreur : " + err, "error");
+  }
+}
+
+async function deleteCustomPackage(name) {
+  try {
+    await invoke("remove_custom_package", { name, channel: null });
+    showToast(`Paquet « ${name} » retiré de custom-packages.nix !`, "info");
+
+    await loadCustomPackages();
+
+    for (const item of currentSearchResults) {
+      if (item.attr_name === name) {
+        item.is_custom_stable = false;
+        item.is_custom_unstable = false;
+      }
+    }
+    applyFilterAndRender();
+  } catch (err) {
+    console.error("Erreur suppression paquet :", err);
+    showToast("Erreur : " + err, "error");
+  }
+}
+
+async function switchPackageBranch(name, targetBranch) {
+  try {
+    await invoke("add_custom_package", { name, channel: targetBranch });
+    const channelLabel = targetBranch === "stable" ? "Stable (26.05)" : "Unstable";
+    showToast(`Paquet « ${name} » basculé sur ${channelLabel} !`, "success");
+
+    await loadCustomPackages();
+
+    for (const item of currentSearchResults) {
+      if (item.attr_name === name) {
+        item.is_custom_stable = targetBranch === "stable";
+        item.is_custom_unstable = targetBranch === "unstable";
+      }
+    }
+    applyFilterAndRender();
+  } catch (err) {
+    console.error("Erreur bascule paquet :", err);
+    showToast("Erreur : " + err, "error");
+  }
+}
+
+function applyCustomPackagesDeploy() {
+  runTerminalTask("apply-packages", "📦 Déploiement des paquets personnalisés (nh os switch)");
+}
+
+window.loadCustomPackages = loadCustomPackages;
+window.clearPackageSearch = clearPackageSearch;
+window.setPackageFilter = setPackageFilter;
+window.installCustomPackage = installCustomPackage;
+window.deleteCustomPackage = deleteCustomPackage;
+window.switchPackageBranch = switchPackageBranch;
+window.applyCustomPackagesDeploy = applyCustomPackagesDeploy;
+window.quickSearch = quickSearch;

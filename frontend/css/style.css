@@ -1729,3 +1729,34 @@ body {
 .generations-table tr:has(.gen-checkbox:checked):hover {
   background-color: rgba(203, 166, 247, 0.14) !important;
 }
+
+/* Settings icon button between logo and tabs */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background-color: var(--surface0);
+  border: 1px solid var(--surface1);
+  color: var(--subtext0);
+  cursor: pointer;
+  font-size: 15px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-left: 6px;
+}
+
+.nav-settings-btn:hover {
+  background-color: var(--surface1);
+  color: var(--mauve);
+  border-color: var(--mauve);
+  transform: rotate(45deg);
+  box-shadow: 0 2px 8px rgba(203, 166, 247, 0.25);
+}

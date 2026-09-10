@@ -78,6 +78,9 @@ fi
 if [ -f /etc/nixos/hosts/desktop/mount.nix ]; then
   cp -f /etc/nixos/hosts/desktop/mount.nix /etc/nixos/.mount.nix.backup
 fi
+if [ -f /etc/nixos/secrets/github-token.conf ]; then
+  cp -f /etc/nixos/secrets/github-token.conf /etc/nixos/secrets/.github-token.conf.backup
+fi
 
 # 2. Sauvegarde dans le stash git (indépendant de la langue avec --porcelain)
 DID_STASH=0
@@ -184,6 +187,11 @@ if [ -f /etc/nixos/.hardware-configuration.nix.backup ]; then
     echo -e "\033[1;33m🛡️ Restauration de hardware-configuration.nix depuis la sauvegarde...\033[0m"
     cp -f /etc/nixos/.hardware-configuration.nix.backup /etc/nixos/hosts/desktop/hardware-configuration.nix
   fi
+fi
+
+# Restauration automatique du token GitHub si altéré
+if [ -f /etc/nixos/secrets/.github-token.conf.backup ] && [ ! -s /etc/nixos/secrets/github-token.conf ]; then
+  cp -f /etc/nixos/secrets/.github-token.conf.backup /etc/nixos/secrets/github-token.conf
 fi
 
 # Restauration automatique de mount.nix si altéré
@@ -354,6 +362,110 @@ fn restart_dashboard(app: AppHandle) {
     tauri::process::restart(&app.env());
 }
 
+#[tauri::command]
+fn get_github_token() -> Result<Option<String>, String> {
+    let path = std::path::Path::new("/etc/nixos/secrets/github-token.conf");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Impossible de lire le fichier de token : {}", e))?;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') || trimmed.is_empty() {
+            continue;
+        }
+        if let Some(pos) = trimmed.find("github.com=") {
+            let token = trimmed[pos + "github.com=".len()..].trim();
+            return Ok(Some(token.to_string()));
+        } else if trimmed.starts_with("ghp_") || trimmed.starts_with("github_pat_") {
+            return Ok(Some(trimmed.to_string()));
+        }
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+fn save_github_token(token: String) -> Result<(), String> {
+    let dir = std::path::Path::new("/etc/nixos/secrets");
+    if !dir.exists() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let path = dir.join("github-token.conf");
+    let trimmed = token.trim();
+
+    if trimmed.is_empty() {
+        if path.exists() {
+            let _ = std::fs::remove_file(&path);
+        }
+        return Ok(());
+    }
+
+    let clean_token = if let Some(pos) = trimmed.find("github.com=") {
+        trimmed[pos + "github.com=".len()..].trim()
+    } else {
+        trimmed
+    };
+
+    let file_content = format!("access-tokens = github.com={}\n", clean_token);
+
+    match std::fs::write(&path, &file_content) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            let mut child = std::process::Command::new("pkexec")
+                .args(["tee", path.to_str().unwrap()])
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .map_err(|e| format!("Impossible d'enregistrer le token : {}", e))?;
+
+            if let Some(mut stdin) = child.stdin.take() {
+                use std::io::Write;
+                let _ = stdin.write_all(file_content.as_bytes());
+            }
+            let status = child.wait().map_err(|e| e.to_string())?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err("Échec de l'enregistrement avec les privilèges administrateur.".into())
+            }
+        }
+    }
+}
+
+#[tauri::command]
+fn delete_github_token() -> Result<(), String> {
+    let path = std::path::Path::new("/etc/nixos/secrets/github-token.conf");
+    if path.exists() {
+        match std::fs::remove_file(path) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                let status = std::process::Command::new("pkexec")
+                    .args(["rm", "-f", path.to_str().unwrap()])
+                    .status()
+                    .map_err(|e| e.to_string())?;
+                if status.success() {
+                    Ok(())
+                } else {
+                    Err("Impossible de supprimer le fichier de token.".into())
+                }
+            }
+        }
+    } else {
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(&url)
+        .spawn()
+        .map_err(|e| format!("Impossible d'ouvrir le navigateur : {}", e))?;
+    Ok(())
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -379,7 +491,11 @@ fn main() {
             open_in_file_manager,
             get_current_user,
             check_system_updates,
-            restart_dashboard
+            restart_dashboard,
+            get_github_token,
+            save_github_token,
+            delete_github_token,
+            open_external_url
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

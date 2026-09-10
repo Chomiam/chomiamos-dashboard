@@ -53,6 +53,9 @@
         <button id="nav-reload-btn" class="system-status-pill" style="cursor: pointer; background: transparent; border: 1px solid var(--surface1); color: var(--subtext0);" onclick="restartDashboard()" title="Recharger / Relancer le Dashboard">
           <span>🔄</span>
         </button>
+        <button id="nav-settings-btn" class="system-status-pill" style="cursor: pointer; background: transparent; border: 1px solid var(--surface1); color: var(--subtext0);" onclick="openSettingsModal()" title="Paramètres GitHub & Système">
+          <span>⚙️</span>
+        </button>
         <div class="system-status-pill">
           <span class="status-indicator online"></span>
           <span id="nav-kernel">Linux</span>
@@ -1131,6 +1134,91 @@
           <button class="btn btn-danger" id="btn-confirm-format" disabled onclick="submitFormat()">
             <span>🗑️</span> Formater définitivement
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS / GITHUB TOKEN MODAL ==================== -->
+    <div id="settings-modal" class="modal-overlay hidden">
+      <div class="modal-card" style="max-width: 580px;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">⚙️</span>
+            <div>
+              <h3>Paramètres GitHub & Système</h3>
+              <p class="modal-subtitle">Configuration du token GitHub pour NixOS</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeSettingsModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="info-alert" style="margin-bottom: 16px; background: rgba(137, 180, 250, 0.08); border-left: 3px solid var(--accent); padding: 12px 14px; border-radius: 8px; display: flex; gap: 12px; align-items: flex-start;">
+            <span style="font-size: 20px; line-height: 1;">💡</span>
+            <div style="font-size: 13px; line-height: 1.5; color: var(--text);">
+              <strong>Pourquoi renseigner un token GitHub ?</strong><br>
+              Sans token, GitHub limite les requêtes à <strong>60 requêtes/heure</strong> par adresse IP. Lors des mises à jour ou des synchronisations de configuration NixOS, cela peut bloquer le système avec une erreur <code>403 rate limit exceeded</code>.
+              Avec un token personnel, la limite passe à <strong>5 000 requêtes/heure</strong>.
+            </div>
+          </div>
+
+          <div style="background: var(--surface0); border: 1px solid var(--surface1); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+            <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 6px;">
+              <span>🔗</span> Comment générer votre token GitHub :
+            </h4>
+            <ol style="margin: 0; padding-left: 20px; font-size: 12.5px; color: var(--subtext0); line-height: 1.6;">
+              <li>Rendez-vous sur la page des tokens GitHub : 
+                <a href="#" onclick="openExternalUrl('https://github.com/settings/tokens'); return false;" style="color: var(--accent); font-weight: 600; text-decoration: underline;">github.com/settings/tokens</a>
+              </li>
+              <li>Cliquez sur <strong>Generate new token</strong> ➔ <strong>Generate new token (classic)</strong>.</li>
+              <li>Donnez-lui une note descriptive (ex: <em>ChomiamOS Nix</em>). <strong>Aucun droit spécifique n'est requis</strong> pour lever la limite de requêtes publiques.</li>
+              <li>Cliquez sur <strong>Generate token</strong> tout en bas et copiez la clé générée (commençant par <code>ghp_</code>).</li>
+            </ol>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>GitHub Personal Access Token (classic) :</span>
+              <span id="github-token-status-badge" class="badge" style="font-size: 11px;">Vérification...</span>
+            </label>
+            <div style="position: relative; display: flex; align-items: center;">
+              <input 
+                type="password" 
+                id="github-token-input" 
+                class="form-input" 
+                placeholder="ghp_YOUR_GITHUB_PERSONAL_ACCESS_TOKEN_HERE" 
+                autocomplete="off"
+                spellcheck="false"
+                style="padding-right: 42px; font-family: monospace;"
+              >
+              <button 
+                type="button" 
+                id="toggle-token-visibility-btn"
+                onclick="toggleTokenVisibility()" 
+                title="Afficher/Masquer le token"
+                style="position: absolute; right: 8px; background: transparent; border: none; cursor: pointer; color: var(--subtext0); font-size: 16px; padding: 4px;"
+              >
+                👁️
+              </button>
+            </div>
+            <small class="form-help" style="display: block; margin-top: 6px; color: var(--subtext1); font-size: 11.5px;">
+              📁 Enregistré dans <code>/etc/nixos/secrets/github-token.conf</code> (inclus automatiquement par NixOS).
+            </small>
+          </div>
+
+          <div id="github-token-alert" class="hidden" style="margin-top: 14px; padding: 10px 12px; border-radius: 6px; font-size: 12px;"></div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <button class="btn btn-danger btn-sm" id="btn-delete-token" onclick="deleteToken()" style="display: none;">
+            <span>🗑️</span> Supprimer
+          </button>
+          <div style="display: flex; gap: 8px; margin-left: auto;">
+            <button class="btn btn-outline" onclick="closeSettingsModal()">Annuler</button>
+            <button class="btn btn-primary" id="btn-save-token" onclick="saveToken()">
+              <span>💾</span> Enregistrer
+            </button>
+          </div>
         </div>
       </div>
     </div>

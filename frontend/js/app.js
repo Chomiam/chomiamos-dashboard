@@ -1516,3 +1516,145 @@ async function restartDashboard() {
 window.checkForUpdates = checkForUpdates;
 window.dismissUpdateAlert = dismissUpdateAlert;
 window.restartDashboard = restartDashboard;
+
+// =========================================================================
+// ⚙️ Settings & GitHub Token Management
+// =========================================================================
+async function openSettingsModal() {
+  const modal = document.getElementById("settings-modal");
+  if (!modal) return;
+
+  const input = document.getElementById("github-token-input");
+  const badge = document.getElementById("github-token-status-badge");
+  const deleteBtn = document.getElementById("btn-delete-token");
+  const alertEl = document.getElementById("github-token-alert");
+
+  if (alertEl) {
+    alertEl.className = "hidden";
+    alertEl.textContent = "";
+  }
+
+  try {
+    const token = await invoke("get_github_token");
+    if (token) {
+      if (input) input.value = token;
+      if (badge) {
+        badge.className = "badge badge-accent";
+        badge.textContent = "✅ Configuré";
+      }
+      if (deleteBtn) deleteBtn.style.display = "inline-flex";
+    } else {
+      if (input) input.value = "";
+      if (badge) {
+        badge.className = "badge";
+        badge.textContent = "⚠️ Non configuré";
+      }
+      if (deleteBtn) deleteBtn.style.display = "none";
+    }
+  } catch (e) {
+    console.error("Erreur lecture token GitHub:", e);
+    if (badge) {
+      badge.className = "badge";
+      badge.textContent = "Erreur lecture";
+    }
+  }
+
+  modal.classList.remove("hidden");
+  if (input) input.focus();
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById("settings-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function toggleTokenVisibility() {
+  const input = document.getElementById("github-token-input");
+  const btn = document.getElementById("toggle-token-visibility-btn");
+  if (!input) return;
+
+  if (input.type === "password") {
+    input.type = "text";
+    if (btn) btn.textContent = "🙈";
+  } else {
+    input.type = "password";
+    if (btn) btn.textContent = "👁️";
+  }
+}
+
+async function saveToken() {
+  const input = document.getElementById("github-token-input");
+  const alertEl = document.getElementById("github-token-alert");
+  const token = input ? input.value.trim() : "";
+
+  if (!token) {
+    if (confirm("Le champ est vide. Souhaitez-vous supprimer le token existant ?")) {
+      await deleteToken();
+    }
+    return;
+  }
+
+  try {
+    await invoke("save_github_token", { token });
+    if (alertEl) {
+      alertEl.style.background = "rgba(166, 227, 161, 0.15)";
+      alertEl.style.color = "var(--green)";
+      alertEl.style.border = "1px solid var(--green)";
+      alertEl.textContent = "✅ Token GitHub enregistré avec succès dans /etc/nixos/secrets/github-token.conf !";
+      alertEl.classList.remove("hidden");
+    }
+    setTimeout(() => {
+      closeSettingsModal();
+    }, 1200);
+  } catch (e) {
+    if (alertEl) {
+      alertEl.style.background = "rgba(243, 139, 168, 0.15)";
+      alertEl.style.color = "var(--red)";
+      alertEl.style.border = "1px solid var(--red)";
+      alertEl.textContent = "❌ Erreur : " + e;
+      alertEl.classList.remove("hidden");
+    }
+  }
+}
+
+async function deleteToken() {
+  const alertEl = document.getElementById("github-token-alert");
+  const input = document.getElementById("github-token-input");
+  try {
+    await invoke("delete_github_token");
+    if (input) input.value = "";
+    if (alertEl) {
+      alertEl.style.background = "rgba(166, 227, 161, 0.15)";
+      alertEl.style.color = "var(--green)";
+      alertEl.style.border = "1px solid var(--green)";
+      alertEl.textContent = "🗑️ Token supprimé avec succès.";
+      alertEl.classList.remove("hidden");
+    }
+    setTimeout(() => {
+      closeSettingsModal();
+    }, 1000);
+  } catch (e) {
+    if (alertEl) {
+      alertEl.style.background = "rgba(243, 139, 168, 0.15)";
+      alertEl.style.color = "var(--red)";
+      alertEl.style.border = "1px solid var(--red)";
+      alertEl.textContent = "❌ Erreur : " + e;
+      alertEl.classList.remove("hidden");
+    }
+  }
+}
+
+async function openExternalUrl(url) {
+  try {
+    await invoke("open_external_url", { url });
+  } catch (e) {
+    window.open(url, "_blank");
+  }
+}
+
+window.openSettingsModal = openSettingsModal;
+window.closeSettingsModal = closeSettingsModal;
+window.toggleTokenVisibility = toggleTokenVisibility;
+window.saveToken = saveToken;
+window.deleteToken = deleteToken;
+window.openExternalUrl = openExternalUrl;

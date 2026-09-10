@@ -1,112 +1,111 @@
 #![allow(dead_code)]
-use serde::Serialize;
-use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
-use tokio_stream::wrappers::LinesStream;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::process::Command;
 
-#[derive(Debug, Clone, Serialize)]
-pub struct UpdateCheck {
-    pub updates_available: bool,
-    pub current_commit: String,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckResult {
+    pub github_has_updates: bool,
+    pub github_remote_commit: Option<String>,
+    pub github_local_commit: String,
+    pub dashboard_has_updates: bool,
+    pub dashboard_remote_commit: Option<String>,
+    pub dashboard_locked_commit: Option<String>,
+    pub current_version: String,
     pub message: String,
 }
 
-pub async fn check_updates() -> UpdateCheck {
-    // Check git status in /etc/nixos
-    let git_check = Command::new("git")
+pub fn check_system_updates() -> UpdateCheckResult {
+    let current_version = env!("CARGO_PKG_VERSION").to_string();
+
+    // 1. Commit local /etc/nixos
+    let local_commit = Command::new("git")
         .args(["-C", "/etc/nixos", "rev-parse", "--short", "HEAD"])
         .output()
-        .await;
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "inconnu".to_string());
 
-    let commit = match git_check {
-        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        _ => "local".to_string(),
-    };
+    let full_local_commit = Command::new("git")
+        .args(["-C", "/etc/nixos", "rev-parse", "HEAD"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
 
-    UpdateCheck {
-        updates_available: false,
-        current_commit: commit,
-        message: "Système synchronisé avec /etc/nixos".to_string(),
+    // 2. Vérification remote /etc/nixos (Chomiam/nix_config_gaming)
+    let remote_nixos = Command::new("git")
+        .args(["-C", "/etc/nixos", "ls-remote", "origin", "HEAD"])
+        .output();
+
+    let mut github_has_updates = false;
+    let mut github_remote_commit = None;
+
+    if let Ok(out) = remote_nixos {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(token) = text.split_whitespace().next() {
+                github_remote_commit = Some(token[..7.min(token.len())].to_string());
+                if !full_local_commit.is_empty() && token != full_local_commit {
+                    github_has_updates = true;
+                }
+            }
+        }
     }
-}
 
-pub struct ProcessOutputLine {
-    pub text: String,
-    pub is_error: bool,
-}
+    // 3. Vérification de la version du dashboard dans /etc/nixos/flake.lock vs GitHub
+    let mut dashboard_has_updates = false;
+    let mut dashboard_locked_commit = None;
+    let mut dashboard_remote_commit = None;
 
-pub async fn spawn_command_stream(
-    action: &str,
-) -> Result<LinesStream<BufReader<tokio::io::DuplexStream>>, String> {
-    let (mut client_writer, client_reader) = tokio::io::duplex(64 * 1024);
+    if let Ok(content) = fs::read_to_string("/etc/nixos/flake.lock") {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(rev) = json
+                .get("nodes")
+                .and_then(|n| n.get("chomiamos-dashboard"))
+                .and_then(|d| d.get("locked"))
+                .and_then(|l| l.get("rev"))
+                .and_then(|r| r.as_str())
+            {
+                dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
 
-    let (program, args): (&str, Vec<&str>) = match action {
-        "switch" => ("nh", vec!["os", "switch", "/etc/nixos"]),
-        "switch-update" => ("nh", vec!["os", "switch", "-u", "/etc/nixos"]),
-        "boot" => ("nh", vec!["os", "boot", "/etc/nixos"]),
-        "boot-update" => ("nh", vec!["os", "boot", "-u", "/etc/nixos"]),
-        "clean-generations" => ("nh", vec!["clean", "all", "--keep", "3"]),
-        "clean-all" => ("nh", vec!["clean", "all"]),
-        "optimise" => ("nix", vec!["store", "optimise"]),
-        _ => return Err(format!("Action inconnue: {}", action)),
+                let remote_dash = Command::new("git")
+                    .args([
+                        "ls-remote",
+                        "https://github.com/Chomiam/chomiamos-dashboard.git",
+                        "HEAD",
+                    ])
+                    .output();
+
+                if let Ok(out) = remote_dash {
+                    if out.status.success() {
+                        let text = String::from_utf8_lossy(&out.stdout);
+                        if let Some(token) = text.split_whitespace().next() {
+                            dashboard_remote_commit = Some(token[..7.min(token.len())].to_string());
+                            if token != rev {
+                                dashboard_has_updates = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let message = if github_has_updates {
+        "Modifications disponibles sur le dépôt GitHub de ChomiamOS".to_string()
+    } else if dashboard_has_updates {
+        "Nouvelle version du Dashboard ChomiamOS disponible sur GitHub".to_string()
+    } else {
+        "Votre système et votre tableau de bord sont à jour".to_string()
     };
 
-    let mut cmd = Command::new(program);
-    cmd.args(&args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Impossible de lancer {}: {}", program, e))?;
-
-    let stdout = child.stdout.take().expect("Failed to capture stdout");
-    let stderr = child.stderr.take().expect("Failed to capture stderr");
-
-    tokio::spawn(async move {
-        use tokio::io::AsyncWriteExt;
-        let mut out_reader = BufReader::new(stdout).lines();
-        let mut err_reader = BufReader::new(stderr).lines();
-
-        let banner = format!("🚀 Démarrage de : {} {}\n", program, args.join(" "));
-        let _ = client_writer.write_all(banner.as_bytes()).await;
-
-        loop {
-            tokio::select! {
-                line = out_reader.next_line() => {
-                    match line {
-                        Ok(Some(l)) => {
-                            let _ = client_writer.write_all(format!("{}\n", l).as_bytes()).await;
-                        }
-                        _ => break,
-                    }
-                }
-                line = err_reader.next_line() => {
-                    match line {
-                        Ok(Some(l)) => {
-                            let _ = client_writer.write_all(format!("{}\n", l).as_bytes()).await;
-                        }
-                        _ => break,
-                    }
-                }
-            }
-        }
-
-        let status = child.wait().await;
-        match status {
-            Ok(s) if s.success() => {
-                let _ = client_writer.write_all("\n\x1b[32m✔ Opération terminée avec succès !\x1b[0m\n".as_bytes()).await;
-            }
-            Ok(s) => {
-                let _ = client_writer.write_all(format!("\n\x1b[31m✘ L'opération a échoué avec le code {}\x1b[0m\n", s.code().unwrap_or(1)).as_bytes()).await;
-            }
-            Err(e) => {
-                let _ = client_writer.write_all(format!("\n\x1b[31m✘ Erreur d'exécution: {}\x1b[0m\n", e).as_bytes()).await;
-            }
-        }
-    });
-
-    let reader = BufReader::new(client_reader);
-    Ok(LinesStream::new(reader.lines()))
+    UpdateCheckResult {
+        github_has_updates,
+        github_remote_commit,
+        github_local_commit: local_commit,
+        dashboard_has_updates,
+        dashboard_remote_commit,
+        dashboard_locked_commit,
+        current_version,
+        message,
+    }
 }

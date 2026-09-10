@@ -53,6 +53,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadConfig();
   initTerminal();
   loadStorageDevices();
+  checkForUpdates();
 });
 
 // 1. Tab Navigation
@@ -1304,3 +1305,81 @@ window.submitFormat = submitFormat;
 window.openFileManager = openFileManager;
 window.resetConfig = resetConfig;
 window.submitConfigDeploy = submitConfigDeploy;
+
+
+// ==========================================================================
+// 7. Update Checker Controller (Auto-check on startup)
+// ==========================================================================
+
+async function checkForUpdates() {
+  try {
+    const status = await invoke("check_system_updates");
+    if (!status) return;
+
+    const metaCommit = document.getElementById("meta-commit");
+    if (metaCommit && status.github_local_commit) {
+      metaCommit.textContent = "Commit: " + status.github_local_commit;
+    }
+
+    const alertBanner = document.getElementById("system-update-alert");
+    const alertIcon = document.getElementById("update-suggestion-icon");
+    const alertTitle = document.getElementById("update-suggestion-title");
+    const alertDesc = document.getElementById("update-suggestion-desc");
+    const alertBtn = document.getElementById("update-suggestion-btn");
+    const navIndicator = document.getElementById("nav-update-indicator");
+
+    if (status.github_has_updates) {
+      if (alertBanner) {
+        alertBanner.classList.remove("hidden");
+        alertBanner.classList.add("is-github");
+        alertBanner.classList.remove("is-dashboard");
+      }
+      if (alertIcon) alertIcon.textContent = "🐙";
+      if (alertTitle) alertTitle.textContent = "Mises à jour GitHub disponibles !";
+      if (alertDesc) {
+        const remoteSha = status.github_remote_commit || "origin/main";
+        alertDesc.innerHTML = "De nouvelles modifications sont disponibles sur GitHub (distant: <code>" + remoteSha + "</code>). Synchronisez votre système pour en bénéficier.";
+      }
+      if (alertBtn) {
+        alertBtn.innerHTML = "<span>🐙</span> Synchroniser avec GitHub";
+        alertBtn.onclick = () => runAction("sync-github");
+      }
+      if (navIndicator) {
+        navIndicator.classList.remove("hidden");
+        navIndicator.innerHTML = "<span>🐙</span> <span>Sync GitHub</span>";
+      }
+    } else if (status.dashboard_has_updates) {
+      if (alertBanner) {
+        alertBanner.classList.remove("hidden");
+        alertBanner.classList.add("is-dashboard");
+        alertBanner.classList.remove("is-github");
+      }
+      if (alertIcon) alertIcon.textContent = "✨";
+      if (alertTitle) alertTitle.textContent = "Nouvelle version du Dashboard disponible !";
+      if (alertDesc) {
+        alertDesc.innerHTML = "Une nouvelle mise à jour du tableau de bord a été publiée. Mettez à jour vos paquets pour l'installer.";
+      }
+      if (alertBtn) {
+        alertBtn.innerHTML = "<span>📦</span> Mettre à jour les paquets";
+        alertBtn.onclick = () => runAction("switch-update");
+      }
+      if (navIndicator) {
+        navIndicator.classList.remove("hidden");
+        navIndicator.innerHTML = "<span>✨</span> <span>MAJ Dashboard</span>";
+      }
+    } else {
+      if (alertBanner) alertBanner.classList.add("hidden");
+      if (navIndicator) navIndicator.classList.add("hidden");
+    }
+  } catch (err) {
+    console.warn("Vérification des mises à jour ignorée:", err);
+  }
+}
+
+function dismissUpdateAlert() {
+  const alertBanner = document.getElementById("system-update-alert");
+  if (alertBanner) alertBanner.classList.add("hidden");
+}
+
+window.checkForUpdates = checkForUpdates;
+window.dismissUpdateAlert = dismissUpdateAlert;

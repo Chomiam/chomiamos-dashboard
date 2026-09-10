@@ -46,6 +46,10 @@
       </nav>
 
       <div class="nav-right">
+        <div id="nav-update-indicator" class="system-status-pill badge-accent hidden" style="cursor: pointer;" onclick="runAction('sync-github')" title="Mise à jour disponible - Cliquez pour synchroniser">
+          <span>⚡</span>
+          <span id="nav-update-text">MAJ Dispo</span>
+        </div>
         <div class="system-status-pill">
           <span class="status-indicator online"></span>
           <span id="nav-kernel">Linux</span>
@@ -172,13 +176,32 @@
           </div>
         </div>
 
+        <!-- Update Suggestion Alert Banner (S'affiche si MAJ GitHub ou Dashboard disponible) -->
+        <div id="system-update-alert" class="update-suggestion-banner hidden">
+          <div class="update-suggestion-content">
+            <span id="update-suggestion-icon" class="update-suggestion-icon">🔔</span>
+            <div>
+              <strong id="update-suggestion-title">Mise à jour disponible</strong>
+              <p id="update-suggestion-desc">Une nouvelle version ou des modifications distantes sont prêtes à être appliquées.</p>
+            </div>
+          </div>
+          <div class="update-suggestion-actions">
+            <button id="update-suggestion-btn" class="btn btn-primary btn-sm" onclick="runAction('sync-github')">
+              <span>⚡</span> Appliquer maintenant
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="dismissUpdateAlert()" title="Masquer cette notification">
+              ✕
+            </button>
+          </div>
+        </div>
+
         <!-- Updates Center Card -->
         <div class="card action-banner-card">
           <div class="banner-content">
             <div class="banner-icon-box">🚀</div>
             <div class="banner-text">
               <h2>Mises à Jour & Maintenance ChomiamOS</h2>
-              <p>Recompilez déclarativement votre système NixOS ou synchronisez les paquets avec les outils optimisés <code>nh</code>.</p>
+              <p>Mettez à jour vos paquets logiciels ou synchronisez votre configuration avec le dépôt officiel GitHub.</p>
               <div class="system-meta-row">
                 <span class="meta-item"><strong id="meta-host">chomiamos</strong></span>
                 <span class="meta-item">•</span>
@@ -188,17 +211,15 @@
               </div>
             </div>
             <div class="banner-actions">
-              <button class="btn btn-primary" onclick="runAction('sync-github')">
-                <span class="btn-icon">🐙</span> Synchroniser avec GitHub
+              <!-- Bouton 1 (Principal) : Mise à jour des paquets via nh os switch -u -->
+              <button class="btn btn-primary" onclick="runAction('switch-update')">
+                <span class="btn-icon">📦</span> Mettre à jour les paquets
+                <small>nh os switch -u</small>
+              </button>
+              <!-- Bouton 2 : Synchroniser avec GitHub & MAJ -->
+              <button class="btn btn-outline" onclick="runAction('sync-github')">
+                <span class="btn-icon">🐙</span> Synchroniser avec GitHub & MAJ
                 <small>git pull & nh os switch -u</small>
-              </button>
-              <button class="btn btn-secondary" onclick="runAction('boot-sync-github')">
-                <span class="btn-icon">🔄</span> Sync GitHub au reboot
-                <small>git pull & nh os boot -u</small>
-              </button>
-              <button class="btn btn-outline" onclick="runAction('switch')">
-                <span class="btn-icon">🔨</span> Recompiler la config locale
-                <small>nh os switch</small>
               </button>
             </div>
           </div>

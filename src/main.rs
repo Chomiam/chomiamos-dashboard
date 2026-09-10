@@ -208,9 +208,13 @@ fn start_terminal_task(
     let rows = rows.unwrap_or(24);
 
     let (program, args): (String, Vec<String>) = match task.as_str() {
-        "sync-github" | "update-now" => (
+        "sync-github" => (
             "bash".into(),
             vec!["-c".into(), get_sync_script("switch")],
+        ),
+        "update-now" | "switch-update" => (
+            "nh".into(),
+            vec!["os".into(), "switch".into(), "-u".into(), "/etc/nixos".into()],
         ),
         "boot-sync-github" | "update-boot" => (
             "bash".into(),
@@ -317,6 +321,11 @@ fn get_current_user() -> String {
 }
 
 #[tauri::command]
+fn check_system_updates() -> Result<updates::UpdateCheckResult, String> {
+    Ok(updates::check_system_updates())
+}
+
+#[tauri::command]
 fn open_in_file_manager(path: String) -> Result<(), String> {
     let _ = std::process::Command::new("xdg-open")
         .arg(&path)
@@ -346,7 +355,8 @@ fn main() {
             unmount_storage_device,
             format_storage_device,
             open_in_file_manager,
-            get_current_user
+            get_current_user,
+            check_system_updates
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

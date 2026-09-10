@@ -1618,3 +1618,34 @@ body {
   align-items: center;
   gap: 10px;
 }
+
+/* Global Hidden Utility */
+.hidden {
+  display: none !important;
+}
+
+.update-suggestion-banner.hidden {
+  display: none !important;
+}
+
+.system-status-pill.hidden {
+  display: none !important;
+}
+
+.config-floating-bar.hidden {
+  display: none !important;
+}
+
+/* Restart App Button */
+.term-btn.btn-restart-app {
+  background: var(--sapphire);
+  color: var(--crust);
+  font-weight: 700;
+  border: 1px solid var(--blue);
+  box-shadow: 0 0 10px rgba(116, 199, 236, 0.4);
+}
+
+.term-btn.btn-restart-app:hover {
+  background: var(--blue);
+  color: #fff;
+}

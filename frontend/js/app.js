@@ -45,6 +45,7 @@ let initialConfigStr = "";
 let term = null;
 let fitAddon = null;
 let termInitialized = false;
+let lastExecutedTask = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
@@ -625,10 +626,14 @@ function initTerminal() {
     const exitCode = event.payload;
     const statusDot = document.getElementById("term-status-icon");
     const statusText = document.getElementById("term-status-text");
+    const restartBtn = document.getElementById("term-restart-app-btn");
 
     if (term) {
       if (exitCode === 0) {
         term.write("\r\n\x1b[1;32m✔ Opération terminée avec succès !\x1b[0m\r\n");
+        if (lastExecutedTask && (lastExecutedTask.includes("update") || lastExecutedTask.includes("sync") || lastExecutedTask.includes("config") || lastExecutedTask.includes("switch") || lastExecutedTask.includes("boot"))) {
+          term.write("\x1b[1;36m💡 Astuce : Cliquez sur « Relancer le Dashboard » en haut à droite pour charger la nouvelle version.\x1b[0m\r\n");
+        }
       } else {
         term.write(`\r\n\x1b[1;31m✘ L'opération a échoué avec le code ${exitCode}\x1b[0m\r\n`);
       }
@@ -641,7 +646,12 @@ function initTerminal() {
       statusText.textContent = exitCode === 0 ? "Terminé (code 0)" : `Terminé avec erreur (code ${exitCode})`;
     }
 
+    if (exitCode === 0 && restartBtn) {
+      restartBtn.classList.remove("hidden");
+    }
+
     loadGenerations();
+    checkForUpdates();
   });
 }
 
@@ -708,6 +718,9 @@ function openTerminal(title = "Exécution en direct") {
   if (statusDot) statusDot.className = "status-dot running";
   if (statusText) statusText.textContent = "Exécution en cours...";
 
+  const restartBtn = document.getElementById("term-restart-app-btn");
+  if (restartBtn) restartBtn.classList.add("hidden");
+
   modal.classList.remove("hidden");
 
   refreshLockStateFromHardware();
@@ -743,6 +756,7 @@ function clearTerminal() {
 }
 
 function runAction(action) {
+  lastExecutedTask = action;
   let task = "";
   let title = "";
   let extra = null;
@@ -1381,5 +1395,15 @@ function dismissUpdateAlert() {
   if (alertBanner) alertBanner.classList.add("hidden");
 }
 
+async function restartDashboard() {
+  try {
+    await invoke("restart_dashboard");
+  } catch (err) {
+    console.warn("restart_dashboard invoke a échoué, rechargement web:", err);
+    window.location.reload();
+  }
+}
+
 window.checkForUpdates = checkForUpdates;
 window.dismissUpdateAlert = dismissUpdateAlert;
+window.restartDashboard = restartDashboard;

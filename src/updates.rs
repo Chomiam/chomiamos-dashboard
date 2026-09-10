@@ -45,7 +45,17 @@ pub fn check_system_updates() -> UpdateCheckResult {
             if let Some(token) = text.split_whitespace().next() {
                 github_remote_commit = Some(token[..7.min(token.len())].to_string());
                 if !full_local_commit.is_empty() && token != full_local_commit {
-                    github_has_updates = true;
+                    // Vérifier si le commit distant est déjà ancêtre du HEAD local
+                    // (ex: si l'utilisateur a des commits locaux d'avance)
+                    let is_ancestor = Command::new("git")
+                        .args(["-C", "/etc/nixos", "merge-base", "--is-ancestor", token, "HEAD"])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false);
+
+                    if !is_ancestor {
+                        github_has_updates = true;
+                    }
                 }
             }
         }

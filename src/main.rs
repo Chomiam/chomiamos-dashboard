@@ -6,7 +6,7 @@ mod system;
 mod updates;
 
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use config::{get_vars_path, read_vars_nix, save_vars_nix, ChomiamConfig};
 use generations::{list_generations, GenerationsSummary};
@@ -334,6 +334,11 @@ fn open_in_file_manager(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn restart_dashboard(app: AppHandle) {
+    tauri::process::restart(&app.env());
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -356,7 +361,8 @@ fn main() {
             format_storage_device,
             open_in_file_manager,
             get_current_user,
-            check_system_updates
+            check_system_updates,
+            restart_dashboard
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

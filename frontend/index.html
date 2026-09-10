@@ -50,6 +50,9 @@
           <span>⚡</span>
           <span id="nav-update-text">MAJ Dispo</span>
         </div>
+        <button id="nav-reload-btn" class="system-status-pill" style="cursor: pointer; background: transparent; border: 1px solid var(--surface1); color: var(--subtext0);" onclick="restartDashboard()" title="Recharger / Relancer le Dashboard">
+          <span>🔄</span>
+        </button>
         <div class="system-status-pill">
           <span class="status-indicator online"></span>
           <span id="nav-kernel">Linux</span>
@@ -940,6 +943,7 @@
             </div>
           </div>
           <div class="terminal-controls">
+            <button id="term-restart-app-btn" class="term-btn btn-restart-app hidden" onclick="restartDashboard()">🔄 Relancer le Dashboard</button>
             <button class="term-btn" onclick="clearTerminal()">Effacer</button>
             <button class="term-btn close-btn" onclick="closeTerminal()">Fermer ✕</button>
           </div>

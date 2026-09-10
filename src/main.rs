@@ -265,7 +265,7 @@ fn start_terminal_task(
                 vec![
                     "-c".into(),
                     format!(
-                        "echo -e '\033[1;35m🗑️ Suppression des générations NixOS sélectionnées ({ids_str})...\033[0m\n' ;                          sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations {ids_str} &&                          echo -e '\n\033[1;34m🔄 Actualisation du menu de démarrage (bootloader)...\033[0m\n' &&                          sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot &&                          echo -e '\n\033[1;32m✅ Génération(s) supprimée(s) avec succès !\033[0m\n\033[1;36m💡 Pour récupérer l\'espace disque des paquets non utilisés, vous pouvez lancer « Garbage Collect complet » dans le Dashboard.\033[0m'"
+                        r#"echo -e "\033[1;35m🗑️ Suppression des générations NixOS sélectionnées ({ids_str})...\033[0m\n" ; sudo nix-env --profile /nix/var/nix/profiles/system --delete-generations {ids_str} && echo -e "\n\033[1;34m🔄 Actualisation du menu de démarrage (bootloader)...\033[0m\n" && sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot && echo -e "\n\033[1;32m✅ Génération(s) supprimée(s) avec succès !\033[0m\n\033[1;36m💡 Pour récupérer l'espace disque des paquets non utilisés, vous pouvez lancer « Garbage Collect complet » dans le Dashboard.\033[0m""#
                     ),
                 ],
             )
@@ -281,7 +281,7 @@ fn start_terminal_task(
                 vec![
                     "-c".into(),
                     format!(
-                        "echo -e '\033[1;35m🔄 Bascule sur la génération NixOS #{id} pour le prochain reboot...\033[0m\n' ;                          sudo nix-env --profile /nix/var/nix/profiles/system --switch-generation {id} &&                          echo -e '\n\033[1;34m⚙️ Configuration du bootloader sur le profil #{id}...\033[0m\n' &&                          sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot &&                          echo -e '\n\033[1;32m✅ Génération #{id} activée avec succès ! Elle sera chargée au prochain redémarrage.\033[0m'"
+                        r#"echo -e "\033[1;35m🔄 Bascule sur la génération NixOS #{id} pour le prochain reboot...\033[0m\n" ; sudo nix-env --profile /nix/var/nix/profiles/system --switch-generation {id} && echo -e "\n\033[1;34m⚙️ Configuration du bootloader sur le profil #{id}...\033[0m\n" && sudo /nix/var/nix/profiles/system/bin/switch-to-configuration boot && echo -e "\n\033[1;32m✅ Génération #{id} activée avec succès ! Elle sera chargée au prochain redémarrage.\033[0m""#
                     ),
                 ],
             )

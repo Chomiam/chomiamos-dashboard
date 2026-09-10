@@ -1,17 +1,22 @@
 // ==========================================================================
-// ChomiamOS Dashboard Frontend JavaScript
+// ChomiamOS Dashboard - Tauri v2 + xterm.js Controller
 // ==========================================================================
+
+const invoke = window.__TAURI__ ? window.__TAURI__.core.invoke : async () => ({});
+const listen = window.__TAURI__ ? window.__TAURI__.event.listen : async () => () => {};
 
 let currentConfig = null;
 let initialConfigStr = "";
-let autoScroll = true;
-let eventSource = null;
+let term = null;
+let fitAddon = null;
+let termInitialized = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   initTabs();
   startMetricsPolling();
   loadGenerations();
   loadConfig();
+  initTerminal();
 });
 
 // 1. Tab Navigation
@@ -40,9 +45,8 @@ function startMetricsPolling() {
 
 async function fetchMetrics() {
   try {
-    const res = await fetch("/api/system/metrics");
-    if (!res.ok) return;
-    const m = await res.json();
+    const m = await invoke("get_system_metrics");
+    if (!m) return;
     renderMetrics(m);
   } catch (err) {
     console.error("Erreur métriques:", err);
@@ -50,177 +54,137 @@ async function fetchMetrics() {
 }
 
 function renderMetrics(m) {
-  // Nav items
-  document.getElementById("nav-kernel").textContent = m.kernel_version;
-  document.getElementById("nav-uptime").textContent = formatUptime(m.uptime_seconds);
-  document.getElementById("meta-host").textContent = m.hostname;
+  // System Info
+  const hostnameEl = document.getElementById("sys-hostname");
+  if (hostnameEl) hostnameEl.textContent = m.hostname || "ChomiamOS";
+  const osEl = document.getElementById("sys-os");
+  if (osEl) osEl.textContent = m.os_name || "ChomiamOS Linux";
+  const kernelEl = document.getElementById("sys-kernel");
+  if (kernelEl) kernelEl.textContent = m.kernel_version || "Linux";
+  const uptimeEl = document.getElementById("sys-uptime");
+  if (uptimeEl) uptimeEl.textContent = formatUptime(m.uptime_secs || 0);
 
   // CPU
-  document.getElementById("cpu-model").textContent = m.cpu_model;
-  document.getElementById("cpu-freq").textContent = `${(m.cpu_freq_mhz / 1000).toFixed(2)} GHz`;
-  document.getElementById("cpu-percent").textContent = `${Math.round(m.cpu_usage_percent)}%`;
-  setGauge("cpu-gauge", m.cpu_usage_percent);
-
-  // Cores meter
-  const coresBar = document.getElementById("cpu-cores-bar");
-  if (coresBar && m.cpu_cores_usage) {
-    if (coresBar.children.length !== m.cpu_cores_usage.length) {
-      coresBar.innerHTML = m.cpu_cores_usage.map(() => `
-        <div class="core-bar"><div class="core-bar-fill"></div></div>
-      `).join("");
-    }
-    const fills = coresBar.querySelectorAll(".core-bar-fill");
-    m.cpu_cores_usage.forEach((pct, i) => {
-      if (fills[i]) fills[i].style.transform = `scaleY(${pct / 100})`;
-    });
-  }
-
-  // GPU
-  if (m.gpu) {
-    document.getElementById("gpu-name").textContent = m.gpu.name;
-    document.getElementById("gpu-driver").textContent = m.gpu.driver;
-    if (m.gpu.usage_percent !== null) {
-      document.getElementById("gpu-percent").textContent = `${Math.round(m.gpu.usage_percent)}%`;
-      setGauge("gpu-gauge", m.gpu.usage_percent);
-    }
-    if (m.gpu.temp_celsius !== null) {
-      document.getElementById("gpu-temp").textContent = `${m.gpu.temp_celsius} °C`;
-    }
-    if (m.gpu.vram_used_bytes && m.gpu.vram_total_bytes) {
-      const usedGb = (m.gpu.vram_used_bytes / (1024**3)).toFixed(1);
-      const totalGb = (m.gpu.vram_total_bytes / (1024**3)).toFixed(1);
-      document.getElementById("vram-val").textContent = `${usedGb} / ${totalGb} Go`;
-    }
-  }
+  const cpuPercent = Math.round(m.cpu_usage_percent || 0);
+  const cpuUsageEl = document.getElementById("cpu-usage");
+  if (cpuUsageEl) cpuUsageEl.textContent = `${cpuPercent}%`;
+  const cpuModelEl = document.getElementById("cpu-model");
+  if (cpuModelEl) cpuModelEl.textContent = m.cpu_model || "CPU";
+  const cpuBarEl = document.getElementById("cpu-bar");
+  if (cpuBarEl) cpuBarEl.style.width = `${cpuPercent}%`;
 
   // RAM
-  const ramUsedGb = (m.ram_used_bytes / (1024**3)).toFixed(1);
-  const ramTotalGb = (m.ram_total_bytes / (1024**3)).toFixed(1);
-  document.getElementById("ram-numbers").textContent = `${ramUsedGb} / ${ramTotalGb} Go`;
-  document.getElementById("ram-percent").textContent = `${Math.round(m.ram_used_percent)}%`;
-  document.getElementById("ram-bar").style.width = `${m.ram_used_percent}%`;
-  setGauge("ram-gauge", m.ram_used_percent);
+  const ramUsageEl = document.getElementById("ram-usage");
+  if (ramUsageEl) ramUsageEl.textContent = `${m.ram_used_gb?.toFixed(1) || 0} / ${m.ram_total_gb?.toFixed(1) || 0} Go`;
+  const ramPercent = m.ram_total_gb ? Math.round((m.ram_used_gb / m.ram_total_gb) * 100) : 0;
+  const ramBarEl = document.getElementById("ram-bar");
+  if (ramBarEl) ramBarEl.style.width = `${ramPercent}%`;
 
-  const swapUsedGb = (m.swap_used_bytes / (1024**3)).toFixed(1);
-  document.getElementById("swap-val").textContent = `Swap: ${swapUsedGb} Go`;
+  // GPU
+  const gpuModelEl = document.getElementById("gpu-model");
+  if (gpuModelEl) gpuModelEl.textContent = m.gpu_model || "GPU Détecté";
+  const gpuUsageEl = document.getElementById("gpu-usage");
+  if (gpuUsageEl) gpuUsageEl.textContent = m.gpu_usage_percent !== null ? `${Math.round(m.gpu_usage_percent)}%` : "Actif";
+  const gpuBarEl = document.getElementById("gpu-bar");
+  if (gpuBarEl) gpuBarEl.style.width = m.gpu_usage_percent !== null ? `${Math.round(m.gpu_usage_percent)}%` : "10%";
 
-  // Root Storage
-  const rootDisk = m.disks.find(d => d.mount_point === "/") || m.disks[0];
-  if (rootDisk) {
-    const dUsedGb = (rootDisk.used_bytes / (1024**3)).toFixed(0);
-    const dTotalGb = (rootDisk.total_bytes / (1024**3)).toFixed(0);
-    document.getElementById("root-disk-numbers").textContent = `${dUsedGb} / ${dTotalGb} Go`;
-    document.getElementById("root-disk-percent").textContent = `${Math.round(rootDisk.used_percent)}%`;
-    document.getElementById("root-disk-bar").style.width = `${rootDisk.used_percent}%`;
-    setGauge("disk-gauge", rootDisk.used_percent);
-  }
-
-  // Render Disks in Tab 2
-  renderDisksTab(m.disks);
+  // Disks
+  renderDisks(m.disks || []);
 }
 
-function renderDisksTab(disks) {
-  const container = document.getElementById("disks-list");
+function renderDisks(disks) {
+  const container = document.getElementById("disks-container");
   if (!container) return;
 
+  if (disks.length === 0) {
+    container.innerHTML = `<div class="empty-state">Aucun disque détecté</div>`;
+    return;
+  }
+
   container.innerHTML = disks.map(d => {
-    const usedGb = (d.used_bytes / (1024**3)).toFixed(1);
-    const totalGb = (d.total_bytes / (1024**3)).toFixed(1);
-    const freeGb = (d.available_bytes / (1024**3)).toFixed(1);
+    const pct = d.total_gb ? Math.round((d.used_gb / d.total_gb) * 100) : 0;
     return `
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title-wrap">
-            <span class="card-icon">📁</span>
-            <div>
-              <h3>${d.mount_point}</h3>
-              <p class="card-subtitle">${d.name} (${d.file_system})</p>
-            </div>
+      <div class="disk-card">
+        <div class="disk-header">
+          <div class="disk-icon">💽</div>
+          <div class="disk-info">
+            <div class="disk-name">${d.name || d.mount_point}</div>
+            <div class="disk-mount">${d.mount_point} (${d.fs_type})</div>
           </div>
-          <span class="metric-tag">${d.used_percent}%</span>
+          <div class="disk-pct">${pct}%</div>
         </div>
-        <div class="progress-bar-wrap" style="height: 10px; margin-top: 14px;">
-          <div class="progress-bar-inner disk-fill" style="width: ${d.used_percent}%"></div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill ${pct > 85 ? 'danger' : ''}" style="width: ${pct}%"></div>
         </div>
-        <div class="submetric-box" style="margin-top: 12px;">
-          <span>${usedGb} Go occupés sur ${totalGb} Go</span>
-          <span style="color: var(--green);">${freeGb} Go libres</span>
+        <div class="disk-footer">
+          <span>${d.used_gb?.toFixed(1)} Go utilisés</span>
+          <span>${d.total_gb?.toFixed(1)} Go au total</span>
         </div>
       </div>
     `;
   }).join("");
 }
 
-function setGauge(id, percent) {
-  const circle = document.getElementById(id);
-  if (!circle) return;
-  const radius = circle.r.baseVal.value;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (Math.min(100, Math.max(0, percent)) / 100) * circumference;
-  circle.style.strokeDashoffset = offset;
-}
-
-function formatUptime(sec) {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
+function formatUptime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
 }
 
 // 3. Generations Management
 async function loadGenerations() {
+  const listEl = document.getElementById("generations-list");
+  const countBadge = document.getElementById("generations-count-badge");
+  if (!listEl) return;
+
   try {
-    const res = await fetch("/api/generations");
-    if (!res.ok) return;
-    const data = await res.json();
-
-    document.getElementById("store-size-val").textContent = data.store_size;
-    document.getElementById("generations-count-val").textContent = data.count;
-
-    const tbody = document.getElementById("generations-tbody");
-    if (!tbody) return;
-
-    if (data.generations.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Aucune génération détectée</td></tr>`;
+    const summary = await invoke("get_generations");
+    if (!summary || !summary.generations) {
+      listEl.innerHTML = `<div class="empty-state">Impossible de charger les générations</div>`;
       return;
     }
 
-    tbody.innerHTML = data.generations.map(g => `
-      <tr>
-        <td><strong>#${g.id}</strong></td>
-        <td>${g.date}</td>
-        <td><code>${g.nixos_version}</code></td>
-        <td><code>${g.kernel}</code></td>
-        <td>
-          <span class="badge-gen ${g.current ? 'badge-active' : 'badge-inactive'}">
-            ${g.current ? '✔ Actuelle' : 'Archive'}
-          </span>
-        </td>
-      </tr>
+    if (countBadge) {
+      countBadge.textContent = `${summary.count} génération${summary.count > 1 ? 's' : ''}`;
+    }
+
+    if (summary.generations.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">Aucune génération disponible</div>`;
+      return;
+    }
+
+    listEl.innerHTML = summary.generations.map(g => `
+      <div class="gen-item ${g.is_current ? 'current' : ''}">
+        <div class="gen-col-num">#${g.id}</div>
+        <div class="gen-col-date">${g.date}</div>
+        <div class="gen-col-badge">
+          ${g.is_current ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-idle">Archivée</span>'}
+        </div>
+      </div>
     `).join("");
-  } catch (e) {
-    console.error("Erreur générations:", e);
+  } catch (err) {
+    console.error("Erreur générations:", err);
+    listEl.innerHTML = `<div class="empty-state">Erreur : ${err}</div>`;
   }
 }
 
-// 4. Configuration Management
+// 4. Config Management
 async function loadConfig() {
   try {
-    const res = await fetch("/api/config");
-    if (!res.ok) return;
-    currentConfig = await res.json();
-    initialConfigStr = JSON.stringify(currentConfig);
-    populateConfigUI(currentConfig);
+    const c = await invoke("get_chomiamos_config");
+    if (!c) return;
+    currentConfig = c;
+    initialConfigStr = JSON.stringify(c);
+    populateConfigUI(c);
     attachConfigChangeListeners();
-  } catch (e) {
-    console.error("Erreur chargement configuration:", e);
+  } catch (err) {
+    console.error("Erreur chargement config:", err);
   }
 }
 
 function populateConfigUI(c) {
-  // Radio: Browser
   setRadioVal("browser", c.browser);
-  // Radio: Discord
   setRadioVal("discord_client", c.discord_client);
 
   // Gaming
@@ -356,15 +320,7 @@ function resetConfig() {
 async function saveConfig(andApply = false) {
   readConfigFromUI();
   try {
-    const res = await fetch("/api/config/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(currentConfig),
-    });
-    if (!res.ok) {
-      alert("Erreur lors de la sauvegarde de la configuration");
-      return;
-    }
+    await invoke("save_chomiamos_config", { config: currentConfig });
     initialConfigStr = JSON.stringify(currentConfig);
     checkDirtyState();
 
@@ -374,80 +330,187 @@ async function saveConfig(andApply = false) {
       alert("Configuration sauvegardée avec succès dans /etc/nixos/vars.nix !");
     }
   } catch (e) {
-    alert("Erreur réseau: " + e);
+    alert("Erreur lors de la sauvegarde : " + e);
   }
 }
 
-// 5. Streaming Terminal Runner
-function runAction(action) {
+// 5. Embedded xterm.js Native Terminal
+function initTerminal() {
+  if (termInitialized) return;
+  termInitialized = true;
+
+  const container = document.getElementById("terminal-output");
+  if (!container) return;
+  container.innerHTML = "";
+
+  term = new Terminal({
+    theme: {
+      background: '#11111b',
+      foreground: '#cdd6f4',
+      cursor: '#f5e0dc',
+      cursorAccent: '#11111b',
+      selectionBackground: '#585b7066',
+      black: '#45475a',
+      red: '#f38ba8',
+      green: '#a6e3a1',
+      yellow: '#f9e2af',
+      blue: '#89b4fa',
+      magenta: '#f5c2e7',
+      cyan: '#94e2d5',
+      white: '#bac2de',
+      brightBlack: '#585b70',
+      brightRed: '#f38ba8',
+      brightGreen: '#a6e3a1',
+      brightYellow: '#f9e2af',
+      brightBlue: '#89b4fa',
+      brightMagenta: '#f5c2e7',
+      brightCyan: '#94e2d5',
+      brightWhite: '#a6adc8',
+    },
+    fontFamily: '"JetBrains Mono", monospace',
+    fontSize: 13,
+    lineHeight: 1.2,
+    cursorBlink: true,
+    convertEol: true,
+  });
+
+  if (window.FitAddon && window.FitAddon.FitAddon) {
+    fitAddon = new window.FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+  }
+
+  term.open(container);
+
+  // Send keystrokes directly to PTY stdin
+  term.onData(data => {
+    invoke("write_pty", { data }).catch(console.error);
+  });
+
+  // Handle window resize
+  window.addEventListener("resize", () => {
+    if (fitAddon && term) {
+      fitAddon.fit();
+      invoke("resize_pty", { cols: term.cols, rows: term.rows }).catch(console.error);
+    }
+  });
+
+  // Receive PTY data in real-time from Rust
+  listen("pty-data", event => {
+    if (term) {
+      term.write(event.payload);
+    }
+  });
+
+  // Process exit handler
+  listen("pty-exit", event => {
+    const exitCode = event.payload;
+    const statusDot = document.getElementById("term-status-icon");
+    const statusText = document.getElementById("term-status-text");
+
+    if (term) {
+      if (exitCode === 0) {
+        term.write("\r\n\x1b[1;32m✔ Opération terminée avec succès !\x1b[0m\r\n");
+      } else {
+        term.write(`\r\n\x1b[1;31m✘ L'opération a échoué avec le code ${exitCode}\x1b[0m\r\n`);
+      }
+    }
+
+    if (statusDot) {
+      statusDot.className = exitCode === 0 ? "status-dot success" : "status-dot error";
+    }
+    if (statusText) {
+      statusText.textContent = exitCode === 0 ? "Terminé (code 0)" : `Terminé avec erreur (code ${exitCode})`;
+    }
+
+    loadGenerations();
+  });
+}
+
+function openTerminal(title = "Exécution en direct") {
   const modal = document.getElementById("terminal-modal");
-  const output = document.getElementById("terminal-output");
+  const titleEl = document.getElementById("term-title");
   const statusDot = document.getElementById("term-status-icon");
   const statusText = document.getElementById("term-status-text");
 
+  if (titleEl) titleEl.textContent = title;
+  if (statusDot) statusDot.className = "status-dot running";
+  if (statusText) statusText.textContent = "Exécution en cours...";
+
   modal.classList.remove("hidden");
-  output.innerHTML = "";
-  statusDot.className = "status-dot running";
-  statusText.textContent = "Exécution de la commande en cours...";
 
-  if (eventSource) {
-    eventSource.close();
+  if (!termInitialized) {
+    initTerminal();
   }
 
-  eventSource = new EventSource(`/api/action/stream?action=${encodeURIComponent(action)}`);
-
-  eventSource.onmessage = (event) => {
-    appendTerminal(event.data);
-  };
-
-  eventSource.onerror = () => {
-    eventSource.close();
-    eventSource = null;
-    statusDot.className = "status-dot success";
-    statusText.textContent = "Terminé (flux fermé)";
-    // Refresh generations if cleanup was executed
-    loadGenerations();
-  };
-}
-
-function appendTerminal(line) {
-  const output = document.getElementById("terminal-output");
-  const p = document.createElement("div");
-  p.innerHTML = ansiToHtml(line);
-  output.appendChild(p);
-
-  if (autoScroll) {
-    output.scrollTop = output.scrollHeight;
+  if (term) {
+    term.reset();
   }
-}
 
-function clearTerminal() {
-  document.getElementById("terminal-output").innerHTML = "";
+  setTimeout(() => {
+    if (fitAddon && term) {
+      fitAddon.fit();
+    }
+  }, 50);
 }
 
 function closeTerminal() {
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
+  const modal = document.getElementById("terminal-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function clearTerminal() {
+  if (term) term.reset();
+}
+
+function runAction(action) {
+  let task = "";
+  let title = "";
+  let extra = null;
+
+  switch (action) {
+    case "switch":
+      task = "apply-config";
+      title = "Application de la configuration ChomiamOS";
+      break;
+    case "switch-update":
+      task = "update-now";
+      title = "Mise à jour complète du système (Immédiate)";
+      break;
+    case "boot-update":
+      task = "update-boot";
+      title = "Mise à jour au prochain redémarrage";
+      break;
+    case "clean-generations":
+      task = "clean-generations";
+      title = "Nettoyage des générations NixOS";
+      extra = document.getElementById("keep-generations")?.value || "3";
+      break;
+    case "clean-all":
+      task = "clean-all";
+      title = "Nettoyage complet du Garbage Collector";
+      break;
+    case "optimise":
+      task = "optimise-store";
+      title = "Optimisation du Nix Store";
+      break;
+    default:
+      console.error("Action inconnue:", action);
+      return;
   }
-  document.getElementById("terminal-modal").classList.add("hidden");
-}
 
-function toggleAutoScroll() {
-  autoScroll = !autoScroll;
-  const btn = document.getElementById("term-autoscroll-btn");
-  btn.textContent = `Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`;
-  btn.className = `term-chip ${autoScroll ? 'active' : ''}`;
-}
+  openTerminal(title);
 
-// Convert common ANSI escape codes to colored HTML spans
-function ansiToHtml(text) {
-  return text
-    .replace(/\x1b\[31m/g, '<span style="color: var(--red);">')
-    .replace(/\x1b\[32m/g, '<span style="color: var(--green);">')
-    .replace(/\x1b\[33m/g, '<span style="color: var(--yellow);">')
-    .replace(/\x1b\[34m/g, '<span style="color: var(--blue);">')
-    .replace(/\x1b\[35m/g, '<span style="color: var(--mauve);">')
-    .replace(/\x1b\[36m/g, '<span style="color: var(--teal);">')
-    .replace(/\x1b\[0m/g, '</span>');
+  setTimeout(() => {
+    if (fitAddon && term) {
+      fitAddon.fit();
+    }
+    const cols = term ? term.cols : 100;
+    const rows = term ? term.rows : 24;
+
+    invoke("start_terminal_task", { task, extra, cols, rows }).catch(err => {
+      if (term) term.write(`\r\n\x1b[31mErreur : ${err}\x1b[0m\r\n`);
+      const statusDot = document.getElementById("term-status-icon");
+      if (statusDot) statusDot.className = "status-dot error";
+    });
+  }, 100);
 }

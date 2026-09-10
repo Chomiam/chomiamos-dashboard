@@ -925,15 +925,18 @@ body {
 
 .terminal-body {
   flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text);
-  background-color: #12121e;
-  word-break: break-all;
-  white-space: pre-wrap;
+  padding: 12px;
+  overflow: hidden;
+  background-color: #11111b;
+  position: relative;
+}
+
+.terminal-body .xterm {
+  height: 100%;
+}
+
+.terminal-body .xterm-viewport {
+  overflow-y: auto !important;
 }
 
 .terminal-footer {

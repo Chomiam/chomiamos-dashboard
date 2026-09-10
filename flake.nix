@@ -1,5 +1,5 @@
 {
-  description = "ChomiamOS System Dashboard (Native Slint GUI + Rust + Catppuccin Mocha)";
+  description = "ChomiamOS System Dashboard (Tauri v2 + xterm.js + Rust + Catppuccin Mocha)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -22,26 +22,21 @@
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             pkg-config
+            wrapGAppsHook3
           ];
           buildInputs = with pkgs; [
             cargo
             rustc
             rustfmt
             clippy
-            fontconfig
-            wayland
-            libxkbcommon
-            libGL
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXi
-            xorg.libXrandr
-          ];
-          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-            pkgs.wayland
-            pkgs.libxkbcommon
-            pkgs.libGL
-            pkgs.fontconfig
+            webkitgtk_4_1
+            gtk3
+            libsoup_3
+            openssl
+            glib
+            cairo
+            pango
+            gdk-pixbuf
           ];
         };
       }

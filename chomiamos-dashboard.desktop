@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=ChomiamOS Dashboard
 Comment=Tableau de bord de gestion et de surveillance native ChomiamOS (Slint)
-Exec=/home/chomiam/.local/bin/chomiamos-dashboard
+Exec=chomiamos-dashboard
 Icon=chomiamos-dashboard
 Terminal=false
 Type=Application

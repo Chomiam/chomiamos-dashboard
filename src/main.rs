@@ -20,7 +20,30 @@ use crate::system::SystemCollector;
 
 static ACTIVE_STDIN: Mutex<Option<ChildStdin>> = Mutex::new(None);
 
-const SUDO_WRAPPER: &str = "/home/chomiam/Projects/dashboard-chomiamos/scripts/sudo-stdin";
+fn get_sudo_wrapper_path() -> String {
+    let local = std::path::Path::new("/home/chomiam/Projects/dashboard-chomiamos/scripts/sudo-stdin");
+    if local.exists() {
+        return local.to_string_lossy().to_string();
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(prefix) = exe.parent().and_then(|p| p.parent()) {
+            let shared = prefix.join("share/chomiamos-dashboard/scripts/sudo-stdin");
+            if shared.exists() {
+                return shared.to_string_lossy().to_string();
+            }
+        }
+    }
+    let fallback = std::path::Path::new("/tmp/chomiamos-sudo-stdin");
+    if !fallback.exists() {
+        let _ = std::fs::write(fallback, "#!/usr/bin/env bash\nexec /run/wrappers/bin/sudo -S -p \"[sudo] Mot de passe : \" \"$@\"\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(fallback, std::fs::Permissions::from_mode(0o755));
+        }
+    }
+    fallback.to_string_lossy().to_string()
+}
 
 fn format_bytes(bytes: u64) -> String {
     const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -332,7 +355,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weak.clone(),
             "Mise à jour du système (Immédiate)",
             "nh",
-            vec!["os".into(), "switch".into(), "-u".into(), "-e".into(), SUDO_WRAPPER.into()],
+            vec!["os".into(), "switch".into(), "-u".into(), "-e".into(), get_sudo_wrapper_path()],
         );
     });
 
@@ -343,7 +366,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weak.clone(),
             "Mise à jour du système (Au prochain boot)",
             "nh",
-            vec!["os".into(), "boot".into(), "-u".into(), "-e".into(), SUDO_WRAPPER.into()],
+            vec!["os".into(), "boot".into(), "-u".into(), "-e".into(), get_sudo_wrapper_path()],
         );
     });
 
@@ -356,7 +379,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weak.clone(),
             "Nettoyage des générations NixOS",
             "nh",
-            vec!["clean".into(), "all".into(), "--keep".into(), keep_str, "-e".into(), SUDO_WRAPPER.into()],
+            vec!["clean".into(), "all".into(), "--keep".into(), keep_str, "-e".into(), get_sudo_wrapper_path()],
         );
         load_generations(weak_for_refresh);
     });
@@ -369,7 +392,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weak.clone(),
             "Nettoyage complet du Garbage Collector",
             "nh",
-            vec!["clean".into(), "all".into(), "-e".into(), SUDO_WRAPPER.into()],
+            vec!["clean".into(), "all".into(), "-e".into(), get_sudo_wrapper_path()],
         );
         load_generations(weak_for_refresh);
     });
@@ -381,7 +404,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         run_command_in_terminal(
             weak.clone(),
             "Optimisation des hardlinks du Nix Store",
-            SUDO_WRAPPER,
+            &get_sudo_wrapper_path(),
             vec!["nix-store".into(), "--optimise".into()],
         );
         load_generations(weak_for_refresh);
@@ -400,7 +423,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             weak.clone(),
             "Application de la configuration ChomiamOS",
             "nh",
-            vec!["os".into(), "switch".into(), "-e".into(), SUDO_WRAPPER.into()],
+            vec!["os".into(), "switch".into(), "-e".into(), get_sudo_wrapper_path()],
         );
     });
 

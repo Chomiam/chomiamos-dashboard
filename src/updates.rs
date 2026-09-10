@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use serde::Serialize;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};

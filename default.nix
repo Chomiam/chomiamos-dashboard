@@ -2,7 +2,7 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "chomiamos-dashboard";
-  version = "0.1.0";
+  version = "0.2.0";
 
   src = ./.;
 
@@ -12,14 +12,36 @@ pkgs.rustPlatform.buildRustPackage rec {
 
   nativeBuildInputs = with pkgs; [
     pkg-config
+    makeWrapper
   ];
 
   buildInputs = with pkgs; [
-    openssl
+    fontconfig
+    wayland
+    libxkbcommon
+    libGL
+    xorg.libX11
+    xorg.libXcursor
+    xorg.libXi
+    xorg.libXrandr
   ];
 
+  postInstall = ''
+    wrapProgram $out/bin/chomiamos-dashboard \
+      --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [
+        pkgs.wayland
+        pkgs.libxkbcommon
+        pkgs.libGL
+        pkgs.fontconfig
+        pkgs.xorg.libX11
+        pkgs.xorg.libXcursor
+        pkgs.xorg.libXi
+        pkgs.xorg.libXrandr
+      ]}
+  '';
+
   meta = with pkgs.lib; {
-    description = "Tableau de bord système officiel pour ChomiamOS (Catppuccin Mocha & Rust)";
+    description = "Tableau de bord système officiel natif pour ChomiamOS (Slint GUI & Catppuccin Mocha)";
     homepage = "https://github.com/Chomiam/dashboard-chomiamos";
     license = licenses.mit;
     maintainers = [ "chomiam" ];

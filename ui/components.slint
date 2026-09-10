@@ -1,0 +1,164 @@
+import { Theme } from "theme.slint";
+
+export component Card inherits Rectangle {
+    background: Theme.mantle;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Theme.surface0;
+}
+
+export component ProgressBar inherits Rectangle {
+    in property <float> progress: 0.0; // 0..100
+    in property <color> fill-color: Theme.mauve;
+    in property <length> bar-height: 8px;
+
+    height: root.bar-height;
+    background: Theme.surface0;
+    border-radius: root.bar-height / 2;
+
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: Math.clamp(parent.width * (root.progress / 100.0), 0px, parent.width);
+        height: parent.height;
+        border-radius: parent.border-radius;
+        background: root.fill-color;
+        animate width { duration: 250ms; easing: ease-out; }
+    }
+}
+
+export component ToggleSwitch inherits Rectangle {
+    in-out property <bool> checked: false;
+    in property <string> text: "";
+    in property <string> description: "";
+    callback toggled(bool);
+
+    min-height: 42px;
+    background: transparent;
+
+    HorizontalLayout {
+        alignment: space-between;
+        spacing: 12px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.text;
+                color: Theme.text;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            if root.description != "": Text {
+                text: root.description;
+                color: Theme.subtext0;
+                font-size: 11px;
+            }
+        }
+
+        switch_box := Rectangle {
+            width: 44px;
+            height: 24px;
+            border-radius: 12px;
+            background: root.checked ? Theme.mauve : Theme.surface1;
+            animate background { duration: 150ms; }
+
+            Rectangle {
+                x: root.checked ? parent.width - self.width - 2px : 2px;
+                y: 2px;
+                width: 20px;
+                height: 20px;
+                border-radius: 10px;
+                background: Theme.crust;
+                animate x { duration: 150ms; easing: ease-out; }
+            }
+
+            TouchArea {
+                clicked => {
+                    root.checked = !root.checked;
+                    root.toggled(root.checked);
+                }
+            }
+        }
+    }
+}
+
+export component ActionBtn inherits Rectangle {
+    in property <string> text: "";
+    in property <color> bg-color: Theme.surface1;
+    in property <color> text-color: Theme.text;
+    in property <color> hover-color: Theme.surface2;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    min-height: 38px;
+    background: touch.has-hover ? root.hover-color : root.bg-color;
+    border-radius: 8px;
+    animate background { duration: 120ms; }
+
+    HorizontalLayout {
+        alignment: center;
+        padding-left: 16px;
+        padding-right: 16px;
+        Text {
+            text: root.text;
+            color: root.enabled ? root.text-color : Theme.overlay0;
+            font-size: 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component NavItem inherits Rectangle {
+    in property <string> text: "";
+    in property <string> icon: "";
+    in property <bool> active: false;
+    callback clicked();
+
+    height: 44px;
+    border-radius: 10px;
+    background: root.active ? Theme.surface0 : (touch.has-hover ? Theme.mantle : transparent);
+    animate background { duration: 150ms; }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 12px;
+        alignment: start;
+
+        Text {
+            text: root.icon;
+            font-size: 16px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.text;
+            color: root.active ? Theme.mauve : (touch.has-hover ? Theme.text : Theme.subtext0);
+            font-size: 13px;
+            font-weight: root.active ? 700 : 500;
+            vertical-alignment: center;
+        }
+    }
+
+    if root.active: Rectangle {
+        x: 0;
+        y: 8px;
+        width: 4px;
+        height: parent.height - 16px;
+        border-radius: 2px;
+        background: Theme.mauve;
+    }
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}

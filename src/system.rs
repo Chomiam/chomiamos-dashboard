@@ -54,6 +54,8 @@ impl SystemCollector {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        sys.refresh_cpu_all();
         let disks = Disks::new_with_refreshed_list();
         Self { sys, disks }
     }
@@ -264,6 +266,9 @@ fn resolve_pci_gpu_name(uevent: &str, fallback: &str) -> String {
     for line in uevent.lines() {
         if line.starts_with("PCI_ID=") {
             let id = line.trim_start_matches("PCI_ID=").to_uppercase();
+            if id.contains("1002:7550") || id.contains("7550") {
+                return "AMD Radeon RX 9070 / 9070 XT".to_string();
+            }
             return format!("AMD Radeon (PCI ID: {})", id);
         }
     }

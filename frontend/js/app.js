@@ -2,8 +2,43 @@
 // ChomiamOS Dashboard - Tauri v2 + xterm.js Controller
 // ==========================================================================
 
-const invoke = window.__TAURI__ ? window.__TAURI__.core.invoke : async () => ({});
-const listen = window.__TAURI__ ? window.__TAURI__.event.listen : async () => () => {};
+// Helper to reliably access Tauri IPC in Tauri v2
+async function ensureTauri() {
+  if (window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke) {
+    return true;
+  }
+  for (let i = 0; i < 50; i++) {
+    await new Promise(r => setTimeout(r, 20));
+    if (window.__TAURI__?.core?.invoke || window.__TAURI_INTERNALS__?.invoke) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function invoke(cmd, args = {}) {
+  await ensureTauri();
+  if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === "function") {
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === "function") {
+    return window.__TAURI_INTERNALS__.invoke(cmd, args);
+  }
+  console.error("Tauri invoke non disponible pour:", cmd);
+  throw new Error("Tauri IPC non disponible");
+}
+
+async function listen(event, cb) {
+  await ensureTauri();
+  if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === "function") {
+    return window.__TAURI__.event.listen(event, cb);
+  }
+  if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.listen === "function") {
+    return window.__TAURI_INTERNALS__.listen(event, cb);
+  }
+  console.error("Tauri listen non disponible pour:", event);
+  return () => {};
+}
 
 let currentConfig = null;
 let initialConfigStr = "";
@@ -37,7 +72,7 @@ function initTabs() {
   });
 }
 
-// 2. Metrics Polling
+// 2. Metrics Polling & Rendering
 function startMetricsPolling() {
   fetchMetrics();
   setInterval(fetchMetrics, 1500);
@@ -53,76 +88,19 @@ async function fetchMetrics() {
   }
 }
 
-function renderMetrics(m) {
-  // System Info
-  const hostnameEl = document.getElementById("sys-hostname");
-  if (hostnameEl) hostnameEl.textContent = m.hostname || "ChomiamOS";
-  const osEl = document.getElementById("sys-os");
-  if (osEl) osEl.textContent = m.os_name || "ChomiamOS Linux";
-  const kernelEl = document.getElementById("sys-kernel");
-  if (kernelEl) kernelEl.textContent = m.kernel_version || "Linux";
-  const uptimeEl = document.getElementById("sys-uptime");
-  if (uptimeEl) uptimeEl.textContent = formatUptime(m.uptime_secs || 0);
-
-  // CPU
-  const cpuPercent = Math.round(m.cpu_usage_percent || 0);
-  const cpuUsageEl = document.getElementById("cpu-usage");
-  if (cpuUsageEl) cpuUsageEl.textContent = `${cpuPercent}%`;
-  const cpuModelEl = document.getElementById("cpu-model");
-  if (cpuModelEl) cpuModelEl.textContent = m.cpu_model || "CPU";
-  const cpuBarEl = document.getElementById("cpu-bar");
-  if (cpuBarEl) cpuBarEl.style.width = `${cpuPercent}%`;
-
-  // RAM
-  const ramUsageEl = document.getElementById("ram-usage");
-  if (ramUsageEl) ramUsageEl.textContent = `${m.ram_used_gb?.toFixed(1) || 0} / ${m.ram_total_gb?.toFixed(1) || 0} Go`;
-  const ramPercent = m.ram_total_gb ? Math.round((m.ram_used_gb / m.ram_total_gb) * 100) : 0;
-  const ramBarEl = document.getElementById("ram-bar");
-  if (ramBarEl) ramBarEl.style.width = `${ramPercent}%`;
-
-  // GPU
-  const gpuModelEl = document.getElementById("gpu-model");
-  if (gpuModelEl) gpuModelEl.textContent = m.gpu_model || "GPU Détecté";
-  const gpuUsageEl = document.getElementById("gpu-usage");
-  if (gpuUsageEl) gpuUsageEl.textContent = m.gpu_usage_percent !== null ? `${Math.round(m.gpu_usage_percent)}%` : "Actif";
-  const gpuBarEl = document.getElementById("gpu-bar");
-  if (gpuBarEl) gpuBarEl.style.width = m.gpu_usage_percent !== null ? `${Math.round(m.gpu_usage_percent)}%` : "10%";
-
-  // Disks
-  renderDisks(m.disks || []);
+function setGauge(elId, percent) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const pct = Math.min(100, Math.max(0, percent || 0));
+  // Circle radius 50 -> circumference 2 * PI * 50 = 314.15
+  const offset = 314.15 * (1 - pct / 100);
+  el.style.strokeDashoffset = offset;
 }
 
-function renderDisks(disks) {
-  const container = document.getElementById("disks-container");
-  if (!container) return;
-
-  if (disks.length === 0) {
-    container.innerHTML = `<div class="empty-state">Aucun disque détecté</div>`;
-    return;
-  }
-
-  container.innerHTML = disks.map(d => {
-    const pct = d.total_gb ? Math.round((d.used_gb / d.total_gb) * 100) : 0;
-    return `
-      <div class="disk-card">
-        <div class="disk-header">
-          <div class="disk-icon">💽</div>
-          <div class="disk-info">
-            <div class="disk-name">${d.name || d.mount_point}</div>
-            <div class="disk-mount">${d.mount_point} (${d.fs_type})</div>
-          </div>
-          <div class="disk-pct">${pct}%</div>
-        </div>
-        <div class="progress-bar-bg">
-          <div class="progress-bar-fill ${pct > 85 ? 'danger' : ''}" style="width: ${pct}%"></div>
-        </div>
-        <div class="disk-footer">
-          <span>${d.used_gb?.toFixed(1)} Go utilisés</span>
-          <span>${d.total_gb?.toFixed(1)} Go au total</span>
-        </div>
-      </div>
-    `;
-  }).join("");
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return "0 Go";
+  const gb = bytes / (1024 ** 3);
+  return `${gb.toFixed(1)} Go`;
 }
 
 function formatUptime(seconds) {
@@ -132,40 +110,198 @@ function formatUptime(seconds) {
   return `${m}m`;
 }
 
+function renderMetrics(m) {
+  // Top Navigation Bar Info
+  const navKernel = document.getElementById("nav-kernel");
+  if (navKernel) navKernel.textContent = m.kernel_version || "Linux";
+  const navUptime = document.getElementById("nav-uptime");
+  if (navUptime) navUptime.textContent = formatUptime(m.uptime_seconds || 0);
+
+  // CPU Section
+  const cpuPercent = Math.round(m.cpu_usage_percent || 0);
+  const cpuPercentEl = document.getElementById("cpu-percent");
+  if (cpuPercentEl) cpuPercentEl.textContent = `${cpuPercent}%`;
+  setGauge("cpu-gauge", cpuPercent);
+
+  const cpuModelEl = document.getElementById("cpu-model");
+  if (cpuModelEl) cpuModelEl.textContent = m.cpu_model || "Processeur";
+
+  const cpuFreqEl = document.getElementById("cpu-freq");
+  if (cpuFreqEl) {
+    cpuFreqEl.textContent = m.cpu_freq_mhz > 0 ? `${(m.cpu_freq_mhz / 1000).toFixed(2)} GHz` : "-- GHz";
+  }
+
+  // CPU Cores Meter
+  const coresBarEl = document.getElementById("cpu-cores-bar");
+  if (coresBarEl && Array.isArray(m.cpu_cores_usage) && m.cpu_cores_usage.length > 0) {
+    coresBarEl.innerHTML = m.cpu_cores_usage.map(u => {
+      const corePct = Math.min(100, Math.max(0, u || 0));
+      return `
+        <div class="core-bar" title="Cœur : ${Math.round(corePct)}%">
+          <div class="core-bar-fill" style="transform: scaleY(${corePct / 100});"></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // GPU Section
+  if (m.gpu) {
+    const gpuNameEl = document.getElementById("gpu-name");
+    if (gpuNameEl) gpuNameEl.textContent = m.gpu.name || "GPU Détecté";
+
+    const gpuDriverEl = document.getElementById("gpu-driver");
+    if (gpuDriverEl) gpuDriverEl.textContent = m.gpu.driver || "amdgpu";
+
+    const gpuTempEl = document.getElementById("gpu-temp");
+    if (gpuTempEl) {
+      gpuTempEl.textContent = m.gpu.temp_celsius != null ? `${Math.round(m.gpu.temp_celsius)} °C` : "-- °C";
+    }
+
+    const gpuUsageVal = m.gpu.usage_percent != null ? Math.round(m.gpu.usage_percent) : null;
+    const gpuPercentEl = document.getElementById("gpu-percent");
+    if (gpuPercentEl) {
+      gpuPercentEl.textContent = gpuUsageVal != null ? `${gpuUsageVal}%` : "Actif";
+    }
+    setGauge("gpu-gauge", gpuUsageVal != null ? gpuUsageVal : 10);
+
+    const vramValEl = document.getElementById("vram-val");
+    if (vramValEl) {
+      if (m.gpu.vram_used_bytes != null && m.gpu.vram_total_bytes != null) {
+        vramValEl.textContent = `${formatBytes(m.gpu.vram_used_bytes)} / ${formatBytes(m.gpu.vram_total_bytes)}`;
+      } else {
+        vramValEl.textContent = "-- / -- Go";
+      }
+    }
+  }
+
+  // RAM Section
+  const ramUsed = m.ram_used_bytes || 0;
+  const ramTotal = m.ram_total_bytes || 0;
+  const ramPct = Math.round(m.ram_used_percent || (ramTotal > 0 ? (ramUsed / ramTotal) * 100 : 0));
+
+  const ramNumbersEl = document.getElementById("ram-numbers");
+  if (ramNumbersEl) ramNumbersEl.textContent = `${formatBytes(ramUsed)} / ${formatBytes(ramTotal)}`;
+
+  const ramPercentEl = document.getElementById("ram-percent");
+  if (ramPercentEl) ramPercentEl.textContent = `${ramPct}%`;
+  setGauge("ram-gauge", ramPct);
+
+  const ramBarEl = document.getElementById("ram-bar");
+  if (ramBarEl) ramBarEl.style.width = `${ramPct}%`;
+
+  const swapValEl = document.getElementById("swap-val");
+  if (swapValEl) {
+    swapValEl.textContent = `Swap: ${formatBytes(m.swap_used_bytes)} / ${formatBytes(m.swap_total_bytes)}`;
+  }
+
+  // Root Storage (/) on Overview
+  const disks = m.disks || [];
+  const rootDisk = disks.find(d => d.mount_point === "/") || disks[0];
+  if (rootDisk) {
+    const rootUsed = rootDisk.used_bytes || 0;
+    const rootTotal = rootDisk.total_bytes || 0;
+    const rootPct = Math.round(rootDisk.used_percent || (rootTotal > 0 ? (rootUsed / rootTotal) * 100 : 0));
+
+    const rootNumbersEl = document.getElementById("root-disk-numbers");
+    if (rootNumbersEl) rootNumbersEl.textContent = `${formatBytes(rootUsed)} / ${formatBytes(rootTotal)}`;
+
+    const rootPercentEl = document.getElementById("root-disk-percent");
+    if (rootPercentEl) rootPercentEl.textContent = `${rootPct}%`;
+    setGauge("disk-gauge", rootPct);
+
+    const rootBarEl = document.getElementById("root-disk-bar");
+    if (rootBarEl) rootBarEl.style.width = `${rootPct}%`;
+  }
+
+  // Host metadata in action banner
+  const metaHostEl = document.getElementById("meta-host");
+  if (metaHostEl) metaHostEl.textContent = m.hostname || "chomiamos";
+
+  // Tab 2: Disks List
+  renderDisksList(disks);
+}
+
+function renderDisksList(disks) {
+  const container = document.getElementById("disks-list");
+  if (!container) return;
+
+  if (!disks || disks.length === 0) {
+    container.innerHTML = `<div class="card" style="grid-column: 1 / -1; text-align: center; color: var(--subtext0);">Aucun volume monté détecté</div>`;
+    return;
+  }
+
+  container.innerHTML = disks.map(d => {
+    const pct = Math.round(d.used_percent);
+    const isCritical = pct > 85;
+    return `
+      <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 24px;">💽</span>
+            <div>
+              <strong style="font-size: 14px; color: var(--text);">${d.name || d.mount_point}</strong>
+              <div style="font-size: 11px; color: var(--subtext0);">${d.mount_point} (${d.file_system || "ext4"})</div>
+            </div>
+          </div>
+          <span style="font-family: 'JetBrains Mono', monospace; font-weight: 700; color: ${isCritical ? "var(--red)" : "var(--peach)"};">${pct}%</span>
+        </div>
+        <div class="progress-bar-wrap" style="margin: 4px 0;">
+          <div class="progress-bar-inner disk-fill" style="width: ${pct}%; background-color: ${isCritical ? "var(--red)" : "var(--peach)"};"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--subtext0); font-family: 'JetBrains Mono', monospace;">
+          <span>${formatBytes(d.used_bytes)} utilisés</span>
+          <span>${formatBytes(d.total_bytes)} total</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 // 3. Generations Management
 async function loadGenerations() {
-  const listEl = document.getElementById("generations-list");
-  const countBadge = document.getElementById("generations-count-badge");
-  if (!listEl) return;
+  const tbody = document.getElementById("generations-tbody");
+  const countEl = document.getElementById("generations-count-val");
+  const storeSizeEl = document.getElementById("store-size-val");
+  const metaCommitEl = document.getElementById("meta-commit");
 
   try {
     const summary = await invoke("get_generations");
     if (!summary || !summary.generations) {
-      listEl.innerHTML = `<div class="empty-state">Impossible de charger les générations</div>`;
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--red); padding: 20px;">Impossible de charger les générations système</td></tr>`;
       return;
     }
 
-    if (countBadge) {
-      countBadge.textContent = `${summary.count} génération${summary.count > 1 ? 's' : ''}`;
+    if (countEl) countEl.textContent = `${summary.count} génération${summary.count > 1 ? "s" : ""}`;
+    if (storeSizeEl) storeSizeEl.textContent = summary.store_size || "N/A";
+
+    const activeGen = summary.generations.find(g => g.current);
+    if (metaCommitEl && activeGen) {
+      metaCommitEl.textContent = `Image active : #${activeGen.id} (${activeGen.nixos_version})`;
     }
+
+    if (!tbody) return;
 
     if (summary.generations.length === 0) {
-      listEl.innerHTML = `<div class="empty-state">Aucune génération disponible</div>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--subtext0); padding: 20px;">Aucune image de génération trouvée</td></tr>`;
       return;
     }
 
-    listEl.innerHTML = summary.generations.map(g => `
-      <div class="gen-item ${g.is_current ? 'current' : ''}">
-        <div class="gen-col-num">#${g.id}</div>
-        <div class="gen-col-date">${g.date}</div>
-        <div class="gen-col-badge">
-          ${g.is_current ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-idle">Archivée</span>'}
-        </div>
-      </div>
+    tbody.innerHTML = summary.generations.map(g => `
+      <tr style="${g.current ? "background-color: rgba(166, 227, 161, 0.08); font-weight: 500;" : ""}">
+        <td style="font-family: 'JetBrains Mono', monospace; font-weight: 700;">#${g.id}</td>
+        <td>${g.date}</td>
+        <td><span class="metric-tag" style="background: var(--surface0);">${g.nixos_version}</span></td>
+        <td style="font-family: 'JetBrains Mono', monospace; color: var(--subtext1);">${g.kernel}</td>
+        <td>
+          <span class="badge-gen ${g.current ? "badge-active" : "badge-inactive"}">
+            ${g.current ? "● Active" : "Archivée"}
+          </span>
+        </td>
+      </tr>
     `).join("");
   } catch (err) {
     console.error("Erreur générations:", err);
-    listEl.innerHTML = `<div class="empty-state">Erreur : ${err}</div>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--red); padding: 20px;">Erreur : ${err}</td></tr>`;
   }
 }
 

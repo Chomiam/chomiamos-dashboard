@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::path::Path;
 use std::process::Command;
 
 #[derive(Debug, Clone, Serialize)]
@@ -19,7 +20,13 @@ pub struct GenerationsSummary {
 }
 
 pub fn list_generations() -> Result<GenerationsSummary, String> {
-    let output = Command::new("nixos-rebuild")
+    let cmd_name = if Path::new("/run/current-system/sw/bin/nixos-rebuild").exists() {
+        "/run/current-system/sw/bin/nixos-rebuild"
+    } else {
+        "nixos-rebuild"
+    };
+
+    let output = Command::new(cmd_name)
         .arg("list-generations")
         .output()
         .map_err(|e| format!("Erreur lors de l'exécution de nixos-rebuild: {}", e))?;
@@ -73,7 +80,13 @@ pub fn list_generations() -> Result<GenerationsSummary, String> {
 }
 
 fn get_store_size() -> String {
-    if let Ok(output) = Command::new("df").args(["-h", "/nix/store"]).output() {
+    let df_cmd = if Path::new("/run/current-system/sw/bin/df").exists() {
+        "/run/current-system/sw/bin/df"
+    } else {
+        "df"
+    };
+
+    if let Ok(output) = Command::new(df_cmd).args(["-h", "/nix/store"]).output() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines().skip(1) {
             let parts: Vec<&str> = line.split_whitespace().collect();

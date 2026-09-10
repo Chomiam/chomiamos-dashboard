@@ -49,6 +49,12 @@ fn get_sync_script(mode: &str) -> String {
 r#"echo -e '\033[1;35m🐙 Synchronisation de la configuration NixOS depuis GitHub ({desc})...\033[0m\n'
 cd /etc/nixos || exit 1
 
+# 0. Automatisation totale : interdire tout éditeur interactif (nano, vim, etc.)
+export GIT_MERGE_AUTOEDIT=no
+export GIT_EDITOR=true
+export EDITOR=true
+export VISUAL=true
+
 # 1. Sauvegarde inviolable et permanente de vars.nix et hardware-configuration.nix
 git config merge.ours.driver true || true
 if [ -f /etc/nixos/vars.nix ]; then
@@ -69,7 +75,7 @@ fi
 
 # 3. Pull depuis GitHub
 echo -e '\n\033[1;34m⬇️ Récupération des dernières modifications depuis GitHub (git pull --no-rebase)...\033[0m'
-if ! git pull --no-rebase origin main; then
+if ! git pull --no-rebase --no-edit origin main; then
   echo -e '\n\033[1;33m⚠️ Conflit détecté lors du pull...\033[0m'
 
   # Si flake.lock a un conflit, écraser depuis origin/main
@@ -88,7 +94,7 @@ if ! git pull --no-rebase origin main; then
     git add vars.nix
   fi
 
-  git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" || true
+  git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
 fi
 
 # 4. Restauration du stash
@@ -106,7 +112,7 @@ if [ $DID_STASH -eq 1 ]; then
       fi
       git add vars.nix
     fi
-    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" || true
+    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
     git stash drop || true
   fi
 fi

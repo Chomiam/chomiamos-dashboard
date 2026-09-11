@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadStorageDevices();
   loadCustomPackages();
   initPackageSearch();
+  initSpeedtest();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
 });
@@ -77,6 +78,13 @@ function initTabs() {
           loadStorageDevices();
         } else if (targetId === "tab-packages") {
           loadCustomPackages();
+        } else if (targetId === "tab-system") {
+          setTimeout(() => {
+            if (typeof resizeSpeedtestCanvas === "function") {
+              resizeSpeedtestCanvas();
+              renderSpeedtestGraph();
+            }
+          }, 50);
         }
       }
     });
@@ -2448,3 +2456,698 @@ window.deleteCustomPackage = deleteCustomPackage;
 window.switchPackageBranch = switchPackageBranch;
 window.applyCustomPackagesDeploy = applyCustomPackagesDeploy;
 window.quickSearch = quickSearch;
+
+
+// =============================================================================
+// ⚡ SPEEDTEST COMPONENT ENGINE (Cloudflare Anycast + Real-time Canvas Graph)
+// =============================================================================
+
+let speedtestRunning = false;
+let speedtestAbortController = null;
+let currentPublicIp = "";
+let ipHidden = true;
+
+// Graph history
+let graphPoints = []; // { type: "down" | "up", mbps: number }
+let graphMaxMbps = 100;
+
+function initSpeedtest() {
+  fetchSpeedtestMetadata();
+  initSpeedtestCanvas();
+  window.addEventListener("resize", () => {
+    resizeSpeedtestCanvas();
+    renderSpeedtestGraph();
+  });
+}
+
+// 1. Fetch Location, ISP, CDN Node, and IP
+async function fetchSpeedtestMetadata() {
+  const locEl = document.getElementById("net-info-location");
+  const ispEl = document.getElementById("net-info-isp");
+  const srvEl = document.getElementById("net-info-server");
+  const ipEl = document.getElementById("net-info-ip");
+
+  try {
+    const res = await fetch("https://speed.cloudflare.com/__down?bytes=0", {
+      cache: "no-store",
+    });
+
+    const ip = res.headers.get("cf-meta-ip") || "Inconnue";
+    const city = res.headers.get("city") || "";
+    const country = res.headers.get("country") || "";
+    const colo = res.headers.get("colo") || "Edge";
+    const asn = res.headers.get("asn") || "";
+
+    currentPublicIp = ip;
+    updateIpDisplay();
+
+    // ISP Resolution
+    const ispName = resolveIspFromAsn(asn);
+    if (ispEl) ispEl.textContent = ispName ? `Fournisseur : ${ispName} (AS${asn})` : (asn ? `ASN ${asn}` : "Fournisseur détecté");
+
+    // Location
+    if (locEl) {
+      if (city && country) {
+        locEl.textContent = `${city}, ${country}`;
+      } else if (country) {
+        locEl.textContent = country;
+      } else {
+        locEl.textContent = "Localisation détectée";
+      }
+    }
+
+    // Edge Server
+    const coloCities = {
+      CDG: "Paris Roissy",
+      ORY: "Paris Orly",
+      MRS: "Marseille",
+      LYS: "Lyon",
+      BOD: "Bordeaux",
+      GVA: "Genève",
+      BRU: "Bruxelles",
+      LHR: "Londres",
+      FRA: "Francfort",
+      AMS: "Amsterdam",
+      MAD: "Madrid",
+    };
+    const cCity = coloCities[colo] || colo;
+    if (srvEl) srvEl.textContent = `Serveur : Cloudflare (${cCity} - ${colo})`;
+
+  } catch (err) {
+    console.warn("Échec détection métadonnées speedtest (hors-ligne ?):", err);
+    if (locEl) locEl.textContent = "Réseau local";
+    if (ispEl) ispEl.textContent = "Fournisseur : --";
+    if (srvEl) srvEl.textContent = "Serveur : --";
+    if (ipEl) ipEl.textContent = "IP : --";
+  }
+}
+
+function resolveIspFromAsn(asn) {
+  const asns = {
+    "3215": "Orange",
+    "12322": "Free",
+    "21502": "Bouygues Telecom",
+    "5410": "Bouygues Telecom",
+    "15557": "SFR / Altice",
+    "6799": "OVHcloud",
+    "13335": "Cloudflare",
+    "15169": "Google",
+    "8075": "Microsoft",
+    "16509": "Amazon AWS",
+    "5624": "Numericable",
+    "5432": "Proximus",
+    "3303": "Swisscom",
+    "6830": "Liberty Global",
+    "3320": "Deutsche Telekom",
+  };
+  return asns[asn] || "";
+}
+
+function toggleIpVisibility() {
+  ipHidden = !ipHidden;
+  updateIpDisplay();
+}
+
+function updateIpDisplay() {
+  const ipEl = document.getElementById("net-info-ip");
+  if (!ipEl) return;
+  if (!currentPublicIp) {
+    ipEl.textContent = "IP : Non détectée";
+    return;
+  }
+  if (ipHidden) {
+    if (currentPublicIp.includes(":")) {
+      const parts = currentPublicIp.split(":");
+      ipEl.textContent = `IP : ${parts[0]}:••••:••••:${parts[parts.length - 1]}`;
+    } else {
+      const parts = currentPublicIp.split(".");
+      ipEl.textContent = `IP : ${parts[0]}.•••.•••.${parts[3] || ""}`;
+    }
+  } else {
+    ipEl.textContent = `IP : ${currentPublicIp}`;
+  }
+}
+
+// 2. Toggle Start / Stop Speedtest
+async function toggleSpeedtest() {
+  if (speedtestRunning) {
+    stopSpeedtest();
+  } else {
+    await startSpeedtest();
+  }
+}
+
+function stopSpeedtest() {
+  if (speedtestAbortController) {
+    speedtestAbortController.abort();
+    speedtestAbortController = null;
+  }
+  speedtestRunning = false;
+  setSpeedtestUIState("ready");
+}
+
+async function startSpeedtest() {
+  if (speedtestRunning) return;
+  speedtestRunning = true;
+  speedtestAbortController = new AbortController();
+  const signal = speedtestAbortController.signal;
+
+  // Reset UI
+  resetSpeedtestMetrics();
+  setSpeedtestUIState("running");
+  graphPoints = [];
+  graphMaxMbps = 100;
+  renderSpeedtestGraph();
+
+  try {
+    // Phase 1: Ping & Jitter
+    await measurePingAndJitter(signal);
+    if (signal.aborted) return;
+
+    // Phase 2: Download Speed
+    await measureDownloadSpeed(signal);
+    if (signal.aborted) return;
+
+    // Phase 3: Upload Speed
+    await measureUploadSpeed(signal);
+    if (signal.aborted) return;
+
+    // Phase 4: Finalize & Score
+    finalizeSpeedtestScore();
+    setSpeedtestUIState("finished");
+
+  } catch (err) {
+    if (signal.aborted) {
+      console.log("Speedtest annulé par l'utilisateur");
+    } else {
+      console.error("Erreur durant le speedtest :", err);
+      showToast("Erreur lors de la mesure : " + err.message, "error");
+      setSpeedtestUIState("ready");
+    }
+  } finally {
+    speedtestRunning = false;
+    speedtestAbortController = null;
+  }
+}
+
+function setSpeedtestUIState(state) {
+  const btn = document.getElementById("btn-start-speedtest");
+  const icon = document.getElementById("speedtest-btn-icon");
+  const text = document.getElementById("speedtest-btn-text");
+  const badge = document.getElementById("speedtest-status-badge");
+  const liveDot = document.getElementById("graph-live-dot");
+
+  if (!btn || !text || !badge) return;
+
+  if (state === "running") {
+    btn.classList.add("btn-running");
+    icon.textContent = "⏹️";
+    text.textContent = "Arrêter le Test";
+    badge.textContent = "Test en cours";
+    badge.className = "speedtest-status-badge running";
+    if (liveDot) liveDot.classList.add("live");
+  } else if (state === "finished") {
+    btn.classList.remove("btn-running");
+    icon.textContent = "🔄";
+    text.textContent = "Relancer le Test";
+    badge.textContent = "Terminé";
+    badge.className = "speedtest-status-badge";
+    if (liveDot) liveDot.classList.remove("live");
+  } else {
+    btn.classList.remove("btn-running");
+    icon.textContent = "🚀";
+    text.textContent = "Lancer le Speedtest";
+    badge.textContent = "Prêt";
+    badge.className = "speedtest-status-badge";
+    if (liveDot) liveDot.classList.remove("live");
+  }
+}
+
+function resetSpeedtestMetrics() {
+  document.getElementById("speed-val-ping").textContent = "--";
+  document.getElementById("speed-val-jitter").textContent = "-- ms";
+  document.getElementById("ping-quality-tag").textContent = "Mesure en cours...";
+  document.getElementById("ping-quality-tag").className = "speed-quality-tag";
+
+  document.getElementById("speed-val-download").textContent = "--";
+  document.getElementById("speed-transferred-down").textContent = "0 Mo";
+  document.getElementById("phase-down-indicator").textContent = "En attente";
+  document.getElementById("phase-down-indicator").className = "speed-phase-indicator";
+  document.getElementById("progress-bar-down").style.width = "0%";
+
+  document.getElementById("speed-val-upload").textContent = "--";
+  document.getElementById("speed-transferred-up").textContent = "0 Mo";
+  document.getElementById("phase-up-indicator").textContent = "En attente";
+  document.getElementById("phase-up-indicator").className = "speed-phase-indicator";
+  document.getElementById("progress-bar-up").style.width = "0%";
+
+  // Reset usages
+  ["gaming", "streaming", "cloud"].forEach(k => {
+    const el = document.getElementById(`usage-${k}`);
+    if (el) el.classList.remove("passed");
+  });
+  document.getElementById("usage-gaming-desc").textContent = "Évaluation en cours...";
+  document.getElementById("usage-streaming-desc").textContent = "Évaluation en cours...";
+  document.getElementById("usage-cloud-desc").textContent = "Évaluation en cours...";
+}
+
+// 3. Measure Ping & Jitter
+async function measurePingAndJitter(signal) {
+  const pingEl = document.getElementById("speed-val-ping");
+  const jitterEl = document.getElementById("speed-val-jitter");
+  const tagEl = document.getElementById("ping-quality-tag");
+  const cardPing = document.getElementById("metric-card-ping");
+
+  if (cardPing) cardPing.classList.add("active-measuring");
+
+  const samples = [];
+  const PING_COUNT = 8;
+
+  for (let i = 0; i < PING_COUNT; i++) {
+    if (signal.aborted) return;
+    const t0 = performance.now();
+    try {
+      await fetch(`https://speed.cloudflare.com/__down?bytes=0&_t=${Date.now()}_${i}`, {
+        cache: "no-store",
+        signal,
+      });
+      const t1 = performance.now();
+      const rtt = t1 - t0;
+      samples.push(rtt);
+      if (pingEl) pingEl.textContent = rtt.toFixed(0);
+    } catch (e) {
+      if (signal.aborted) return;
+    }
+    await new Promise(r => setTimeout(r, 60));
+  }
+
+  if (cardPing) cardPing.classList.remove("active-measuring");
+  if (samples.length === 0) return;
+
+  // Calcul du ping médian
+  samples.sort((a, b) => a - b);
+  const medianPing = samples[Math.floor(samples.length / 2)];
+
+  // Calcul de la gigue (jitter) = moyenne des écarts consécutifs
+  let jitterSum = 0;
+  for (let i = 1; i < samples.length; i++) {
+    jitterSum += Math.abs(samples[i] - samples[i - 1]);
+  }
+  const jitter = samples.length > 1 ? jitterSum / (samples.length - 1) : 0;
+
+  if (pingEl) pingEl.textContent = medianPing.toFixed(1);
+  if (jitterEl) jitterEl.textContent = `${jitter.toFixed(1)} ms`;
+
+  if (tagEl) {
+    if (medianPing < 20) {
+      tagEl.textContent = "Excellent (< 20ms)";
+      tagEl.className = "speed-quality-tag great";
+    } else if (medianPing < 45) {
+      tagEl.textContent = "Très bon (gaming)";
+      tagEl.className = "speed-quality-tag great";
+    } else if (medianPing < 90) {
+      tagEl.textContent = "Correct";
+      tagEl.className = "speed-quality-tag";
+    } else {
+      tagEl.textContent = "Élevé (> 90ms)";
+      tagEl.className = "speed-quality-tag";
+    }
+  }
+}
+
+// 4. Measure Download Speed
+async function measureDownloadSpeed(signal) {
+  const downEl = document.getElementById("speed-val-download");
+  const transferredEl = document.getElementById("speed-transferred-down");
+  const phaseEl = document.getElementById("phase-down-indicator");
+  const barEl = document.getElementById("progress-bar-down");
+  const cardDown = document.getElementById("metric-card-download");
+
+  if (cardDown) cardDown.classList.add("active-measuring");
+  if (phaseEl) {
+    phaseEl.textContent = "En cours...";
+    phaseEl.className = "speed-phase-indicator active";
+  }
+
+  const TEST_DURATION_MS = 6500;
+  const startTime = performance.now();
+  let totalBytes = 0;
+  let lastBytes = 0;
+  let lastTime = startTime;
+  let currentMbps = 0;
+  const speedSamples = [];
+
+  // 3 flux concurrents pour saturer proprement la bande passante
+  const streamUrls = [
+    "https://speed.cloudflare.com/__down?bytes=50000000",
+    "https://speed.cloudflare.com/__down?bytes=50000000",
+    "https://speed.cloudflare.com/__down?bytes=25000000",
+  ];
+
+  const updateInterval = setInterval(() => {
+    const now = performance.now();
+    const elapsed = now - startTime;
+    const dt = (now - lastTime) / 1000;
+    const dBytes = totalBytes - lastBytes;
+
+    if (dt > 0.05) {
+      const instantMbps = (dBytes * 8) / (dt * 1000000);
+      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.65 + instantMbps * 0.35);
+
+      if (elapsed > 400) {
+        speedSamples.push(currentMbps);
+      }
+
+      if (downEl) downEl.textContent = currentMbps.toFixed(1);
+      if (transferredEl) transferredEl.textContent = `${(totalBytes / 1048576).toFixed(1)} Mo`;
+
+      const progressPct = Math.min(100, (elapsed / TEST_DURATION_MS) * 100);
+      if (barEl) barEl.style.width = `${progressPct}%`;
+
+      // Ajout du point au graphique
+      graphPoints.push({ type: "down", mbps: currentMbps });
+      if (currentMbps > graphMaxMbps) graphMaxMbps = currentMbps * 1.15;
+      renderSpeedtestGraph();
+
+      lastBytes = totalBytes;
+      lastTime = now;
+    }
+  }, 60);
+
+  const fetchStream = async (url) => {
+    try {
+      const res = await fetch(`${url}&_cb=${Date.now()}`, { signal, cache: "no-store" });
+      if (!res.body) return;
+      const reader = res.body.getReader();
+      while (performance.now() - startTime < TEST_DURATION_MS) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        totalBytes += value.byteLength;
+      }
+      reader.cancel();
+    } catch (e) {
+      // Ignorer abort
+    }
+  };
+
+  await Promise.race([
+    Promise.all(streamUrls.map(u => fetchStream(u))),
+    new Promise(r => setTimeout(r, TEST_DURATION_MS)),
+  ]);
+
+  clearInterval(updateInterval);
+
+  if (cardDown) cardDown.classList.remove("active-measuring");
+  if (phaseEl) {
+    phaseEl.textContent = "Terminé";
+    phaseEl.className = "speed-phase-indicator";
+  }
+  if (barEl) barEl.style.width = "100%";
+
+  // Débit final moyen (sur le plateau stable)
+  let finalDownMbps = 0;
+  if (speedSamples.length > 0) {
+    speedSamples.sort((a, b) => a - b);
+    const sliceStart = Math.floor(speedSamples.length * 0.3);
+    const stableSamples = speedSamples.slice(sliceStart);
+    finalDownMbps = stableSamples.reduce((a, b) => a + b, 0) / stableSamples.length;
+  } else {
+    finalDownMbps = currentMbps;
+  }
+
+  if (downEl) downEl.textContent = finalDownMbps.toFixed(1);
+}
+
+// 5. Measure Upload Speed
+async function measureUploadSpeed(signal) {
+  const upEl = document.getElementById("speed-val-upload");
+  const transferredEl = document.getElementById("speed-transferred-up");
+  const phaseEl = document.getElementById("phase-up-indicator");
+  const barEl = document.getElementById("progress-bar-up");
+  const cardUp = document.getElementById("metric-card-upload");
+
+  if (cardUp) cardUp.classList.add("active-upload");
+  if (phaseEl) {
+    phaseEl.textContent = "En cours...";
+    phaseEl.className = "speed-phase-indicator active-up";
+  }
+
+  const TEST_DURATION_MS = 5500;
+  const startTime = performance.now();
+  let totalUploadedBytes = 0;
+  let lastBytes = 0;
+  let lastTime = startTime;
+  let currentMbps = 0;
+  const speedSamples = [];
+
+  // Préparation d'un buffer binaire en mémoire (2 Mo par requête POST)
+  const CHUNK_SIZE = 2 * 1024 * 1024;
+  const uploadPayload = new Uint8Array(CHUNK_SIZE);
+  for (let i = 0; i < CHUNK_SIZE; i += 4096) {
+    uploadPayload[i] = (i * 31) & 0xff;
+  }
+
+  const updateInterval = setInterval(() => {
+    const now = performance.now();
+    const elapsed = now - startTime;
+    const dt = (now - lastTime) / 1000;
+    const dBytes = totalUploadedBytes - lastBytes;
+
+    if (dt > 0.05) {
+      const instantMbps = (dBytes * 8) / (dt * 1000000);
+      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.65 + instantMbps * 0.35);
+
+      if (elapsed > 300) {
+        speedSamples.push(currentMbps);
+      }
+
+      if (upEl) upEl.textContent = currentMbps.toFixed(1);
+      if (transferredEl) transferredEl.textContent = `${(totalUploadedBytes / 1048576).toFixed(1)} Mo`;
+
+      const progressPct = Math.min(100, (elapsed / TEST_DURATION_MS) * 100);
+      if (barEl) barEl.style.width = `${progressPct}%`;
+
+      // Ajout au graphique
+      graphPoints.push({ type: "up", mbps: currentMbps });
+      if (currentMbps > graphMaxMbps) graphMaxMbps = currentMbps * 1.15;
+      renderSpeedtestGraph();
+
+      lastBytes = totalUploadedBytes;
+      lastTime = now;
+    }
+  }, 60);
+
+  const postWorker = async () => {
+    while (performance.now() - startTime < TEST_DURATION_MS && !signal.aborted) {
+      try {
+        await fetch("https://speed.cloudflare.com/__up", {
+          method: "POST",
+          body: uploadPayload,
+          signal,
+          cache: "no-store",
+        });
+        totalUploadedBytes += CHUNK_SIZE;
+      } catch (e) {
+        if (signal.aborted) break;
+      }
+    }
+  };
+
+  // 2 flux d'envoi concurrents
+  await Promise.race([
+    Promise.all([postWorker(), postWorker()]),
+    new Promise(r => setTimeout(r, TEST_DURATION_MS)),
+  ]);
+
+  clearInterval(updateInterval);
+
+  if (cardUp) cardUp.classList.remove("active-upload");
+  if (phaseEl) {
+    phaseEl.textContent = "Terminé";
+    phaseEl.className = "speed-phase-indicator";
+  }
+  if (barEl) barEl.style.width = "100%";
+
+  let finalUpMbps = 0;
+  if (speedSamples.length > 0) {
+    speedSamples.sort((a, b) => a - b);
+    const sliceStart = Math.floor(speedSamples.length * 0.3);
+    const stableSamples = speedSamples.slice(sliceStart);
+    finalUpMbps = stableSamples.reduce((a, b) => a + b, 0) / stableSamples.length;
+  } else {
+    finalUpMbps = currentMbps;
+  }
+
+  if (upEl) upEl.textContent = finalUpMbps.toFixed(1);
+}
+
+// 6. Quality of Experience Diagnostic
+function finalizeSpeedtestScore() {
+  const pingVal = parseFloat(document.getElementById("speed-val-ping").textContent) || 50;
+  const downVal = parseFloat(document.getElementById("speed-val-download").textContent) || 0;
+  const upVal = parseFloat(document.getElementById("speed-val-upload").textContent) || 0;
+
+  // Gaming
+  const gameBadge = document.getElementById("usage-gaming");
+  const gameDesc = document.getElementById("usage-gaming-desc");
+  if (pingVal <= 25) {
+    gameBadge.classList.add("passed");
+    gameDesc.textContent = `🌟 Idéal eSport & FPS compétitifs (Ping: ${pingVal.toFixed(0)} ms)`;
+  } else if (pingVal <= 50) {
+    gameBadge.classList.add("passed");
+    gameDesc.textContent = `Très bon pour le multijoueur (${pingVal.toFixed(0)} ms)`;
+  } else {
+    gameDesc.textContent = `Latence modérée (${pingVal.toFixed(0)} ms)`;
+  }
+
+  // Streaming 4K / 8K
+  const streamBadge = document.getElementById("usage-streaming");
+  const streamDesc = document.getElementById("usage-streaming-desc");
+  if (downVal >= 100) {
+    streamBadge.classList.add("passed");
+    streamDesc.textContent = "🌟 4K HDR & 8K Ultra HD multi-écrans sans chargement";
+  } else if (downVal >= 30) {
+    streamBadge.classList.add("passed");
+    streamDesc.textContent = "Parfait pour Netflix & YouTube en 4K UHD";
+  } else {
+    streamDesc.textContent = "Idéal streaming HD 1080p";
+  }
+
+  // Cloud Gaming & P2P
+  const cloudBadge = document.getElementById("usage-cloud");
+  const cloudDesc = document.getElementById("usage-cloud-desc");
+  if (downVal >= 150 && upVal >= 40 && pingVal <= 35) {
+    cloudBadge.classList.add("passed");
+    cloudDesc.textContent = "🌟 GeForce NOW / Steam Remote Play Ultra fluide";
+  } else if (downVal >= 50 && upVal >= 15) {
+    cloudBadge.classList.add("passed");
+    cloudDesc.textContent = "Expérience Cloud Gaming 1080p 60 FPS optimale";
+  } else {
+    cloudDesc.textContent = "Téléchargements standards";
+  }
+}
+
+// 7. Canvas Real-Time Rendering
+function initSpeedtestCanvas() {
+  resizeSpeedtestCanvas();
+  renderSpeedtestGraph();
+}
+
+function resizeSpeedtestCanvas() {
+  const canvas = document.getElementById("speedtest-canvas");
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+}
+
+function renderSpeedtestGraph() {
+  const canvas = document.getElementById("speedtest-canvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+
+  ctx.clearRect(0, 0, width, height);
+
+  // Background grid
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+  ctx.lineWidth = 1;
+  const gridLines = 3;
+  for (let i = 1; i <= gridLines; i++) {
+    const y = (height / (gridLines + 1)) * i;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+
+    // Value indicator on right
+    const val = (graphMaxMbps * (1 - i / (gridLines + 1))).toFixed(0);
+    ctx.fillStyle = "rgba(166, 173, 200, 0.35)";
+    ctx.font = `${Math.max(10, 11 * (window.devicePixelRatio || 1))}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = "right";
+    ctx.fillText(`${val}M`, width - 8, y - 4);
+  }
+
+  if (graphPoints.length < 2) return;
+
+  // Separate points by phase
+  const downPoints = [];
+  const upPoints = [];
+
+  graphPoints.forEach((p, idx) => {
+    const x = (idx / Math.max(graphPoints.length - 1, 1)) * width;
+    const y = height - (Math.min(p.mbps, graphMaxMbps) / graphMaxMbps) * (height - 15) - 8;
+    if (p.type === "down") {
+      downPoints.push({ x, y, mbps: p.mbps });
+    } else {
+      upPoints.push({ x, y, mbps: p.mbps });
+    }
+  });
+
+  // Render Download Curve (Sapphire / Cyan)
+  if (downPoints.length > 1) {
+    drawCurve(ctx, downPoints, "#74c7ec", "rgba(116, 199, 236, 0.22)", height);
+  }
+
+  // Render Upload Curve (Mauve / Lavender)
+  if (upPoints.length > 1) {
+    drawCurve(ctx, upPoints, "#cba6f7", "rgba(203, 166, 247, 0.22)", height);
+  }
+}
+
+function drawCurve(ctx, pts, strokeColor, fillColor, canvasHeight) {
+  ctx.save();
+
+  // Draw Area Fill
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, canvasHeight);
+  ctx.lineTo(pts[0].x, pts[0].y);
+
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.quadraticCurveTo(prev.x, prev.y, cpx, (prev.y + curr.y) / 2);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  ctx.lineTo(pts[pts.length - 1].x, canvasHeight);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+  grad.addColorStop(0, fillColor);
+  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Draw Stroke
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1];
+    const curr = pts[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.quadraticCurveTo(prev.x, prev.y, cpx, (prev.y + curr.y) / 2);
+  }
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = 2.5 * (window.devicePixelRatio || 1);
+  ctx.shadowColor = strokeColor;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+
+  // Glowing Head dot
+  const last = pts[pts.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 4 * (window.devicePixelRatio || 1), 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowBlur = 12;
+  ctx.fill();
+
+  ctx.restore();
+}
+
+window.toggleSpeedtest = toggleSpeedtest;
+window.toggleIpVisibility = toggleIpVisibility;
+window.initSpeedtest = initSpeedtest;

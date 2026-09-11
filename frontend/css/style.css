@@ -2334,3 +2334,451 @@ body {
   border-radius: var(--radius-sm);
   margin-top: 4px;
 }
+
+/* ==========================================================================
+   SPEEDTEST COMPONENT (Catppuccin Mocha Ultra-Aesthetics)
+   ========================================================================== */
+
+.speedtest-card {
+  margin-top: 24px;
+  background: linear-gradient(135deg, rgba(30, 30, 46, 0.92) 0%, rgba(24, 24, 37, 0.98) 100%);
+  border: 1px solid rgba(116, 199, 236, 0.22);
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.4), 0 0 25px rgba(116, 199, 236, 0.07);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.speedtest-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--sapphire), var(--mauve), transparent);
+  opacity: 0.8;
+}
+
+/* Header */
+.speedtest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.speedtest-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.speedtest-icon-box {
+  width: 52px;
+  height: 52px;
+  background: radial-gradient(circle, rgba(116, 199, 236, 0.25) 0%, rgba(30, 30, 46, 0.6) 100%);
+  border: 1px solid rgba(116, 199, 236, 0.4);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 0 16px rgba(116, 199, 236, 0.2);
+}
+
+.speedtest-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.speedtest-title-row h3 {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.speedtest-status-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+  transition: var(--transition-smooth);
+}
+
+.speedtest-status-badge.running {
+  background: rgba(116, 199, 236, 0.2);
+  color: var(--sapphire);
+  border-color: rgba(116, 199, 236, 0.4);
+  animation: badgeGlow 1.5s infinite alternate;
+}
+
+@keyframes badgeGlow {
+  0% { box-shadow: 0 0 4px rgba(116, 199, 236, 0.2); }
+  100% { box-shadow: 0 0 14px rgba(116, 199, 236, 0.5); }
+}
+
+.speedtest-subtitle {
+  font-size: 13px;
+  color: var(--subtext0);
+}
+
+/* Action Button */
+.btn-speedtest {
+  background: linear-gradient(135deg, #74c7ec 0%, #cba6f7 100%);
+  color: #11111b;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  border: none;
+  box-shadow: 0 4px 18px rgba(116, 199, 236, 0.3);
+  transition: all 0.25s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-speedtest:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(203, 166, 247, 0.45);
+  filter: brightness(1.06);
+}
+
+.btn-speedtest:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-speedtest.btn-running {
+  background: linear-gradient(135deg, #f38ba8 0%, #fab387 100%);
+  box-shadow: 0 4px 18px rgba(243, 139, 168, 0.3);
+}
+
+/* Info Bar (Pills) */
+.speedtest-network-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: rgba(17, 17, 27, 0.55);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  margin-bottom: 20px;
+}
+
+.net-info-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--subtext1);
+  background: rgba(49, 50, 68, 0.4);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.net-info-icon {
+  font-size: 13px;
+}
+
+.net-info-ip-pill {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.net-ip-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  color: var(--subtext0);
+  transition: opacity 0.15s;
+}
+
+.net-ip-toggle:hover {
+  opacity: 0.7;
+}
+
+/* Main 3 Metrics Grid */
+.speedtest-main-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.speedtest-metric-card {
+  background: rgba(49, 50, 68, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.speedtest-metric-card.active-measuring {
+  border-color: rgba(116, 199, 236, 0.5);
+  background: rgba(49, 50, 68, 0.6);
+  box-shadow: 0 0 20px rgba(116, 199, 236, 0.18);
+}
+
+.speedtest-metric-card.active-upload {
+  border-color: rgba(203, 166, 247, 0.5);
+  background: rgba(49, 50, 68, 0.6);
+  box-shadow: 0 0 20px rgba(203, 166, 247, 0.18);
+}
+
+.metric-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric-icon-small {
+  font-size: 16px;
+}
+
+.metric-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--subtext1);
+}
+
+.metric-value-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.ping-color { color: var(--green); }
+.download-color { color: var(--sapphire); }
+.upload-color { color: var(--mauve); }
+
+.metric-unit {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--subtext0);
+  text-transform: uppercase;
+}
+
+.metric-sub-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--subtext0);
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.speed-quality-tag,
+.speed-phase-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--subtext1);
+}
+
+.speed-quality-tag.great {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+}
+
+.speed-phase-indicator.active {
+  background: rgba(116, 199, 236, 0.2);
+  color: var(--sapphire);
+  animation: phaseBlink 1s infinite alternate;
+}
+
+.speed-phase-indicator.active-up {
+  background: rgba(203, 166, 247, 0.2);
+  color: var(--mauve);
+  animation: phaseBlink 1s infinite alternate;
+}
+
+@keyframes phaseBlink {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.metric-progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-full);
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.metric-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: var(--radius-full);
+  transition: width 0.15s ease-out;
+}
+
+.bar-down {
+  background: linear-gradient(90deg, #74c7ec, #89dceb);
+  box-shadow: 0 0 8px rgba(116, 199, 236, 0.6);
+}
+
+.bar-up {
+  background: linear-gradient(90deg, #cba6f7, #b4befe);
+  box-shadow: 0 0 8px rgba(203, 166, 247, 0.6);
+}
+
+/* Graph Section */
+.speedtest-graph-section {
+  background: rgba(17, 17, 27, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+
+.graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--subtext1);
+}
+
+.graph-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.graph-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--surface2);
+  transition: var(--transition-smooth);
+}
+
+.graph-indicator-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+  animation: liveDotPulse 1s infinite alternate;
+}
+
+@keyframes liveDotPulse {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(1.2); opacity: 1; }
+}
+
+.graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11.5px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--subtext0);
+}
+
+.legend-box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-down { background: var(--sapphire); }
+.legend-up { background: var(--mauve); }
+
+.canvas-wrapper {
+  width: 100%;
+  height: 130px;
+  position: relative;
+}
+
+#speedtest-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Usage Badges Row */
+.speedtest-usages-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.usage-badge {
+  background: rgba(49, 50, 68, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.25s ease;
+}
+
+.usage-badge:hover {
+  background: rgba(49, 50, 68, 0.45);
+  border-color: rgba(203, 166, 247, 0.2);
+}
+
+.usage-badge.passed {
+  border-color: rgba(166, 227, 161, 0.35);
+  background: rgba(166, 227, 161, 0.08);
+}
+
+.usage-icon {
+  font-size: 24px;
+}
+
+.usage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.usage-info strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.usage-info small {
+  font-size: 11.5px;
+  color: var(--subtext0);
+}

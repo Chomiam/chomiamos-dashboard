@@ -234,6 +234,150 @@
             </div>
           </div>
         </div>
+
+        <!-- Network Speedtest Section -->
+        <div class="card speedtest-card" id="speedtest-section">
+          <div class="speedtest-header">
+            <div class="speedtest-title-wrap">
+              <div class="speedtest-icon-box">⚡</div>
+              <div>
+                <div class="speedtest-title-row">
+                  <h3>Test de Débit & Latence Réseau</h3>
+                  <span class="speedtest-status-badge" id="speedtest-status-badge">Prêt</span>
+                </div>
+                <p class="speedtest-subtitle">Mesure haute précision de la latence, gigue et débits internet</p>
+              </div>
+            </div>
+
+            <!-- Action button -->
+            <div class="speedtest-actions">
+              <button class="btn btn-speedtest" id="btn-start-speedtest" onclick="toggleSpeedtest()">
+                <span class="btn-icon" id="speedtest-btn-icon">🚀</span>
+                <span id="speedtest-btn-text">Lancer le Speedtest</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Network metadata pills -->
+          <div class="speedtest-network-info-bar">
+            <div class="net-info-pill" title="Localisation estimée de votre connexion">
+              <span class="net-info-icon">📍</span>
+              <span id="net-info-location">Détection en cours...</span>
+            </div>
+            <div class="net-info-pill" title="Fournisseur d'accès internet (ASN)">
+              <span class="net-info-icon">🌐</span>
+              <span id="net-info-isp">Fournisseur : Analyse...</span>
+            </div>
+            <div class="net-info-pill" title="Point de présence / Serveur de test">
+              <span class="net-info-icon">🏢</span>
+              <span id="net-info-server">Serveur : Cloudflare Anycast</span>
+            </div>
+            <div class="net-info-pill net-info-ip-pill" title="Adresse IP publique">
+              <span class="net-info-icon">🛡️</span>
+              <span id="net-info-ip">IP : ••••••••••••</span>
+              <button type="button" class="net-ip-toggle" onclick="toggleIpVisibility()" title="Afficher/Masquer l'adresse IP">👁️</button>
+            </div>
+          </div>
+
+          <!-- 3 Main Digital Metrics -->
+          <div class="speedtest-main-grid">
+            <!-- Ping Card -->
+            <div class="speedtest-metric-card" id="metric-card-ping">
+              <div class="metric-top">
+                <span class="metric-icon-small">📶</span>
+                <span class="metric-label">Latence (Ping)</span>
+              </div>
+              <div class="metric-value-wrap">
+                <span class="metric-num ping-color" id="speed-val-ping">--</span>
+                <span class="metric-unit">ms</span>
+              </div>
+              <div class="metric-sub-row">
+                <span>Gigue : <strong id="speed-val-jitter">-- ms</strong></span>
+                <span class="speed-quality-tag" id="ping-quality-tag">En attente</span>
+              </div>
+            </div>
+
+            <!-- Download Card -->
+            <div class="speedtest-metric-card" id="metric-card-download">
+              <div class="metric-top">
+                <span class="metric-icon-small">⬇️</span>
+                <span class="metric-label">Débit Descendant</span>
+              </div>
+              <div class="metric-value-wrap">
+                <span class="metric-num download-color" id="speed-val-download">--</span>
+                <span class="metric-unit">Mbps</span>
+              </div>
+              <div class="metric-sub-row">
+                <span>Transféré : <strong id="speed-transferred-down">0 Mo</strong></span>
+                <span class="speed-phase-indicator" id="phase-down-indicator">Prêt</span>
+              </div>
+              <div class="metric-progress-track">
+                <div class="metric-progress-bar bar-down" id="progress-bar-down"></div>
+              </div>
+            </div>
+
+            <!-- Upload Card -->
+            <div class="speedtest-metric-card" id="metric-card-upload">
+              <div class="metric-top">
+                <span class="metric-icon-small">⬆️</span>
+                <span class="metric-label">Débit Montant</span>
+              </div>
+              <div class="metric-value-wrap">
+                <span class="metric-num upload-color" id="speed-val-upload">--</span>
+                <span class="metric-unit">Mbps</span>
+              </div>
+              <div class="metric-sub-row">
+                <span>Transféré : <strong id="speed-transferred-up">0 Mo</strong></span>
+                <span class="speed-phase-indicator" id="phase-up-indicator">Prêt</span>
+              </div>
+              <div class="metric-progress-track">
+                <div class="metric-progress-bar bar-up" id="progress-bar-up"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Speed Graph -->
+          <div class="speedtest-graph-section">
+            <div class="graph-header">
+              <div class="graph-title-group">
+                <span class="graph-indicator-dot" id="graph-live-dot"></span>
+                <span>Graphique de Débit en Direct</span>
+              </div>
+              <div class="graph-legend">
+                <span class="legend-item"><span class="legend-box legend-down"></span> Téléchargement</span>
+                <span class="legend-item"><span class="legend-box legend-up"></span> Envoi</span>
+              </div>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="speedtest-canvas" width="900" height="130"></canvas>
+            </div>
+          </div>
+
+          <!-- Quality of Experience Badges -->
+          <div class="speedtest-usages-row">
+            <div class="usage-badge" id="usage-gaming">
+              <span class="usage-icon">🎮</span>
+              <div class="usage-info">
+                <strong>Gaming & eSport</strong>
+                <small id="usage-gaming-desc">Lancez le test pour évaluer la qualité</small>
+              </div>
+            </div>
+            <div class="usage-badge" id="usage-streaming">
+              <span class="usage-icon">🎬</span>
+              <div class="usage-info">
+                <strong>Streaming 4K / 8K</strong>
+                <small id="usage-streaming-desc">Lancez le test pour évaluer la qualité</small>
+              </div>
+            </div>
+            <div class="usage-badge" id="usage-cloud">
+              <span class="usage-icon">☁️</span>
+              <div class="usage-info">
+                <strong>Cloud Gaming & P2P</strong>
+                <small id="usage-cloud-desc">Lancez le test pour évaluer la qualité</small>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- ==================== TAB 2: DISK MANAGEMENT & MOUNTING ==================== -->

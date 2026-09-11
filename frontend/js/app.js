@@ -2472,6 +2472,12 @@ let speedtestAbortController = null;
 let currentPublicIp = "";
 let ipHidden = true;
 
+// Active speedtest server definition
+let activeSpeedServer = {
+  name: "Cloudflare Anycast (France/Europe)",
+  endpoint: "https://speed.cloudflare.com",
+};
+
 // Graph history
 let graphPoints = []; // { type: "down" | "up", mbps: number }
 let graphMaxMbps = 100;
@@ -2485,69 +2491,112 @@ function initSpeedtest() {
   });
 }
 
-// 1. Fetch Location, ISP, CDN Node, and IP
+// 1. Fetch Location, ISP, CDN Node, and IP (Multi-source avec ipwho.is + Cloudflare fallback)
 async function fetchSpeedtestMetadata() {
   const locEl = document.getElementById("net-info-location");
   const ispEl = document.getElementById("net-info-isp");
   const srvEl = document.getElementById("net-info-server");
   const ipEl = document.getElementById("net-info-ip");
 
+  if (locEl) locEl.textContent = "Détection de la ville...";
+  if (ispEl) ispEl.textContent = "Recherche du FAI...";
+  if (srvEl) srvEl.textContent = "Serveur : Optimisation...";
+
+  let detected = false;
+
+  // Source 1 : ipwho.is (CORS complet, FAI exact, Ville, Pays, ASN et Emoji drapeau)
   try {
-    const res = await fetch("https://speed.cloudflare.com/__down?bytes=0", {
+    const res = await fetch("https://ipwho.is/", {
       cache: "no-store",
+      signal: AbortSignal.timeout(3000),
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success !== false) {
+        currentPublicIp = data.ip || "";
+        updateIpDisplay();
 
-    const ip = res.headers.get("cf-meta-ip") || "Inconnue";
-    const city = res.headers.get("city") || "";
-    const country = res.headers.get("country") || "";
-    const colo = res.headers.get("colo") || "Edge";
-    const asn = res.headers.get("asn") || "";
+        const ispName = data.connection?.isp || data.connection?.org || resolveIspFromAsn(data.connection?.asn);
+        const asnStr = data.connection?.asn ? ` (AS${data.connection.asn})` : "";
+        if (ispEl) ispEl.textContent = `Fournisseur : ${ispName}${asnStr}`;
 
-    currentPublicIp = ip;
-    updateIpDisplay();
-
-    // ISP Resolution
-    const ispName = resolveIspFromAsn(asn);
-    if (ispEl) ispEl.textContent = ispName ? `Fournisseur : ${ispName} (AS${asn})` : (asn ? `ASN ${asn}` : "Fournisseur détecté");
-
-    // Location
-    if (locEl) {
-      if (city && country) {
-        locEl.textContent = `${city}, ${country}`;
-      } else if (country) {
-        locEl.textContent = country;
-      } else {
-        locEl.textContent = "Localisation détectée";
+        const city = data.city || "";
+        const country = data.country || "";
+        const flag = data.flag?.emoji || "";
+        if (locEl) {
+          const locText = [flag, city, country].filter(Boolean).join(" ");
+          locEl.textContent = locText || "Localisation détectée";
+        }
+        detected = true;
       }
     }
+  } catch (e) {
+    console.warn("ipwho.is indisponible, tentative fallback Cloudflare...", e);
+  }
 
-    // Edge Server
-    const coloCities = {
-      CDG: "Paris Roissy",
-      ORY: "Paris Orly",
-      MRS: "Marseille",
-      LYS: "Lyon",
-      BOD: "Bordeaux",
-      GVA: "Genève",
-      BRU: "Bruxelles",
-      LHR: "Londres",
-      FRA: "Francfort",
-      AMS: "Amsterdam",
-      MAD: "Madrid",
-    };
-    const cCity = coloCities[colo] || colo;
-    if (srvEl) srvEl.textContent = `Serveur : Cloudflare (${cCity} - ${colo})`;
+  // Source 2 : Cloudflare fallback
+  if (!detected) {
+    try {
+      const res = await fetch("https://speed.cloudflare.com/__down?bytes=0", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
 
-  } catch (err) {
-    console.warn("Échec détection métadonnées speedtest (hors-ligne ?):", err);
-    if (locEl) locEl.textContent = "Réseau local";
+      const ip = res.headers.get("cf-meta-ip") || "";
+      if (ip) {
+        currentPublicIp = ip;
+        updateIpDisplay();
+      }
+
+      const city = res.headers.get("cf-meta-city") || res.headers.get("city") || "";
+      const country = res.headers.get("cf-meta-country") || res.headers.get("country") || "";
+      const colo = res.headers.get("cf-meta-colo") || res.headers.get("colo") || "CDG";
+      const asn = res.headers.get("cf-meta-asn") || res.headers.get("asn") || "";
+
+      const ispName = resolveIspFromAsn(asn);
+      if (ispEl) ispEl.textContent = ispName ? `Fournisseur : ${ispName} (AS${asn})` : (asn ? `ASN ${asn}` : "Fournisseur détecté");
+      if (locEl) locEl.textContent = city && country ? `${city}, ${country}` : (country || "Localisation détectée");
+      detected = true;
+    } catch (err) {
+      console.warn("Échec détection Cloudflare :", err);
+    }
+  }
+
+  // Source 3 : Backup ultime country.is pour au moins avoir l'IP et le pays
+  if (!detected) {
+    try {
+      const res = await fetch("https://api.country.is", {
+        cache: "no-store",
+        signal: AbortSignal.timeout(2500),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.ip) {
+          currentPublicIp = data.ip;
+          updateIpDisplay();
+        }
+        if (locEl) locEl.textContent = `Pays : ${data.country || "France"}`;
+        if (ispEl) ispEl.textContent = "Fournisseur : Détecté";
+        detected = true;
+      }
+    } catch (e) {
+      console.warn("Échec ultime country.is :", e);
+    }
+  }
+
+  if (!detected) {
+    if (locEl) locEl.textContent = "Réseau local / Déconnecté";
     if (ispEl) ispEl.textContent = "Fournisseur : --";
-    if (srvEl) srvEl.textContent = "Serveur : --";
     if (ipEl) ipEl.textContent = "IP : --";
+  }
+
+  if (srvEl) {
+    srvEl.textContent = `Serveur : ${activeSpeedServer.name}`;
   }
 }
 
 function resolveIspFromAsn(asn) {
+  if (!asn) return "";
   const asns = {
     "3215": "Orange",
     "12322": "Free",
@@ -2565,7 +2614,7 @@ function resolveIspFromAsn(asn) {
     "6830": "Liberty Global",
     "3320": "Deutsche Telekom",
   };
-  return asns[asn] || "";
+  return asns[String(asn)] || "";
 }
 
 function toggleIpVisibility() {
@@ -2621,23 +2670,30 @@ async function startSpeedtest() {
   resetSpeedtestMetrics();
   setSpeedtestUIState("running");
   graphPoints = [];
-  graphMaxMbps = 100;
+  graphMaxMbps = 50;
   renderSpeedtestGraph();
 
   try {
-    // Phase 1: Ping & Jitter
+    // Étape 0 : Test de connectivité & vérification DNS préalable
+    const reachable = await verifySpeedtestServerConnectivity(signal);
+    if (signal.aborted) return;
+    if (!reachable) {
+      throw new Error("Impossible de joindre le serveur de test. Vérifiez votre connexion internet ou vos serveurs DNS (blocage de speed.cloudflare.com).");
+    }
+
+    // Phase 1 : Ping & Jitter
     await measurePingAndJitter(signal);
     if (signal.aborted) return;
 
-    // Phase 2: Download Speed
+    // Phase 2 : Download Speed (flux progressif adaptatif)
     await measureDownloadSpeed(signal);
     if (signal.aborted) return;
 
-    // Phase 3: Upload Speed
+    // Phase 3 : Upload Speed (paquets adaptatifs 128 Ko / 256 Ko)
     await measureUploadSpeed(signal);
     if (signal.aborted) return;
 
-    // Phase 4: Finalize & Score
+    // Phase 4 : Diagnostic & Score
     finalizeSpeedtestScore();
     setSpeedtestUIState("finished");
 
@@ -2646,13 +2702,43 @@ async function startSpeedtest() {
       console.log("Speedtest annulé par l'utilisateur");
     } else {
       console.error("Erreur durant le speedtest :", err);
-      showToast("Erreur lors de la mesure : " + err.message, "error");
+      showToast(err.message, "error");
+      const badge = document.getElementById("speedtest-status-badge");
+      if (badge) {
+        badge.textContent = "Erreur réseau";
+        badge.className = "speedtest-status-badge";
+      }
       setSpeedtestUIState("ready");
     }
   } finally {
     speedtestRunning = false;
     speedtestAbortController = null;
   }
+}
+
+// Vérification de la disponibilité du serveur et de la résolution DNS
+async function verifySpeedtestServerConnectivity(signal) {
+  const srvEl = document.getElementById("net-info-server");
+  try {
+    const res = await fetch("https://speed.cloudflare.com/__down?bytes=0&_check=" + Date.now(), {
+      cache: "no-store",
+      signal: AbortSignal.any([signal, AbortSignal.timeout(3500)]),
+    });
+    if (res.ok) {
+      const colo = res.headers.get("cf-meta-colo") || res.headers.get("colo") || "";
+      const coloCities = {
+        CDG: "Paris Roissy", ORY: "Paris Orly", MRS: "Marseille", LYS: "Lyon",
+        BOD: "Bordeaux", GVA: "Genève", BRU: "Bruxelles", LHR: "Londres", FRA: "Francfort",
+      };
+      const city = coloCities[colo] || colo || "Europe";
+      activeSpeedServer.name = `Cloudflare Anycast (${city})`;
+      if (srvEl) srvEl.textContent = `Serveur : ${activeSpeedServer.name}`;
+      return true;
+    }
+  } catch (e) {
+    console.warn("Échec connexion Cloudflare speedtest :", e);
+  }
+  return false;
 }
 
 function setSpeedtestUIState(state) {
@@ -2734,7 +2820,7 @@ async function measurePingAndJitter(signal) {
     try {
       await fetch(`https://speed.cloudflare.com/__down?bytes=0&_t=${Date.now()}_${i}`, {
         cache: "no-store",
-        signal,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(2000)]),
       });
       const t1 = performance.now();
       const rtt = t1 - t0;
@@ -2747,7 +2833,11 @@ async function measurePingAndJitter(signal) {
   }
 
   if (cardPing) cardPing.classList.remove("active-measuring");
-  if (samples.length === 0) return;
+  if (samples.length === 0) {
+    if (pingEl) pingEl.textContent = "N/A";
+    if (tagEl) tagEl.textContent = "Échec ping";
+    return;
+  }
 
   // Calcul du ping médian
   samples.sort((a, b) => a - b);
@@ -2780,7 +2870,7 @@ async function measurePingAndJitter(signal) {
   }
 }
 
-// 4. Measure Download Speed
+// 4. Measure Download Speed (Ramping & Adaptive Continuous Streams)
 async function measureDownloadSpeed(signal) {
   const downEl = document.getElementById("speed-val-download");
   const transferredEl = document.getElementById("speed-transferred-down");
@@ -2794,20 +2884,13 @@ async function measureDownloadSpeed(signal) {
     phaseEl.className = "speed-phase-indicator active";
   }
 
-  const TEST_DURATION_MS = 6500;
+  const TEST_DURATION_MS = 7000;
   const startTime = performance.now();
   let totalBytes = 0;
   let lastBytes = 0;
   let lastTime = startTime;
   let currentMbps = 0;
   const speedSamples = [];
-
-  // 3 flux concurrents pour saturer proprement la bande passante
-  const streamUrls = [
-    "https://speed.cloudflare.com/__down?bytes=50000000",
-    "https://speed.cloudflare.com/__down?bytes=50000000",
-    "https://speed.cloudflare.com/__down?bytes=25000000",
-  ];
 
   const updateInterval = setInterval(() => {
     const now = performance.now();
@@ -2817,9 +2900,9 @@ async function measureDownloadSpeed(signal) {
 
     if (dt > 0.05) {
       const instantMbps = (dBytes * 8) / (dt * 1000000);
-      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.65 + instantMbps * 0.35);
+      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.6 + instantMbps * 0.4);
 
-      if (elapsed > 400) {
+      if (elapsed > 400 && currentMbps > 0) {
         speedSamples.push(currentMbps);
       }
 
@@ -2839,24 +2922,55 @@ async function measureDownloadSpeed(signal) {
     }
   }, 60);
 
-  const fetchStream = async (url) => {
-    try {
-      const res = await fetch(`${url}&_cb=${Date.now()}`, { signal, cache: "no-store" });
-      if (!res.body) return;
-      const reader = res.body.getReader();
-      while (performance.now() - startTime < TEST_DURATION_MS) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        totalBytes += value.byteLength;
+  // Worker adaptatif : démarre par de petits paquets pour décoller en < 50ms,
+  // puis monte en puissance (1 Mo, 5 Mo, 15 Mo, 25 Mo) pour saturer la bande passante
+  const downloadWorker = async (workerId) => {
+    let chunkBytes = workerId === 0 ? 500000 : 1000000; // 500 Ko / 1 Mo au départ
+
+    while (performance.now() - startTime < TEST_DURATION_MS && !signal.aborted) {
+      const fetchUrl = `https://speed.cloudflare.com/__down?bytes=${chunkBytes}&_w=${workerId}&_t=${Date.now()}`;
+      try {
+        const res = await fetch(fetchUrl, {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(4000)]),
+          cache: "no-store",
+        });
+
+        if (!res.ok) break;
+
+        if (res.body && typeof res.body.getReader === "function") {
+          const reader = res.body.getReader();
+          while (performance.now() - startTime < TEST_DURATION_MS && !signal.aborted) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value && value.byteLength) {
+              totalBytes += value.byteLength;
+            }
+          }
+          reader.cancel().catch(() => {});
+        } else {
+          // Fallback arrayBuffer si streaming non supporté par WebKit
+          const buf = await res.arrayBuffer();
+          totalBytes += buf.byteLength;
+        }
+
+        // Ramping : augmenter la taille des paquets suivants si le débit est élevé
+        if (currentMbps > 50) {
+          chunkBytes = Math.min(25000000, chunkBytes * 2);
+        } else if (currentMbps > 15) {
+          chunkBytes = Math.min(8000000, chunkBytes * 2);
+        }
+      } catch (e) {
+        if (signal.aborted) break;
+        // En cas d'erreur sur un gros chunk, redescendre à un paquet plus petit
+        chunkBytes = 1000000;
+        await new Promise(r => setTimeout(r, 80));
       }
-      reader.cancel();
-    } catch (e) {
-      // Ignorer abort
     }
   };
 
+  // Lancer 3 workers en parallèle
   await Promise.race([
-    Promise.all(streamUrls.map(u => fetchStream(u))),
+    Promise.all([downloadWorker(0), downloadWorker(1), downloadWorker(2)]),
     new Promise(r => setTimeout(r, TEST_DURATION_MS)),
   ]);
 
@@ -2869,11 +2983,10 @@ async function measureDownloadSpeed(signal) {
   }
   if (barEl) barEl.style.width = "100%";
 
-  // Débit final moyen (sur le plateau stable)
   let finalDownMbps = 0;
   if (speedSamples.length > 0) {
     speedSamples.sort((a, b) => a - b);
-    const sliceStart = Math.floor(speedSamples.length * 0.3);
+    const sliceStart = Math.floor(speedSamples.length * 0.25);
     const stableSamples = speedSamples.slice(sliceStart);
     finalDownMbps = stableSamples.reduce((a, b) => a + b, 0) / stableSamples.length;
   } else {
@@ -2883,7 +2996,7 @@ async function measureDownloadSpeed(signal) {
   if (downEl) downEl.textContent = finalDownMbps.toFixed(1);
 }
 
-// 5. Measure Upload Speed
+// 5. Measure Upload Speed (Paquets adaptatifs 128 Ko / 256 Ko)
 async function measureUploadSpeed(signal) {
   const upEl = document.getElementById("speed-val-upload");
   const transferredEl = document.getElementById("speed-transferred-up");
@@ -2897,7 +3010,7 @@ async function measureUploadSpeed(signal) {
     phaseEl.className = "speed-phase-indicator active-up";
   }
 
-  const TEST_DURATION_MS = 5500;
+  const TEST_DURATION_MS = 6000;
   const startTime = performance.now();
   let totalUploadedBytes = 0;
   let lastBytes = 0;
@@ -2905,11 +3018,11 @@ async function measureUploadSpeed(signal) {
   let currentMbps = 0;
   const speedSamples = [];
 
-  // Préparation d'un buffer binaire en mémoire (2 Mo par requête POST)
-  const CHUNK_SIZE = 2 * 1024 * 1024;
+  // Buffer de taille adaptée (256 Ko au lieu de 2 Mo) pour un décollage immédiat
+  const CHUNK_SIZE = 256 * 1024;
   const uploadPayload = new Uint8Array(CHUNK_SIZE);
-  for (let i = 0; i < CHUNK_SIZE; i += 4096) {
-    uploadPayload[i] = (i * 31) & 0xff;
+  for (let i = 0; i < CHUNK_SIZE; i += 2048) {
+    uploadPayload[i] = (i * 17) & 0xff;
   }
 
   const updateInterval = setInterval(() => {
@@ -2920,9 +3033,9 @@ async function measureUploadSpeed(signal) {
 
     if (dt > 0.05) {
       const instantMbps = (dBytes * 8) / (dt * 1000000);
-      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.65 + instantMbps * 0.35);
+      currentMbps = currentMbps === 0 ? instantMbps : (currentMbps * 0.6 + instantMbps * 0.4);
 
-      if (elapsed > 300) {
+      if (elapsed > 300 && currentMbps > 0) {
         speedSamples.push(currentMbps);
       }
 
@@ -2942,25 +3055,28 @@ async function measureUploadSpeed(signal) {
     }
   }, 60);
 
-  const postWorker = async () => {
+  const uploadWorker = async () => {
     while (performance.now() - startTime < TEST_DURATION_MS && !signal.aborted) {
       try {
-        await fetch("https://speed.cloudflare.com/__up", {
+        const res = await fetch("https://speed.cloudflare.com/__up", {
           method: "POST",
           body: uploadPayload,
-          signal,
+          signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]),
           cache: "no-store",
         });
-        totalUploadedBytes += CHUNK_SIZE;
+        if (res.ok) {
+          totalUploadedBytes += CHUNK_SIZE;
+        }
       } catch (e) {
         if (signal.aborted) break;
+        await new Promise(r => setTimeout(r, 60));
       }
     }
   };
 
-  // 2 flux d'envoi concurrents
+  // 2 workers concurrents d'envoi
   await Promise.race([
-    Promise.all([postWorker(), postWorker()]),
+    Promise.all([uploadWorker(), uploadWorker()]),
     new Promise(r => setTimeout(r, TEST_DURATION_MS)),
   ]);
 
@@ -2976,7 +3092,7 @@ async function measureUploadSpeed(signal) {
   let finalUpMbps = 0;
   if (speedSamples.length > 0) {
     speedSamples.sort((a, b) => a - b);
-    const sliceStart = Math.floor(speedSamples.length * 0.3);
+    const sliceStart = Math.floor(speedSamples.length * 0.25);
     const stableSamples = speedSamples.slice(sliceStart);
     finalUpMbps = stableSamples.reduce((a, b) => a + b, 0) / stableSamples.length;
   } else {
@@ -3032,7 +3148,6 @@ function finalizeSpeedtestScore() {
   }
 }
 
-// 7. Canvas Real-Time Rendering
 function initSpeedtestCanvas() {
   resizeSpeedtestCanvas();
   renderSpeedtestGraph();

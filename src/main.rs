@@ -125,6 +125,10 @@ fi
 if [ -f /etc/nixos/firewall-user.nix ]; then
   cp -f /etc/nixos/firewall-user.nix /etc/nixos/.firewall-user.nix.backup
 fi
+if [ -f /etc/nixos/custom-packages.nix ]; then
+  echo -e "[1;34m📦 Sauvegarde de vos paquets personnalisés (custom-packages.nix)...[0m"
+  cp -f /etc/nixos/custom-packages.nix /etc/nixos/.custom-packages.nix.backup
+fi
 if [ -f /etc/nixos/secrets/github-token.conf ]; then
   cp -f /etc/nixos/secrets/github-token.conf /etc/nixos/secrets/.github-token.conf.backup
 fi
@@ -170,7 +174,14 @@ if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
   cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
 fi
 if [ -f /etc/nixos/.custom-packages.nix.backup ]; then
-  cp -f /etc/nixos/.custom-packages.nix.backup /etc/nixos/custom-packages.nix
+  echo -e "
+[1;35m📦 Fusion et préservation des paquets personnalisés de la Logithèque...[0m"
+  if [ -f /etc/nixos/scripts/merge-custom-packages.py ]; then
+    python3 /etc/nixos/scripts/merge-custom-packages.py /etc/nixos/.custom-packages.nix.backup /etc/nixos/custom-packages.nix
+  else
+    cp -f /etc/nixos/.custom-packages.nix.backup /etc/nixos/custom-packages.nix
+  fi
+  git add custom-packages.nix 2>/dev/null || true
 fi
 if [ -f /etc/nixos/secrets/.github-token.conf.backup ]; then
   mkdir -p /etc/nixos/secrets

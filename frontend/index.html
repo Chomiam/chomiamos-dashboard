@@ -289,6 +289,32 @@
             </div>
           </div>
 
+          <!-- Pre-flight Network Checkup Bar (Pastilles de validation) -->
+          <div class="speedtest-checkup-bar" id="speedtest-checkup-bar">
+            <div class="checkup-title">
+              <span class="checkup-title-icon">🩺</span>
+              <span>Diagnostic de liaison :</span>
+            </div>
+            <div class="checkup-item" id="checkup-internet" title="Connexion internet directe par adresse IP (1.1.1.1)">
+              <span class="checkup-dot dot-checking" id="dot-internet"></span>
+              <span class="checkup-label">Internet (IP) :</span>
+              <span class="checkup-val" id="val-internet">Vérification...</span>
+            </div>
+            <div class="checkup-divider"></div>
+            <div class="checkup-item" id="checkup-dns" title="Résolution des noms de domaine par le serveur DNS actif">
+              <span class="checkup-dot dot-checking" id="dot-dns"></span>
+              <span class="checkup-label">Résolution DNS :</span>
+              <span class="checkup-val" id="val-dns">Vérification...</span>
+            </div>
+            <div class="checkup-divider"></div>
+            <div class="checkup-item" id="checkup-server" title="Accessibilité et latence du serveur de test">
+              <span class="checkup-dot dot-checking" id="dot-server"></span>
+              <span class="checkup-label">Serveur Speedtest :</span>
+              <span class="checkup-val" id="val-server">Vérification...</span>
+            </div>
+            <button type="button" class="btn-checkup-refresh" onclick="runNetworkCheckup(true)" title="Relancer le diagnostic">🔄</button>
+          </div>
+
           <!-- Network / DNS Diagnostic & Auto-Recovery Banner -->
           <div class="speedtest-alert-banner" id="speedtest-alert-banner" style="display: none;">
             <div class="alert-banner-left">

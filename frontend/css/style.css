@@ -2514,6 +2514,111 @@ body {
   opacity: 0.7;
 }
 
+/* Pre-flight Network Checkup Bar */
+.speedtest-checkup-bar {
+  background: rgba(30, 30, 46, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.checkup-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--subtext1);
+  padding-right: 4px;
+}
+
+.checkup-title-icon {
+  font-size: 14px;
+}
+
+.checkup-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.checkup-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.checkup-dot.dot-checking {
+  background: var(--blue);
+  box-shadow: 0 0 8px rgba(137, 180, 250, 0.6);
+  animation: pulse-dot 1.2s infinite;
+}
+
+.checkup-dot.dot-ok {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(166, 227, 161, 0.6);
+}
+
+.checkup-dot.dot-warn {
+  background: var(--peach);
+  box-shadow: 0 0 8px rgba(250, 179, 135, 0.6);
+}
+
+.checkup-dot.dot-error {
+  background: var(--red);
+  box-shadow: 0 0 8px rgba(243, 139, 168, 0.6);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: 0.6; }
+}
+
+.checkup-label {
+  color: var(--subtext0);
+}
+
+.checkup-val {
+  font-weight: 600;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.checkup-divider {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-checkup-refresh {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  margin-left: auto;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--subtext0);
+  transition: transform 0.3s ease, color 0.15s;
+}
+
+.btn-checkup-refresh:hover {
+  color: var(--text);
+  transform: rotate(90deg);
+}
+
 /* Speedtest Alert & Auto-Recovery Banner */
 .speedtest-alert-banner {
   background: rgba(243, 139, 168, 0.12);

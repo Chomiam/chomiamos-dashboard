@@ -757,6 +757,8 @@ async fn get_network_metadata() -> Result<NetworkMetadata, String> {
 pub struct NetworkDiagnostic {
     pub internet_ip_ok: bool,
     pub dns_ok: bool,
+    pub server_ok: bool,
+    pub server_latency_ms: Option<u32>,
     pub current_dns: String,
     pub details: String,
 }
@@ -783,7 +785,18 @@ async fn diagnose_network() -> Result<NetworkDiagnostic, String> {
         tokio::net::lookup_host("cloudflare.com:443")
     ).await.map(|r| r.is_ok()).unwrap_or(false);
 
-    // 3. Récupérer les serveurs DNS actifs
+    // 3. Tester l'accessibilité du serveur Speedtest
+    let t0 = std::time::Instant::now();
+    let server_res = tokio::time::timeout(
+        tokio::time::Duration::from_millis(2500),
+        tokio::net::TcpStream::connect("speed.cloudflare.com:443")
+    ).await;
+    let (server_ok, server_latency_ms) = match server_res {
+        Ok(Ok(_)) => (true, Some(t0.elapsed().as_millis() as u32)),
+        _ => (false, None),
+    };
+
+    // 4. Récupérer les serveurs DNS actifs
     let dns_output = std::process::Command::new("resolvectl")
         .arg("status")
         .output()
@@ -805,13 +818,17 @@ async fn diagnose_network() -> Result<NetworkDiagnostic, String> {
         "Pas d'accès internet par IP (câble/Wi-Fi déconnecté ou passerelle injoignable).".to_string()
     } else if !dns_ok {
         format!("Internet est accessible par adresse IP, mais le serveur DNS ({}) ne répond pas ou bloque la résolution.", current_dns)
+    } else if !server_ok {
+        "Internet et DNS fonctionnent, mais le serveur de speedtest ne répond pas (port 443 bloqué ou CDN inaccessible).".to_string()
     } else {
-        "Connexion internet et résolution DNS opérationnelles.".to_string()
+        "Connexion internet, résolution DNS et serveur Speedtest 100% opérationnels.".to_string()
     };
 
     Ok(NetworkDiagnostic {
         internet_ip_ok: ip_ok,
         dns_ok,
+        server_ok,
+        server_latency_ms,
         current_dns,
         details,
     })

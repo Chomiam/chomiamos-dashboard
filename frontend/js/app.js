@@ -2484,6 +2484,7 @@ let graphMaxMbps = 100;
 
 function initSpeedtest() {
   fetchSpeedtestMetadata();
+  runNetworkCheckup(false);
   initSpeedtestCanvas();
   window.addEventListener("resize", () => {
     resizeSpeedtestCanvas();
@@ -2629,6 +2630,80 @@ function stopSpeedtest() {
   setSpeedtestUIState("ready");
 }
 
+async function runNetworkCheckup(manual = false) {
+  const dotInternet = document.getElementById("dot-internet");
+  const valInternet = document.getElementById("val-internet");
+  const dotDns = document.getElementById("dot-dns");
+  const valDns = document.getElementById("val-dns");
+  const dotServer = document.getElementById("dot-server");
+  const valServer = document.getElementById("val-server");
+
+  if (!dotInternet || !dotDns || !dotServer) return null;
+
+  // État initial : Pastilles bleues pulsantes "Test..."
+  dotInternet.className = "checkup-dot dot-checking";
+  if (valInternet) valInternet.textContent = "Test...";
+  dotDns.className = "checkup-dot dot-checking";
+  if (valDns) valDns.textContent = "Test...";
+  dotServer.className = "checkup-dot dot-checking";
+  if (valServer) valServer.textContent = "Test...";
+
+  try {
+    const diag = await invoke("diagnose_network");
+    if (!diag) return null;
+
+    // 1. Pastille Internet (IP)
+    if (diag.internet_ip_ok) {
+      dotInternet.className = "checkup-dot dot-ok";
+      if (valInternet) valInternet.textContent = "Connecté";
+    } else {
+      dotInternet.className = "checkup-dot dot-error";
+      if (valInternet) valInternet.textContent = "Déconnecté";
+    }
+
+    // 2. Pastille Résolution DNS
+    if (diag.dns_ok) {
+      dotDns.className = "checkup-dot dot-ok";
+      if (valDns) valDns.textContent = "Résolu";
+      dismissSpeedtestAlert();
+    } else {
+      dotDns.className = "checkup-dot dot-error";
+      if (valDns) valDns.textContent = "Échec DNS";
+      showSpeedtestAlert("🚨 Problème de Résolution DNS détecté", diag.details, true);
+    }
+
+    // 3. Pastille Serveur Speedtest
+    if (diag.server_ok) {
+      dotServer.className = "checkup-dot dot-ok";
+      const lat = diag.server_latency_ms ? `${diag.server_latency_ms} ms` : "Prêt";
+      if (valServer) valServer.textContent = `Prêt (${lat})`;
+    } else if (diag.dns_ok) {
+      dotServer.className = "checkup-dot dot-warn";
+      if (valServer) valServer.textContent = "Injoignable";
+      showSpeedtestAlert("⚠️ Serveur Speedtest Injoignable", "Le serveur de test ne répond pas sur le port 443.", false);
+    } else {
+      dotServer.className = "checkup-dot dot-error";
+      if (valServer) valServer.textContent = "Bloqué (DNS)";
+    }
+
+    if (manual) {
+      if (diag.internet_ip_ok && diag.dns_ok && diag.server_ok) {
+        showToast("Diagnostic réseau : Tous les voyants sont au vert !", "success");
+      } else {
+        showToast(diag.details, "warning");
+      }
+    }
+
+    return diag;
+  } catch (err) {
+    console.error("Échec runNetworkCheckup :", err);
+    dotInternet.className = "checkup-dot dot-warn";
+    dotDns.className = "checkup-dot dot-warn";
+    dotServer.className = "checkup-dot dot-warn";
+    return null;
+  }
+}
+
 function dismissSpeedtestAlert() {
   const banner = document.getElementById("speedtest-alert-banner");
   if (banner) banner.style.display = "none";
@@ -2708,7 +2783,14 @@ async function startSpeedtest() {
   renderSpeedtestGraph();
 
   try {
-    // Étape 0 : Test de connectivité & vérification DNS préalable
+    // Étape 0 : Diagnostic pré-vol complet avec pastilles
+    const diag = await runNetworkCheckup(false);
+    if (signal.aborted) return;
+
+    if (diag && (!diag.internet_ip_ok || !diag.dns_ok)) {
+      throw new Error(diag.details || "Échec du diagnostic de liaison réseau.");
+    }
+
     const reachable = await verifySpeedtestServerConnectivity(signal);
     if (signal.aborted) return;
     if (!reachable) {

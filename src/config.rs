@@ -80,6 +80,8 @@ pub struct ChomiamConfig {
     pub state_version: String,
     pub browser: String,
     pub discord_client: String,
+    #[serde(default)]
+    pub firewall: bool,
     pub desktop_env: String,
     pub gaming: GamingConfig,
     pub emulation: EmulationConfig,
@@ -124,6 +126,7 @@ impl Default for ChomiamConfig {
             state_version: "26.05".to_string(),
             browser: "chrome".to_string(),
             discord_client: "discord".to_string(),
+            firewall: false,
             desktop_env: "gnome".to_string(),
             gaming: GamingConfig {
                 steam: true,
@@ -243,6 +246,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     if let Some(val) = get_str("discordClient") {
         cfg.discord_client = val;
     }
+    cfg.firewall = get_bool("firewall", false);
     if let Some(val) = get_str("desktopEnv") {
         cfg.desktop_env = val;
     }
@@ -383,7 +387,7 @@ r#"{{
   discordClient = "{discord_client}";
 
   # Pare-feu réseau
-  firewall = false;
+  firewall = {firewall};
 
   # Environnement de bureau
   desktopEnv = "{desktop_env}";
@@ -486,6 +490,7 @@ r#"{{
         virtualisation = c.creation.virtualisation,
         browser = c.browser,
         discord_client = c.discord_client,
+        firewall = c.firewall,
         desktop_env = c.desktop_env,
         gpu_driver = c.gpu_driver,
         steam = c.gaming.steam,

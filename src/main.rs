@@ -1,4 +1,5 @@
 mod config;
+mod firewall;
 mod disks;
 mod generations;
 mod packages;
@@ -107,6 +108,9 @@ fi
 if [ -f /etc/nixos/hosts/desktop/mount.nix ]; then
   cp -f /etc/nixos/hosts/desktop/mount.nix /etc/nixos/.mount.nix.backup
 fi
+if [ -f /etc/nixos/modules/core/firewall.nix ]; then
+  cp -f /etc/nixos/modules/core/firewall.nix /etc/nixos/modules/core/.firewall.nix.backup
+fi
 if [ -f /etc/nixos/secrets/github-token.conf ]; then
   cp -f /etc/nixos/secrets/github-token.conf /etc/nixos/secrets/.github-token.conf.backup
 fi
@@ -151,6 +155,15 @@ if ! git pull --no-rebase --no-edit origin main; then
     git add hosts/desktop/mount.nix
   fi
 
+  # Si firewall.nix a un conflit lors du pull, préserver les règles du pare-feu
+  if git status --porcelain | grep -q "firewall\.nix"; then
+    echo -e "\033[1;33m🛡️ Préservation de vos règles de pare-feu personnelles (firewall.nix)...\033[0m"
+    if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
+      cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
+    fi
+    git add modules/core/firewall.nix
+  fi
+
   git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
 fi
 
@@ -175,6 +188,12 @@ if [ "$DID_STASH" = "1" ]; then
       fi
       git add hosts/desktop/mount.nix
     fi
+    if git status --porcelain | grep -E "firewall\.nix"; then
+      if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
+        cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
+      fi
+      git add modules/core/firewall.nix
+    fi
     git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
     git stash drop || true
   fi
@@ -184,6 +203,10 @@ fi
 if [ -f /etc/nixos/.vars.nix.backup ]; then
   echo -e "\033[1;34m🛡️ Préservation de vos paramètres locaux et choix de bureau (vars.nix)...\033[0m"
   cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
+fi
+if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
+  echo -e "\033[1;34m🛡️ Préservation de vos règles de pare-feu personnelles (firewall.nix)...\033[0m"
+  cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
 fi
 
 # Détection de sécurité avancée : vérifier avec l'UID 1000 du système local
@@ -332,6 +355,13 @@ fn start_terminal_task(
             vec![
                 "-c".into(),
                 r#"echo -e "\033[1;35m📦 Application des paquets personnalisés NixOS (nh os switch)...\033[0m\n" ; nh os switch /etc/nixos && echo -e "\n\033[1;32m✅ Configuration et paquets personnalisés appliqués avec succès !\033[0m""#.into(),
+            ],
+        ),
+        "apply-firewall" => (
+            "bash".into(),
+            vec![
+                "-c".into(),
+                r#"echo -e "\033[1;35m🛡️ Application des règles du pare-feu NixOS (nh os switch)...\033[0m\n" ; nh os switch /etc/nixos && echo -e "\n\033[1;32m✅ Règles du pare-feu appliquées avec succès !\033[0m""#.into(),
             ],
         ),
         "boot-config" => (
@@ -569,6 +599,17 @@ fn open_external_url(url: String) -> Result<(), String> {
     Ok(())
 }
 
+
+#[tauri::command]
+fn get_firewall_state() -> Result<firewall::FirewallState, String> {
+    firewall::load_firewall_state()
+}
+
+#[tauri::command]
+fn save_firewall_state(enabled: bool, rules: Vec<firewall::FirewallPortRule>) -> Result<(), String> {
+    firewall::save_firewall_state(enabled, rules)
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -602,7 +643,9 @@ fn main() {
             search_nix_packages,
             get_custom_packages,
             add_custom_package,
-            remove_custom_package
+            remove_custom_package,
+            get_firewall_state,
+            save_firewall_state
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

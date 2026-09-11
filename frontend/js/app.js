@@ -57,6 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadCustomPackages();
   initPackageSearch();
   initSpeedtest();
+  loadFirewallState();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
 });
@@ -85,6 +86,8 @@ function initTabs() {
               renderSpeedtestGraph();
             }
           }, 50);
+        } else if (targetId === "tab-firewall") {
+          loadFirewallState();
         }
       }
     });
@@ -3151,3 +3154,385 @@ function drawCurve(ctx, pts, strokeColor, fillColor, canvasHeight) {
 window.toggleSpeedtest = toggleSpeedtest;
 window.toggleIpVisibility = toggleIpVisibility;
 window.initSpeedtest = initSpeedtest;
+
+
+// =============================================================================
+// 🛡️ FIREWALL & SECURITY MANAGEMENT COMPONENT
+// =============================================================================
+
+let currentFirewallState = {
+  enabled: false,
+  rules: []
+};
+let firewallFormType = "single";
+let firewallFormProto = "both";
+let currentFirewallFilter = "all";
+let firewallDirty = false;
+
+async function loadFirewallState() {
+  try {
+    const state = await invoke("get_firewall_state");
+    if (!state) return;
+
+    currentFirewallState = state;
+    firewallDirty = false;
+    updateFirewallUI();
+  } catch (err) {
+    console.error("Erreur chargement pare-feu :", err);
+    showToast("Erreur chargement pare-feu : " + err, "error");
+  }
+}
+
+function updateFirewallUI() {
+  // 1. Global Switch & Pill
+  const sw = document.getElementById("fw-global-switch");
+  const pill = document.getElementById("fw-status-pill");
+  const icon = document.getElementById("fw-shield-icon");
+  const label = document.getElementById("fw-toggle-label");
+  const sub = document.getElementById("fw-toggle-sub");
+
+  if (sw) sw.checked = currentFirewallState.enabled;
+
+  if (currentFirewallState.enabled) {
+    if (pill) {
+      pill.textContent = "Actif (Filtrage Actif)";
+      pill.className = "fw-status-pill active";
+    }
+    if (icon) icon.className = "fw-shield-icon-box active";
+    if (label) label.textContent = "Pare-feu Activé";
+    if (sub) sub.textContent = "Filtrage réseau strict NixOS activé";
+  } else {
+    if (pill) {
+      pill.textContent = "Désactivé";
+      pill.className = "fw-status-pill disabled";
+    }
+    if (icon) icon.className = "fw-shield-icon-box";
+    if (label) label.textContent = "Pare-feu Désactivé";
+    if (sub) sub.textContent = "Tous les ports entrants sont non filtrés";
+  }
+
+  // 2. Stats
+  let tcpCount = 0;
+  let udpCount = 0;
+  let rangeCount = 0;
+
+  currentFirewallState.rules.forEach(r => {
+    if (r.rule_type === "single") {
+      if (r.protocol === "tcp" || r.protocol === "both") tcpCount++;
+      if (r.protocol === "udp" || r.protocol === "both") udpCount++;
+    } else if (r.rule_type === "range") {
+      rangeCount++;
+    }
+  });
+
+  const tcpEl = document.getElementById("fw-stat-tcp");
+  const udpEl = document.getElementById("fw-stat-udp");
+  const rangesEl = document.getElementById("fw-stat-ranges");
+
+  if (tcpEl) tcpEl.textContent = tcpCount;
+  if (udpEl) udpEl.textContent = udpCount;
+  if (rangesEl) rangesEl.textContent = rangeCount;
+
+  // 3. Render Rules
+  renderFirewallRules();
+  updateFirewallDirtyUI();
+}
+
+function toggleFirewallGlobal(checked) {
+  currentFirewallState.enabled = checked;
+  firewallDirty = true;
+  updateFirewallUI();
+}
+
+function setFirewallFormType(type) {
+  firewallFormType = type;
+
+  const btnSingle = document.querySelector('#fw-type-selector [data-type="single"]');
+  const btnRange = document.querySelector('#fw-type-selector [data-type="range"]');
+  const wrapSingle = document.getElementById("fw-wrap-single-port");
+  const wrapRange = document.getElementById("fw-wrap-range-ports");
+
+  if (btnSingle && btnRange) {
+    btnSingle.classList.toggle("active", type === "single");
+    btnRange.classList.toggle("active", type === "range");
+  }
+
+  if (wrapSingle && wrapRange) {
+    if (type === "single") {
+      wrapSingle.classList.remove("hidden");
+      wrapRange.classList.add("hidden");
+    } else {
+      wrapSingle.classList.add("hidden");
+      wrapRange.classList.remove("hidden");
+    }
+  }
+}
+
+function setFirewallFormProto(proto) {
+  firewallFormProto = proto;
+
+  const btns = document.querySelectorAll("#fw-proto-selector .fw-pill-btn");
+  btns.forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-proto") === proto);
+  });
+}
+
+function applyFirewallPreset(type, proto, port, from, to, label) {
+  setFirewallFormType(type);
+  setFirewallFormProto(proto);
+
+  if (type === "single") {
+    const portInput = document.getElementById("fw-input-port");
+    if (portInput) portInput.value = port;
+  } else {
+    const fromInput = document.getElementById("fw-input-from");
+    const toInput = document.getElementById("fw-input-to");
+    if (fromInput) fromInput.value = from;
+    if (toInput) toInput.value = to;
+  }
+
+  const labelInput = document.getElementById("fw-input-label");
+  if (labelInput) labelInput.value = label;
+
+  showToast(`Preset « ${label} » chargé !`, "info");
+}
+
+function addFirewallRuleFromUI() {
+  const labelInput = document.getElementById("fw-input-label");
+  let label = labelInput ? labelInput.value.trim() : "";
+
+  if (firewallFormType === "single") {
+    const portInput = document.getElementById("fw-input-port");
+    const portVal = parseInt(portInput ? portInput.value : "0", 10);
+
+    if (isNaN(portVal) || portVal < 1 || portVal > 65535) {
+      showToast("Veuillez saisir un numéro de port valide (1 à 65535)", "error");
+      return;
+    }
+
+    if (!label) label = `Port ${portVal}`;
+
+    // Vérifier si la règle existe déjà
+    const existing = currentFirewallState.rules.find(
+      r => r.rule_type === "single" && r.port === portVal && (r.protocol === firewallFormProto || r.protocol === "both" || firewallFormProto === "both")
+    );
+
+    if (existing) {
+      showToast(`Le port ${portVal} est déjà ouvert (${existing.protocol.toUpperCase()})`, "error");
+      return;
+    }
+
+    const newRule = {
+      id: `single-${firewallFormProto}-${portVal}-${Date.now()}`,
+      rule_type: "single",
+      protocol: firewallFormProto,
+      port: portVal,
+      from_port: null,
+      to_port: null,
+      label,
+      is_default: false
+    };
+
+    currentFirewallState.rules.push(newRule);
+    if (portInput) portInput.value = "";
+    if (labelInput) labelInput.value = "";
+
+  } else {
+    const fromInput = document.getElementById("fw-input-from");
+    const toInput = document.getElementById("fw-input-to");
+    const fromVal = parseInt(fromInput ? fromInput.value : "0", 10);
+    const toVal = parseInt(toInput ? toInput.value : "0", 10);
+
+    if (isNaN(fromVal) || fromVal < 1 || fromVal > 65535 || isNaN(toVal) || toVal < 1 || toVal > 65535) {
+      showToast("Veuillez renseigner des ports de début et de fin valides (1 à 65535)", "error");
+      return;
+    }
+
+    if (fromVal > toVal) {
+      showToast("Le port de début doit être inférieur ou égal au port de fin", "error");
+      return;
+    }
+
+    if (!label) label = `Plage ${fromVal} - ${toVal}`;
+
+    const newRule = {
+      id: `range-${firewallFormProto}-${fromVal}-${toVal}-${Date.now()}`,
+      rule_type: "range",
+      protocol: firewallFormProto,
+      port: null,
+      from_port: fromVal,
+      to_port: toVal,
+      label,
+      is_default: false
+    };
+
+    currentFirewallState.rules.push(newRule);
+    if (fromInput) fromInput.value = "";
+    if (toInput) toInput.value = "";
+    if (labelInput) labelInput.value = "";
+  }
+
+  firewallDirty = true;
+  updateFirewallUI();
+  showToast("Règle ajoutée avec succès ! Pensez à enregistrer et appliquer.", "success");
+}
+
+async function deleteFirewallRule(id) {
+  const rule = currentFirewallState.rules.find(r => r.id === id);
+  if (!rule) return;
+
+  const desc = rule.rule_type === "single"
+    ? `le port ${rule.port} (${rule.protocol.toUpperCase()})`
+    : `la plage ${rule.from_port} - ${rule.to_port} (${rule.protocol.toUpperCase()})`;
+
+  const confirmed = await showConfirmModal({
+    title: "Supprimer l'ouverture de port",
+    message: `Voulez-vous vraiment retirer ${desc} ?`,
+    detail: rule.label,
+    confirmText: "Supprimer la règle",
+    cancelText: "Annuler",
+    isDanger: true
+  });
+
+  if (!confirmed) return;
+
+  currentFirewallState.rules = currentFirewallState.rules.filter(r => r.id !== id);
+  firewallDirty = true;
+  updateFirewallUI();
+  showToast("Règle retirée. N'oubliez pas d'enregistrer et appliquer.", "info");
+}
+
+function filterFirewallRules(filter) {
+  currentFirewallFilter = filter;
+  const btns = document.querySelectorAll(".fw-filter-btn");
+  btns.forEach(b => {
+    b.classList.toggle("active", b.getAttribute("data-filter") === filter);
+  });
+  renderFirewallRules();
+}
+
+function renderFirewallRules() {
+  const container = document.getElementById("fw-rules-list");
+  const countBadge = document.getElementById("fw-rules-count-badge");
+  if (!container) return;
+
+  let filtered = currentFirewallState.rules;
+  if (currentFirewallFilter === "single") {
+    filtered = filtered.filter(r => r.rule_type === "single");
+  } else if (currentFirewallFilter === "range") {
+    filtered = filtered.filter(r => r.rule_type === "range");
+  }
+
+  if (countBadge) {
+    countBadge.textContent = `${currentFirewallState.rules.length} règle(s)`;
+  }
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="fw-empty-state">
+        <div class="fw-empty-icon">🛡️</div>
+        <h4>Aucune règle correspondant au filtre</h4>
+        <p>Utilisez le formulaire ci-dessus pour ouvrir des ports dans modules/core/firewall.nix</p>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  filtered.forEach(r => {
+    let protoClass = "proto-both";
+    let protoText = "TCP + UDP";
+    if (r.protocol === "tcp") {
+      protoClass = "proto-tcp";
+      protoText = "TCP";
+    } else if (r.protocol === "udp") {
+      protoClass = "proto-udp";
+      protoText = "UDP";
+    }
+
+    const portDisplay = r.rule_type === "single"
+      ? `<span class="fw-port-num">${r.port}</span>`
+      : `<span class="fw-port-num">${r.from_port} ➔ ${r.to_port}</span>`;
+
+    const statusTag = r.is_default
+      ? `<span class="fw-default-tag" title="Règle système par défaut de ChomiamOS">Par défaut</span>`
+      : `<span class="fw-custom-tag">Personnalisé</span>`;
+
+    html += `
+      <div class="fw-rule-item" id="fw-rule-${r.id}">
+        <div class="fw-rule-left">
+          <span class="fw-proto-badge ${protoClass}">${protoText}</span>
+          <div class="fw-port-display">
+            ${portDisplay}
+          </div>
+          <div class="fw-rule-info">
+            <span class="fw-rule-label">${escapeHtml(r.label || "Sans libellé")}</span>
+            <span class="fw-rule-meta">${r.rule_type === "single" ? "Port unique" : "Plage de ports"}</span>
+          </div>
+        </div>
+        <div class="fw-rule-right">
+          ${statusTag}
+          <button type="button" class="btn-del-rule" onclick="deleteFirewallRule('${r.id}')" title="Supprimer cette ouverture de port">
+            🗑️
+          </button>
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function updateFirewallDirtyUI() {
+  const badge = document.getElementById("firewall-dirty-badge");
+  const anchor = document.getElementById("fw-floating-anchor");
+  const title = document.getElementById("fw-anchor-title");
+  const sub = document.getElementById("fw-anchor-sub");
+
+  if (badge) badge.classList.toggle("hidden", !firewallDirty);
+
+  if (anchor) {
+    if (firewallDirty) {
+      anchor.classList.add("visible");
+      if (title) title.textContent = "Modifications pare-feu en attente";
+      if (sub) sub.textContent = "Cliquez sur Appliquer pour sauvegarder firewall.nix et reconstruire";
+    } else {
+      anchor.classList.remove("visible");
+      if (title) title.textContent = "Configuration Pare-feu Synchronisée";
+      if (sub) sub.textContent = "Prêt pour déploiement immédiat dans le noyau NixOS";
+    }
+  }
+}
+
+async function applyFirewallDeploy() {
+  try {
+    showToast("Enregistrement de firewall.nix...", "info");
+
+    await invoke("save_firewall_state", {
+      enabled: currentFirewallState.enabled,
+      rules: currentFirewallState.rules
+    });
+
+    firewallDirty = false;
+    updateFirewallDirtyUI();
+
+    showToast("Fichier modules/core/firewall.nix mis à jour avec succès !", "success");
+
+    // Lancer la reconstruction NixOS
+    runTerminalTask("apply-firewall", "🛡️ Application des règles du pare-feu NixOS (nh os switch)");
+
+  } catch (err) {
+    console.error("Erreur enregistrement pare-feu :", err);
+    showToast("Erreur lors de l'enregistrement : " + err, "error");
+  }
+}
+
+window.loadFirewallState = loadFirewallState;
+window.toggleFirewallGlobal = toggleFirewallGlobal;
+window.setFirewallFormType = setFirewallFormType;
+window.setFirewallFormProto = setFirewallFormProto;
+window.applyFirewallPreset = applyFirewallPreset;
+window.addFirewallRuleFromUI = addFirewallRuleFromUI;
+window.deleteFirewallRule = deleteFirewallRule;
+window.filterFirewallRules = filterFirewallRules;
+window.applyFirewallDeploy = applyFirewallDeploy;

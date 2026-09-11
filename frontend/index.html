@@ -50,6 +50,11 @@
           <span class="tab-icon">📦</span>
           <span class="tab-label">Logithèque Nix</span>
         </button>
+        <button class="tab-btn" data-tab="tab-firewall">
+          <span class="tab-icon">🛡️</span>
+          <span class="tab-label">Pare-feu</span>
+          <span id="firewall-dirty-badge" class="badge-dot hidden"></span>
+        </button>
       </nav>
 
       <div class="nav-right">
@@ -1502,6 +1507,203 @@
           </div>
         </div>
 
+      </section>
+
+    
+      <!-- ==================== TAB 6: PARE-FEU & SÉCURITÉ RÉSEAU ==================== -->
+      <section id="tab-firewall" class="tab-content">
+        <!-- Master Firewall Card -->
+        <div class="card firewall-hero-card">
+          <div class="fw-hero-header">
+            <div class="fw-hero-title-wrap">
+              <div class="fw-shield-icon-box" id="fw-shield-icon">🛡️</div>
+              <div>
+                <div class="fw-title-row">
+                  <h2>Bouclier Pare-feu Réseau</h2>
+                  <span id="fw-status-pill" class="fw-status-pill disabled">Désactivé</span>
+                  <span class="fw-protected-tag" title="Ce fichier est configuré avec merge=ours et ne sera jamais écrasé par GitHub">🔒 Inviolable (merge=ours)</span>
+                </div>
+                <p class="fw-hero-desc">Contrôle centralisé du pare-feu Linux/NixOS et gestion visuelle des règles de <code>modules/core/firewall.nix</code></p>
+              </div>
+            </div>
+
+            <!-- Global Enable/Disable Toggle -->
+            <div class="fw-master-toggle-wrap">
+              <label class="switch-toggle master-switch">
+                <input type="checkbox" id="fw-global-switch" onchange="toggleFirewallGlobal(this.checked)">
+                <span class="slider round"></span>
+              </label>
+              <div class="master-toggle-text">
+                <strong id="fw-toggle-label">Pare-feu Désactivé</strong>
+                <small id="fw-toggle-sub">Basculer pour activer le filtrage réseau</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Stats Pills -->
+          <div class="fw-stats-bar">
+            <div class="fw-stat-pill">
+              <span class="fw-stat-icon">🌐</span>
+              <div>
+                <strong id="fw-stat-tcp">0</strong>
+                <small>Ports TCP</small>
+              </div>
+            </div>
+            <div class="fw-stat-pill">
+              <span class="fw-stat-icon">📡</span>
+              <div>
+                <strong id="fw-stat-udp">0</strong>
+                <small>Ports UDP</small>
+              </div>
+            </div>
+            <div class="fw-stat-pill">
+              <span class="fw-stat-icon">↔️</span>
+              <div>
+                <strong id="fw-stat-ranges">0</strong>
+                <small>Plages de Ports</small>
+              </div>
+            </div>
+            <div class="fw-stat-pill fw-stat-file">
+              <span class="fw-stat-icon">📄</span>
+              <div>
+                <strong>/etc/nixos/modules/core/firewall.nix</strong>
+                <small>Fichier source actif</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Port / Range Rule Card -->
+        <div class="card fw-add-rule-card">
+          <div class="fw-card-header">
+            <div class="fw-card-header-icon">➕</div>
+            <div>
+              <h3>Ouvrir un Port ou une Plage de Ports</h3>
+              <p>Autorisez un service local ou un jeu à recevoir des connexions réseau entrantes</p>
+            </div>
+          </div>
+
+          <!-- Rule creation form -->
+          <div class="fw-form-body">
+            <div class="fw-form-row">
+              <!-- Type selector -->
+              <div class="fw-form-group">
+                <label class="fw-form-label">Type d'ouverture</label>
+                <div class="fw-pill-selector" id="fw-type-selector">
+                  <button type="button" class="fw-pill-btn active" data-type="single" onclick="setFirewallFormType('single')">Port Unique</button>
+                  <button type="button" class="fw-pill-btn" data-type="range" onclick="setFirewallFormType('range')">Plage de Ports</button>
+                </div>
+              </div>
+
+              <!-- Protocol selector -->
+              <div class="fw-form-group">
+                <label class="fw-form-label">Protocole</label>
+                <div class="fw-pill-selector" id="fw-proto-selector">
+                  <button type="button" class="fw-pill-btn active" data-proto="both" onclick="setFirewallFormProto('both')">TCP + UDP</button>
+                  <button type="button" class="fw-pill-btn" data-proto="tcp" onclick="setFirewallFormProto('tcp')">TCP</button>
+                  <button type="button" class="fw-pill-btn" data-proto="udp" onclick="setFirewallFormProto('udp')">UDP</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Port Inputs -->
+            <div class="fw-form-row">
+              <!-- Single Port input -->
+              <div class="fw-form-group fw-port-inputs" id="fw-wrap-single-port">
+                <label class="fw-form-label" for="fw-input-port">Numéro de Port</label>
+                <div class="fw-input-with-icon">
+                  <span class="fw-input-icon">🚪</span>
+                  <input type="number" id="fw-input-port" class="fw-text-input" min="1" max="65535" placeholder="ex: 8080" />
+                </div>
+              </div>
+
+              <!-- Range Ports inputs (hidden by default) -->
+              <div class="fw-form-group fw-port-inputs hidden" id="fw-wrap-range-ports">
+                <label class="fw-form-label">Plage de Ports (Début ➔ Fin)</label>
+                <div class="fw-range-inputs-flex">
+                  <div class="fw-input-with-icon">
+                    <span class="fw-input-icon">🏁</span>
+                    <input type="number" id="fw-input-from" class="fw-text-input" min="1" max="65535" placeholder="Début (ex: 27015)" />
+                  </div>
+                  <span class="fw-range-arrow">➔</span>
+                  <div class="fw-input-with-icon">
+                    <span class="fw-input-icon">🛑</span>
+                    <input type="number" id="fw-input-to" class="fw-text-input" min="1" max="65535" placeholder="Fin (ex: 27030)" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Label input -->
+              <div class="fw-form-group fw-grow">
+                <label class="fw-form-label" for="fw-input-label">Libellé / Description</label>
+                <div class="fw-input-with-icon">
+                  <span class="fw-input-icon">🏷️</span>
+                  <input type="text" id="fw-input-label" class="fw-text-input" placeholder="ex: Serveur Minecraft, Streaming Plex, Sunshine..." />
+                </div>
+              </div>
+
+              <!-- Submit button -->
+              <div class="fw-form-group fw-btn-col">
+                <label class="fw-form-label">&nbsp;</label>
+                <button type="button" class="btn btn-primary btn-add-fw" onclick="addFirewallRuleFromUI()">
+                  <span>➕</span> Ouvrir le Port
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="fw-presets-row">
+              <span class="fw-presets-title">⚡ Presets Rapides :</span>
+              <div class="fw-presets-pills">
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('single', 'tcp', 25565, null, null, 'Serveur Minecraft')">⛏️ Minecraft (25565 TCP)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('single', 'tcp', 32400, null, null, 'Plex Media Server')">🎬 Plex (32400 TCP)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('single', 'tcp', 22, null, null, 'Accès SSH distant')">💻 SSH (22 TCP)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('range', 'both', null, 47984, 48010, 'Sunshine GameStream')">☀️ Sunshine (47984-48010)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('range', 'udp', null, 2456, 2458, 'Serveur Valheim')">⚔️ Valheim (2456-2458 UDP)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('single', 'both', 53317, null, null, 'LocalSend Partage Local')">📦 LocalSend (53317)</button>
+                <button type="button" class="fw-preset-btn" onclick="applyFirewallPreset('single', 'tcp', 8080, null, null, 'Serveur Web Dev')">🌍 Web Dev (8080 TCP)</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rules Table / Grid -->
+        <div class="card fw-rules-card">
+          <div class="fw-rules-header">
+            <div class="fw-rules-title-group">
+              <h3>Règles Actives du Pare-feu</h3>
+              <span id="fw-rules-count-badge" class="fw-count-badge">0 règle(s)</span>
+            </div>
+
+            <!-- Filters -->
+            <div class="fw-filter-pills">
+              <button type="button" class="fw-filter-btn active" data-filter="all" onclick="filterFirewallRules('all')">Toutes</button>
+              <button type="button" class="fw-filter-btn" data-filter="single" onclick="filterFirewallRules('single')">Ports Uniques</button>
+              <button type="button" class="fw-filter-btn" data-filter="range" onclick="filterFirewallRules('range')">Plages de Ports</button>
+            </div>
+          </div>
+
+          <!-- Rules List Container -->
+          <div id="fw-rules-list" class="fw-rules-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Floating Deploy Anchor -->
+        <div id="fw-floating-anchor" class="pkg-floating-anchor">
+          <div class="pkg-anchor-card fw-anchor-card">
+            <div class="pkg-anchor-info">
+              <span class="pkg-anchor-icon">🛡️</span>
+              <div class="pkg-anchor-text">
+                <strong id="fw-anchor-title">Configuration Pare-feu Synchronisée</strong>
+                <small id="fw-anchor-sub">Prêt pour déploiement immédiat dans le noyau NixOS</small>
+              </div>
+            </div>
+            <button id="fw-apply-btn" class="btn btn-primary btn-apply-packages" onclick="applyFirewallDeploy()">
+              <span>🚀</span> Enregistrer & Appliquer (nh os switch)
+            </button>
+          </div>
+        </div>
       </section>
 
     </main>

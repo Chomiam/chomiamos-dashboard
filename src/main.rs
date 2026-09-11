@@ -653,7 +653,13 @@ pub struct CommitSecurityInfo {
 
 #[tauri::command]
 fn get_commit_security_info() -> Result<CommitSecurityInfo, String> {
-    let output = std::process::Command::new("git")
+    let git_cmd = if std::path::Path::new("/run/current-system/sw/bin/git").exists() {
+        "/run/current-system/sw/bin/git"
+    } else {
+        "git"
+    };
+
+    let output = std::process::Command::new(git_cmd)
         .args(["-C", "/etc/nixos", "log", "-1", "--format=%H|%G?|%GS|%s|%cs"])
         .output()
         .map_err(|e| format!("Erreur git: {}", e))?;
@@ -736,6 +742,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "requires /etc/nixos and git (disabled in nix sandbox)"]
     fn test_commit_sec_info() {
         let res = get_commit_security_info();
         assert!(res.is_ok(), "get_commit_security_info failed: {:?}", res.err());

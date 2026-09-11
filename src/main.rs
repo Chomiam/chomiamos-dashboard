@@ -97,9 +97,9 @@ export EDITOR=true
 export VISUAL=true
 
 # 0b. Contrôle strict d'authenticité et de transport TLS anti-MitM
-EXPECTED_ORIGIN="https://github.com/Chomiam/nix_config_gaming.git"
 CURRENT_ORIGIN=$(git config --get remote.origin.url 2>/dev/null || true)
-if [ -n "$CURRENT_ORIGIN" ] && [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ] && [ "$CURRENT_ORIGIN" != "git@github.com:Chomiam/nix_config_gaming.git" ]; then
+NORM_ORIGIN=$(echo "$CURRENT_ORIGIN" | sed -E 's|\.git/?$||; s|/+$||')
+if [ -n "$NORM_ORIGIN" ] && [ "$NORM_ORIGIN" != "https://github.com/Chomiam/nix_config_gaming" ] && [ "$NORM_ORIGIN" != "git@github.com:Chomiam/nix_config_gaming" ]; then
   echo -e "\033[1;31m🚨 ERREUR CRITIQUE DE SÉCURITÉ : L'URL du dépôt ($CURRENT_ORIGIN) ne correspond pas à l'officielle !\033[0m"
   echo -e "\033[1;31m🛑 Interruption immédiate pour prévenir toute attaque Man-in-the-Middle.\033[0m"
   exit 1

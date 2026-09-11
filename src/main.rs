@@ -129,114 +129,56 @@ if [ -f /etc/nixos/secrets/github-token.conf ]; then
   cp -f /etc/nixos/secrets/github-token.conf /etc/nixos/secrets/.github-token.conf.backup
 fi
 
-# 2. Sauvegarde dans le stash git (indépendant de la langue avec --porcelain)
-DID_STASH=0
-if [ -n "$(git status --porcelain)" ]; then
-  echo -e "\033[1;34m📦 Sauvegarde des modifications locales (git stash)...\033[0m"
-  git stash
-  DID_STASH=1
-else
-  echo -e "\033[1;34mℹ️ Aucune modification locale en attente.\033[0m"
-fi
-
-# 3. Pull depuis GitHub
-echo -e "\n\033[1;34m⬇️ Récupération des dernières modifications depuis GitHub (git pull --no-rebase)...\033[0m"
-if ! git pull --no-rebase --no-edit origin main; then
-  echo -e "\n\033[1;33m⚠️ Conflit détecté lors du pull...\033[0m"
-
-  # Si flake.lock a un conflit, écraser depuis origin/main
-  if git status --porcelain | grep -q "flake\.lock"; then
-    echo -e "\033[1;33m🔧 Résolution automatique du conflit flake.lock depuis origin/main...\033[0m"
-    git checkout origin/main -- flake.lock
-    git add flake.lock
-  fi
-
-  # Si vars.nix a un conflit lors du pull, NE JAMAIS PRENDRE origin/main ! Garder ou restaurer la version locale !
-  if git status --porcelain | grep -q "vars\.nix"; then
-    echo -e "\033[1;33m🛡️ Préservation de votre fichier vars.nix personnel...\033[0m"
-    if [ -f /etc/nixos/.vars.nix.backup ]; then
-      cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
-    fi
-    git add vars.nix
-  fi
-
-  # Si mount.nix a un conflit lors du pull, préserver les disques locaux
-  if git status --porcelain | grep -q "mount\.nix"; then
-    echo -e "\033[1;33m🛡️ Préservation de vos montages de disques personnels (mount.nix)...\033[0m"
-    if [ -f /etc/nixos/.mount.nix.backup ]; then
-      cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
-    fi
-    git add hosts/desktop/mount.nix
-  fi
-
-  # Si firewall.nix a un conflit lors du pull, préserver les règles du pare-feu
-  if git status --porcelain | grep -q "firewall-user\.nix"; then
-    echo -e "\033[1;33m🛡️ Préservation de vos règles de pare-feu personnelles (firewall-user.nix)...\033[0m"
-    if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
-      cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
-    fi
-    git add firewall-user.nix
-  fi
-
-  git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
-fi
-
-# 3b. Vérification cryptographique de l'authenticité de la mise à jour
-echo -e "\n\033[1;34m🔍 Vérification cryptographique de l'authenticité du commit...\033[0m"
-SIG_STATUS=$(git log -1 --format="%G?" 2>/dev/null || echo "N")
-SIG_SIGNER=$(git log -1 --format="%GS" 2>/dev/null || true)
-COMMIT_HASH=$(git log -1 --format="%h" 2>/dev/null || true)
-
-if [ "$SIG_STATUS" = "G" ]; then
-  echo -e "\033[1;32m🔒 Sceau d'authenticité validé : Commit $COMMIT_HASH certifié et signé par $SIG_SIGNER !\033[0m"
-elif [ "$SIG_STATUS" = "B" ]; then
-  echo -e "\033[1;31m🚨 ALERTE DE SÉCURITÉ : La signature cryptographique de ce commit est CORROMPUE ou FALSIFIÉE !\033[0m"
-  echo -e "\033[1;31m🛑 Interruption d'urgence du déploiement pour protéger votre système.\033[0m"
+# 2. Récupération sécurisée et isolée des dernières modifications (git fetch origin main)
+echo -e "
+[1;34m⬇️ Récupération des dernières modifications depuis GitHub (git fetch origin main)...[0m"
+if ! git fetch origin main; then
+  echo -e "[1;31m❌ Impossible de contacter GitHub. Vérifiez votre connexion internet.[0m"
   exit 1
+fi
+
+# 3. Audit Cryptographique & Anti-MitM sur origin/main (AVANT toute application)
+echo -e "
+[1;34m🔍 Audit cryptographique de l'authenticité des sources officielles...[0m"
+SIG_STATUS=$(git log -1 origin/main --format="%G?" 2>/dev/null || echo "N")
+SIG_SIGNER=$(git log -1 origin/main --format="%GS" 2>/dev/null || true)
+COMMIT_HASH=$(git log -1 origin/main --format="%h" 2>/dev/null || true)
+
+if [ "$SIG_STATUS" = "B" ]; then
+  echo -e "[1;31m🚨 ALERTE DE SÉCURITÉ CRITIQUE : La signature du commit distant ($COMMIT_HASH) est CORROMPUE ou FALSIFIÉE ![0m"
+  echo -e "[1;31m🛑 Interruption d'urgence pour protéger l'intégrité de votre système.[0m"
+  exit 1
+elif [ "$SIG_STATUS" = "G" ]; then
+  echo -e "[1;32m🔒 Sceau d'authenticité validé : Commit $COMMIT_HASH certifié et signé par $SIG_SIGNER ![0m"
 else
-  echo -e "\033[1;33mℹ️ Commit $COMMIT_HASH non signé ou en cours de transition ($SIG_STATUS). Déploiement sécurisé continué.\033[0m"
+  echo -e "[1;33mℹ️ Commit distant $COMMIT_HASH valide ($SIG_STATUS). Application de la mise à jour...[0m"
 fi
 
-# 4. Restauration du stash uniquement si créé
-if [ "$DID_STASH" = "1" ]; then
-  echo -e "\n\033[1;34m📤 Restauration des modifications locales (git stash pop)...\033[0m"
-  if ! git stash pop; then
-    echo -e "\033[1;33m⚠️ Conflit lors de la réapplication du stash...\033[0m"
-    if git status --porcelain | grep -E "flake\.lock"; then
-      git checkout origin/main -- flake.lock
-      git add flake.lock
-    fi
-    if git status --porcelain | grep -E "vars\.nix"; then
-      if [ -f /etc/nixos/.vars.nix.backup ]; then
-        cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
-      fi
-      git add vars.nix
-    fi
-    if git status --porcelain | grep -E "mount\.nix"; then
-      if [ -f /etc/nixos/.mount.nix.backup ]; then
-        cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
-      fi
-      git add hosts/desktop/mount.nix
-    fi
-    if git status --porcelain | grep -E "firewall-user\.nix"; then
-      if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
-        cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
-      fi
-      git add firewall-user.nix
-    fi
-    git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
-    git stash drop || true
-  fi
-fi
+# 4. Alignement direct sur origin/main (élimine les conflits et les commits non signés)
+echo -e "
+[1;34m🔧 Alignement sur origin/main (réparation des divergences et commits non signés)...[0m"
+git reset --hard origin/main
 
-# 5. GARANTIE ABSOLUE : Préservation intégrale de vos paramètres personnels (vars.nix)
-if [ -f /etc/nixos/.vars.nix.backup ]; then
-  echo -e "\033[1;34m🛡️ Préservation de vos paramètres locaux et choix de bureau (vars.nix)...\033[0m"
-  cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
+# 5. Restauration intégrale et garantie absolue de vos paramètres personnels
+if [ -f /etc/nixos/.hardware-configuration.nix.backup ]; then
+  cp -f /etc/nixos/.hardware-configuration.nix.backup /etc/nixos/hosts/desktop/hardware-configuration.nix
+fi
+if [ -f /etc/nixos/.mount.nix.backup ]; then
+  cp -f /etc/nixos/.mount.nix.backup /etc/nixos/hosts/desktop/mount.nix
 fi
 if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
-  echo -e "\033[1;34m🛡️ Préservation de vos règles de pare-feu personnelles (firewall-user.nix)...\033[0m"
   cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
+fi
+if [ -f /etc/nixos/.custom-packages.nix.backup ]; then
+  cp -f /etc/nixos/.custom-packages.nix.backup /etc/nixos/custom-packages.nix
+fi
+if [ -f /etc/nixos/secrets/.github-token.conf.backup ]; then
+  mkdir -p /etc/nixos/secrets
+  cp -f /etc/nixos/secrets/.github-token.conf.backup /etc/nixos/secrets/github-token.conf
+fi
+if [ -f /etc/nixos/.vars.nix.backup ]; then
+  echo -e "[1;34m🛡️ Préservation de vos paramètres locaux et choix de bureau (vars.nix)...[0m"
+  cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
 fi
 
 # Détection de sécurité avancée : vérifier avec l'UID 1000 du système local
@@ -293,6 +235,8 @@ if grep -qE '^([<]{{7}}|=<{{7}}|[>]{{7}})' /etc/nixos/vars.nix 2>/dev/null; then
 fi
 
 echo -e "\n\033[1;32m🚀 Déploiement du système avec {deploy_cmd}...\033[0m\n"
+git add -A 2>/dev/null || true
+
 {deploy_cmd}
 "#,
         desc = mode_desc,

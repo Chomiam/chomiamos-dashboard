@@ -1349,6 +1349,39 @@
       </div>
     </div>
 
+    <!-- ==================== DIALOGUE DE CONFIRMATION / ALERTE MODERNE ==================== -->
+    <div id="confirm-modal" class="modal-overlay hidden">
+      <div id="confirm-modal-card" class="modal-card" style="max-width: 500px;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon" id="confirm-modal-icon">⚠️</span>
+            <div>
+              <h3 id="confirm-modal-title">Confirmation</h3>
+              <p class="modal-subtitle" id="confirm-modal-subtitle">Veuillez confirmer cette opération</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" id="confirm-modal-close-btn">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <p id="confirm-modal-message" style="margin: 0 0 14px 0; font-size: 14px; line-height: 1.55; color: var(--text);"></p>
+          <div id="confirm-modal-details" style="display: none; background: var(--surface0); border: 1px solid var(--surface1); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-family: var(--font-mono); font-size: 13px; color: var(--accent); line-height: 1.6; max-height: 130px; overflow-y: auto;"></div>
+          <div id="confirm-modal-warning-box" class="info-alert" style="display: none; background: rgba(243, 139, 168, 0.1); border-left: 3px solid var(--red); padding: 10px 14px; border-radius: 6px; display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 18px; line-height: 1;">⚠️</span>
+            <span id="confirm-modal-warning" style="font-size: 12.5px; color: var(--red); font-weight: 500; line-height: 1.4;"></span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="confirm-modal-cancel-btn">Annuler</button>
+          <button class="btn btn-primary" id="confirm-modal-ok-btn">
+            <span id="confirm-modal-ok-icon">✓</span>
+            <span id="confirm-modal-ok-text">Confirmer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
   <script src="js/xterm.js"></script>
   <script src="js/addon-fit.js"></script>
   <script src="js/app.js"></script>

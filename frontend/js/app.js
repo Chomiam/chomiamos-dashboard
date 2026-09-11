@@ -541,11 +541,17 @@ async function saveConfig(andApply = false, atBoot = false) {
   const deChanged = initialCfg && initialCfg.desktop_env !== currentConfig.desktop_env;
 
   if (andApply && !atBoot && deChanged) {
-    const confirmSwitch = confirm(
-      "⚠️ Attention : Vous changez d'environnement de bureau (" + (initialCfg?.desktop_env || "") + " → " + currentConfig.desktop_env + ").\n\n" +
-      "L'application en direct ('nh os switch') va relancer le gestionnaire d'affichage et risque de fermer brutalement votre session graphique.\n\n" +
-      "Voulez-vous plutôt l'appliquer en toute sécurité au prochain redémarrage ('nh os boot') ?"
-    );
+    const confirmSwitch = await showConfirmModal({
+      title: "Changement d'environnement de bureau",
+      subtitle: `${initialCfg?.desktop_env || ""} ➔ ${currentConfig.desktop_env}`,
+      icon: "⚠️",
+      message: "L'application en direct ('nh os switch') va relancer le gestionnaire d'affichage et risque de fermer brutalement votre session graphique.",
+      warning: "Voulez-vous plutôt l'appliquer en toute sécurité au prochain redémarrage ('nh os boot') ?",
+      confirmText: "Appliquer au reboot (conseillé)",
+      confirmIcon: "🔄",
+      confirmClass: "btn-primary",
+      cancelText: "Appliquer en direct (risqué)",
+    });
     if (confirmSwitch) {
       atBoot = true;
     }
@@ -1199,9 +1205,19 @@ async function submitMount() {
 }
 
 async function unmountDisk(mountPoint, uuid) {
-  if (!confirm(`Voulez-vous vraiment démonter le disque monté sur "${mountPoint}" ?\n\nS'il s'agit d'un montage permanent NixOS, il sera retiré de mount.nix.`)) {
-    return;
-  }
+  const confirmed = await showConfirmModal({
+    title: "Démonter le disque",
+    subtitle: "Gestion des volumes de stockage",
+    icon: "⏏️",
+    message: `Voulez-vous vraiment démonter le disque monté sur "${mountPoint}" ?`,
+    warning: "S'il s'agit d'un montage permanent NixOS, il sera retiré de mount.nix.",
+    confirmText: "Démonter le volume",
+    confirmIcon: "⏏️",
+    confirmClass: "btn-danger",
+    isDanger: true,
+  });
+
+  if (!confirmed) return;
 
   try {
     const res = await invoke("unmount_storage_device", {
@@ -1393,15 +1409,170 @@ function clearGenSelection() {
   updateGenActionBar();
 }
 
-function deleteSelectedGenerations() {
+// ==========================================================================
+// Generic Confirmation & Alert Modal System (Catppuccin Theme)
+// ==========================================================================
+
+function showConfirmModal({
+  title = "Confirmation",
+  subtitle = "",
+  icon = "⚠️",
+  message = "Êtes-vous sûr de vouloir continuer ?",
+  details = "",
+  warning = "",
+  confirmText = "Confirmer",
+  confirmIcon = "✓",
+  confirmClass = "btn-primary",
+  cancelText = "Annuler",
+  isDanger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("confirm-modal");
+    const card = document.getElementById("confirm-modal-card");
+    const iconEl = document.getElementById("confirm-modal-icon");
+    const titleEl = document.getElementById("confirm-modal-title");
+    const subtitleEl = document.getElementById("confirm-modal-subtitle");
+    const messageEl = document.getElementById("confirm-modal-message");
+    const detailsEl = document.getElementById("confirm-modal-details");
+    const warningBoxEl = document.getElementById("confirm-modal-warning-box");
+    const warningEl = document.getElementById("confirm-modal-warning");
+    const okBtn = document.getElementById("confirm-modal-ok-btn");
+    const okTextEl = document.getElementById("confirm-modal-ok-text");
+    const okIconEl = document.getElementById("confirm-modal-ok-icon");
+    const cancelBtn = document.getElementById("confirm-modal-cancel-btn");
+    const closeBtn = document.getElementById("confirm-modal-close-btn");
+
+    if (!modal) {
+      resolve(window.confirm(message));
+      return;
+    }
+
+    iconEl.textContent = icon;
+    titleEl.textContent = title;
+    subtitleEl.textContent = subtitle || "";
+    subtitleEl.style.display = subtitle ? "block" : "none";
+    messageEl.textContent = message;
+
+    if (details) {
+      detailsEl.textContent = details;
+      detailsEl.style.display = "block";
+    } else {
+      detailsEl.style.display = "none";
+    }
+
+    if (warning) {
+      warningEl.textContent = warning;
+      warningBoxEl.style.display = "flex";
+    } else {
+      warningBoxEl.style.display = "none";
+    }
+
+    if (isDanger) {
+      card.classList.add("modal-card-danger");
+    } else {
+      card.classList.remove("modal-card-danger");
+    }
+
+    okBtn.className = `btn ${confirmClass}`;
+    okTextEl.textContent = confirmText;
+    if (confirmIcon) {
+      okIconEl.textContent = confirmIcon;
+      okIconEl.style.display = "inline";
+    } else {
+      okIconEl.style.display = "none";
+    }
+
+    if (cancelText === null) {
+      cancelBtn.style.display = "none";
+    } else {
+      cancelBtn.style.display = "inline-flex";
+      cancelBtn.textContent = cancelText;
+    }
+
+    modal.classList.remove("hidden");
+
+    function cleanup(result) {
+      modal.classList.add("hidden");
+      okBtn.removeEventListener("click", onOk);
+      cancelBtn.removeEventListener("click", onCancel);
+      closeBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKeydown);
+      modal.removeEventListener("click", onBackdrop);
+      resolve(result);
+    }
+
+    function onOk() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onKeydown(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cleanup(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        cleanup(true);
+      }
+    }
+    function onBackdrop(e) {
+      if (e.target === modal) cleanup(false);
+    }
+
+    okBtn.addEventListener("click", onOk);
+    cancelBtn.addEventListener("click", onCancel);
+    closeBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKeydown);
+    modal.addEventListener("click", onBackdrop);
+  });
+}
+
+function showAlertModal({
+  title = "Information",
+  subtitle = "",
+  icon = "ℹ️",
+  message = "",
+  details = "",
+  warning = "",
+  okText = "D'accord",
+  isDanger = false,
+} = {}) {
+  return showConfirmModal({
+    title,
+    subtitle,
+    icon,
+    message,
+    details,
+    warning,
+    confirmText: okText,
+    confirmIcon: "",
+    confirmClass: isDanger ? "btn-danger" : "btn-primary",
+    cancelText: null,
+    isDanger,
+  });
+}
+
+window.showConfirmModal = showConfirmModal;
+window.showAlertModal = showAlertModal;
+
+async function deleteSelectedGenerations() {
   const ids = getSelectedGenIds();
   if (ids.length === 0) return;
 
   const plural = ids.length > 1 ? "s" : "";
   const idsStr = ids.map(id => `#${id}`).join(", ");
-  if (!confirm(`Voulez-vous vraiment supprimer ${ids.length} génération${plural} ?\n\n${idsStr}\n\n⚠️ Cette action est irréversible.`)) {
-    return;
-  }
+
+  const confirmed = await showConfirmModal({
+    title: "Supprimer les générations",
+    subtitle: "Nettoyage du profil système NixOS",
+    icon: "🗑️",
+    message: `Voulez-vous vraiment supprimer ${ids.length} génération${plural} système ?`,
+    details: idsStr,
+    warning: "Cette action est irréversible et retirera ces entrées du chargeur de démarrage.",
+    confirmText: `Supprimer ${ids.length} génération${plural}`,
+    confirmIcon: "🗑️",
+    confirmClass: "btn-danger",
+    isDanger: true,
+  });
+
+  if (!confirmed) return;
 
   const idsParam = ids.join(" ");
   runTerminalTask(
@@ -1412,14 +1583,24 @@ function deleteSelectedGenerations() {
   clearGenSelection();
 }
 
-function switchToSelectedGeneration() {
+async function switchToSelectedGeneration() {
   const ids = getSelectedGenIds();
   if (ids.length !== 1) return;
 
   const id = ids[0];
-  if (!confirm(`Voulez-vous rebooter sur la génération #${id} ?\n\nLa génération sera activée dans le bootloader au prochain redémarrage du système.`)) {
-    return;
-  }
+  const confirmed = await showConfirmModal({
+    title: "Activer la génération",
+    subtitle: "Changement de la version de démarrage",
+    icon: "🔄",
+    message: `Voulez-vous rebooter sur la génération #${id} ?`,
+    details: `La génération #${id} sera configurée dans le bootloader (GRUB/systemd-boot) pour le prochain démarrage.`,
+    confirmText: "Activer au prochain reboot",
+    confirmIcon: "🔄",
+    confirmClass: "btn-primary",
+    isDanger: false,
+  });
+
+  if (!confirmed) return;
 
   runTerminalTask(
     "switch-generation",
@@ -1616,7 +1797,17 @@ async function saveToken() {
   const token = input ? input.value.trim() : "";
 
   if (!token) {
-    if (confirm("Le champ est vide. Souhaitez-vous supprimer le token existant ?")) {
+    const confirmed = await showConfirmModal({
+      title: "Supprimer le token",
+      subtitle: "Paramètres GitHub",
+      icon: "🗑️",
+      message: "Le champ est vide. Souhaitez-vous supprimer le token existant ?",
+      confirmText: "Supprimer le token",
+      confirmIcon: "🗑️",
+      confirmClass: "btn-danger",
+      isDanger: true,
+    });
+    if (confirmed) {
       await deleteToken();
     }
     return;

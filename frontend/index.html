@@ -433,6 +433,11 @@
               <span class="cat-name">Création 3D & Jeux</span>
               <span class="cat-counter" id="cat-count-creation3d">0/2</span>
             </button>
+            <button class="cat-pill" data-category="printing3d" type="button">
+              <span class="cat-icon">🖨️</span>
+              <span class="cat-name">Impression 3D</span>
+              <span class="cat-counter" id="cat-count-printing3d">0/4</span>
+            </button>
             <button class="cat-pill" data-category="system" type="button">
               <span class="cat-icon">🛠️</span>
               <span class="cat-name">Utilitaires & Système</span>
@@ -1046,6 +1051,70 @@
                     <div class="toggle-text">
                       <strong>Godot Engine</strong>
                       <small>Moteur de jeu vidéo 2D & 3D libre, ultra-léger et puissant</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Impression 3D -->
+          <div class="config-category-panel" data-category="printing3d">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🖨️</span>
+                  <div>
+                    <h3>Impression 3D & Slicers</h3>
+                    <p class="card-subtitle">Logiciels de découpage et préparation de modèles 3D pour imprimantes FDM et résine</p>
+                  </div>
+                </div>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-orcaslicer">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🐋</span>
+                    <div class="toggle-text">
+                      <strong>OrcaSlicer</strong>
+                      <small>Slicer open-source moderne multi-marques ultra-populaire (Flatpak)</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-prusaslicer">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🧡</span>
+                    <div class="toggle-text">
+                      <strong>PrusaSlicer</strong>
+                      <small>Slicer de référence de Prusa Research avec nombreux profils (Flatpak)</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-cura">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🔵</span>
+                    <div class="toggle-text">
+                      <strong>UltiMaker Cura</strong>
+                      <small>Slicer historique éprouvé avec vaste écosystème de plugins (Flatpak)</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-bambustudio">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎋</span>
+                    <div class="toggle-text">
+                      <strong>Bambu Studio</strong>
+                      <small>Suite officielle Bambu Lab pour imprimantes X1, P1, A1 (Flatpak)</small>
                     </div>
                   </div>
                   <div class="switch"></div>

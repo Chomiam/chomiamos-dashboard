@@ -416,6 +416,12 @@ function populateConfigUI(c) {
   setCheck("cfg-blender", c.creation.blender);
   setCheck("cfg-godot", c.creation.godot);
 
+  // 3D Printing & Slicers
+  setCheck("cfg-orcaslicer", c.slicers ? c.slicers.orcaslicer : false);
+  setCheck("cfg-prusaslicer", c.slicers ? c.slicers.prusaslicer : false);
+  setCheck("cfg-cura", c.slicers ? c.slicers.cura : false);
+  setCheck("cfg-bambustudio", c.slicers ? c.slicers.bambustudio : false);
+
   // System & Utilities
   setCheck("cfg-flatseal", c.media.flatseal);
   setCheck("cfg-tailscale", c.media.tailscale);
@@ -500,6 +506,12 @@ function readConfigFromUI() {
   currentConfig.creation.blender = isChecked("cfg-blender");
   currentConfig.creation.godot = isChecked("cfg-godot");
 
+  if (!currentConfig.slicers) currentConfig.slicers = {};
+  currentConfig.slicers.orcaslicer = isChecked("cfg-orcaslicer");
+  currentConfig.slicers.prusaslicer = isChecked("cfg-prusaslicer");
+  currentConfig.slicers.cura = isChecked("cfg-cura");
+  currentConfig.slicers.bambustudio = isChecked("cfg-bambustudio");
+
   currentConfig.media.flatseal = isChecked("cfg-flatseal");
   currentConfig.media.localsend = isChecked("cfg-localsend");
   currentConfig.media.tailscale = isChecked("cfg-tailscale");
@@ -550,6 +562,7 @@ function updateCategoryPillCounters() {
   updateCount("video", 2);
   updateCount("audio", 2);
   updateCount("creation3d", 2);
+  updateCount("printing3d", 4);
   updateCount("system", 7);
 }
 

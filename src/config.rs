@@ -57,6 +57,14 @@ pub struct CreationConfig {
     pub ai_suite: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SlicersConfig {
+    pub orcaslicer: bool,
+    pub prusaslicer: bool,
+    pub cura: bool,
+    pub bambustudio: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChomiamConfig {
     pub host_name: String,
@@ -77,6 +85,8 @@ pub struct ChomiamConfig {
     pub emulation: EmulationConfig,
     pub media: MediaConfig,
     pub creation: CreationConfig,
+    #[serde(default)]
+    pub slicers: SlicersConfig,
 }
 
 fn default_gpu() -> String { "amd".to_string() }
@@ -162,6 +172,7 @@ impl Default for ChomiamConfig {
                 virtualisation: true,
                 ai_suite: false,
             },
+            slicers: SlicersConfig::default(),
         }
     }
 }
@@ -287,6 +298,12 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.creation.audacity = get_bool("audacity", false);
     cfg.creation.ardour = get_bool("ardour", false);
     cfg.creation.godot = get_bool("godot", false);
+
+    // 3D Printing & Slicers
+    cfg.slicers.orcaslicer = get_bool_in_block("slicers", "orcaslicer", false);
+    cfg.slicers.prusaslicer = get_bool_in_block("slicers", "prusaslicer", false);
+    cfg.slicers.cura = get_bool_in_block("slicers", "cura", false);
+    cfg.slicers.bambustudio = get_bool_in_block("slicers", "bambustudio", false);
     cfg.creation.kdenlive = get_bool("kdenlive", false);
     cfg.creation.obs_studio = get_bool("obsStudio", true);
     cfg.creation.antigravity = get_bool("antigravity", true);
@@ -431,6 +448,14 @@ r#"{{
   localsend = {localsend};
   motrix = {motrix};
 
+  # Impression 3D & Slicers
+  slicers = {{
+    orcaslicer = {orcaslicer};
+    prusaslicer = {prusaslicer};
+    cura = {cura};
+    bambustudio = {bambustudio};
+  }};
+
   # Multimédia & Streaming
   stremio = {stremio};
   vlc = {vlc};
@@ -469,6 +494,10 @@ r#"{{
         flatseal = c.media.flatseal,
         audacity = c.creation.audacity,
         ardour = c.creation.ardour,
+        orcaslicer = c.slicers.orcaslicer,
+        prusaslicer = c.slicers.prusaslicer,
+        cura = c.slicers.cura,
+        bambustudio = c.slicers.bambustudio,
         lutris = c.gaming.lutris,
         heroic = c.gaming.heroic,
         faugus = c.gaming.faugus,

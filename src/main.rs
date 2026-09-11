@@ -660,12 +660,45 @@ fn get_commit_security_info() -> Result<CommitSecurityInfo, String> {
     };
 
     let output = std::process::Command::new(git_cmd)
-        .args(["-C", "/etc/nixos", "log", "-1", "--format=%H|%G?|%GS|%s|%cs"])
+        .args(["-C", "/etc/nixos", "log", "-n", "5", "--format=%H|%G?|%GS|%s|%cs"])
         .output()
         .map_err(|e| format!("Erreur git: {}", e))?;
 
     let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let parts: Vec<&str> = text.split('|').collect();
+    let lines: Vec<&str> = text.lines().collect();
+    if lines.is_empty() {
+        return Err("Aucun commit trouvé dans /etc/nixos".to_string());
+    }
+
+    // On inspecte l'historique récent : si le commit de tête (HEAD) est un commit local
+    // d'installation non signé ("chore: configuration initiale ChomiamOS"), on valide
+    // la base officielle sous-jacente signée cryptographiquement.
+    let mut selected_parts: Option<Vec<&str>> = None;
+
+    for line in &lines {
+        let parts: Vec<&str> = line.split('|').collect();
+        if parts.len() >= 5 {
+            let g_status = parts[1];
+            let subject = parts[3];
+
+            if g_status == "G" {
+                selected_parts = Some(parts);
+                break;
+            }
+            if g_status == "B" {
+                selected_parts = Some(parts);
+                break;
+            }
+            if subject.contains("configuration initiale ChomiamOS") {
+                continue;
+            }
+            if selected_parts.is_none() {
+                selected_parts = Some(parts);
+            }
+        }
+    }
+
+    let parts = selected_parts.unwrap_or_else(|| lines[0].split('|').collect());
 
     if parts.len() >= 5 {
         let hash = parts[0].to_string();

@@ -2,6 +2,18 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct KeyboardConfig {
+    #[serde(default = "default_layout")]
+    pub layout: String,
+    #[serde(default)]
+    pub variant: String,
+    #[serde(default = "default_layout")]
+    pub key_map: String,
+}
+
+fn default_layout() -> String { "fr".to_string() }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GamingConfig {
     pub steam: bool,
@@ -13,6 +25,8 @@ pub struct GamingConfig {
     pub decky_loader: bool,
     pub geforce_now: bool,
     pub steering_wheels: bool,
+    pub sunshine: bool,
+    pub sober: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +97,8 @@ pub struct ChomiamConfig {
     #[serde(default)]
     pub firewall: bool,
     pub desktop_env: String,
+    #[serde(default)]
+    pub keyboard: KeyboardConfig,
     pub gaming: GamingConfig,
     pub emulation: EmulationConfig,
     pub media: MediaConfig,
@@ -128,6 +144,11 @@ impl Default for ChomiamConfig {
             discord_client: "discord".to_string(),
             firewall: false,
             desktop_env: "gnome".to_string(),
+            keyboard: KeyboardConfig {
+                layout: "fr".to_string(),
+                variant: "".to_string(),
+                key_map: "fr".to_string(),
+            },
             gaming: GamingConfig {
                 steam: true,
                 gamescope_session: true,
@@ -138,6 +159,8 @@ impl Default for ChomiamConfig {
                 decky_loader: true,
                 geforce_now: true,
                 steering_wheels: true,
+                sunshine: false,
+                sober: false,
             },
             emulation: EmulationConfig {
                 enable: true,
@@ -271,6 +294,23 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.gaming.decky_loader = get_bool("deckyLoader", false);
     cfg.gaming.geforce_now = get_bool("geforceNow", true);
     cfg.gaming.steering_wheels = get_bool("steeringWheelSupport", true);
+    cfg.gaming.sunshine = extract_bool_var_in_block(&content, "gaming", "sunshine")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "gaming", "sunshine")))
+        .unwrap_or(false);
+    cfg.gaming.sober = extract_bool_var_in_block(&content, "gaming", "sober")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "gaming", "sober")))
+        .unwrap_or(false);
+
+    // Keyboard
+    cfg.keyboard.layout = extract_string_var_in_block(&content, "keyboard", "layout")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "keyboard", "layout")))
+        .unwrap_or_else(|| "fr".to_string());
+    cfg.keyboard.variant = extract_string_var_in_block(&content, "keyboard", "variant")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "keyboard", "variant")))
+        .unwrap_or_default();
+    cfg.keyboard.key_map = extract_string_var_in_block(&content, "keyboard", "keyMap")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "keyboard", "keyMap")))
+        .unwrap_or_else(|| "fr".to_string());
 
     // Emulation
     if let Some(val) = get_str("frontend") {
@@ -369,6 +409,13 @@ r#"{{
   timeZone = "{time_zone}";
   defaultLocale = "{default_locale}";
 
+  # Disposition du clavier
+  keyboard = {{
+    layout = "{kbd_layout}";
+    variant = "{kbd_variant}";
+    keyMap = "{kbd_key_map}";
+  }};
+
   # Version de l'état système NixOS / Home Manager
   stateVersion = "{state_version}";
 
@@ -408,6 +455,8 @@ r#"{{
     deckyLoader = {decky_loader};
     geforceNow = {geforce_now};
     mountGamesDisk = true;
+    sunshine = {sunshine};
+    sober = {sober};
   }};
 
   # Suite d'Émulation & Rétrogaming
@@ -508,6 +557,11 @@ r#"{{
         faugus = c.gaming.faugus,
         decky_loader = c.gaming.decky_loader,
         geforce_now = c.gaming.geforce_now,
+        sunshine = c.gaming.sunshine,
+        sober = c.gaming.sober,
+        kbd_layout = c.keyboard.layout,
+        kbd_variant = c.keyboard.variant,
+        kbd_key_map = c.keyboard.key_map,
         emulation_enable = c.emulation.enable,
         emulation_frontend = c.emulation.frontend,
         retroarch = c.emulation.retroarch,
@@ -580,6 +634,15 @@ fn extract_bool_var_in_block(text: &str, block: &str, var_name: &str) -> Option<
     if let Some(cap) = block_re.captures(text) {
         let inside = &cap[1];
         return extract_bool_var(inside, var_name);
+    }
+    None
+}
+
+fn extract_string_var_in_block(text: &str, block: &str, var_name: &str) -> Option<String> {
+    let block_re = regex::Regex::new(&format!(r#"{}\\s*=\\s*\\{{([^}}]+)\\}}"#, block)).ok()?;
+    if let Some(cap) = block_re.captures(text) {
+        let inside = &cap[1];
+        return extract_string_var(inside, var_name);
     }
     None
 }

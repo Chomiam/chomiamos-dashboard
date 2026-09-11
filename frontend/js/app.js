@@ -395,6 +395,8 @@ function populateConfigUI(c) {
   setCheck("cfg-decky", c.gaming.decky_loader);
   setCheck("cfg-geforce", c.gaming.geforce_now);
   setCheck("cfg-wheels", c.gaming.steering_wheels);
+  setCheck("cfg-sunshine", c.gaming.sunshine);
+  setCheck("cfg-sober", c.gaming.sober);
 
   // Emulation
   setCheck("cfg-esde", c.emulation.frontend === "es-de");
@@ -489,6 +491,8 @@ function readConfigFromUI() {
   currentConfig.gaming.decky_loader = isChecked("cfg-decky");
   currentConfig.gaming.geforce_now = isChecked("cfg-geforce");
   currentConfig.gaming.steering_wheels = isChecked("cfg-wheels");
+  currentConfig.gaming.sunshine = isChecked("cfg-sunshine");
+  currentConfig.gaming.sober = isChecked("cfg-sober");
 
   currentConfig.emulation.frontend = isChecked("cfg-esde") ? "es-de" : "none";
   currentConfig.emulation.retroarch = isChecked("cfg-retroarch");
@@ -568,7 +572,7 @@ function updateCategoryPillCounters() {
     counter.textContent = `${checkedCount}/${total}`;
   };
 
-  updateCount("gaming", 9);
+  updateCount("gaming", 11);
   updateCount("emulation", 11);
   updateCount("multimedia", 4);
   updateCount("video", 2);

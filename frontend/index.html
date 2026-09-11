@@ -389,561 +389,768 @@
             </div>
           </div>
 
-          <!-- Section: Navigateur -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">🌐</span>
-                <div>
-                  <h3>Navigateur Web Principal</h3>
-                  <p class="card-subtitle">Navigateur préconfiguré par défaut dans le système</p>
-                </div>
-              </div>
-            </div>
-            <div class="radio-grid">
-              <label class="radio-card">
-                <input type="radio" name="browser" value="brave">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🦁</span>
-                  <strong>Brave Browser</strong>
-                  <small>Paquet Nix</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="chrome">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🟡</span>
-                  <strong>Google Chrome</strong>
-                  <small>Paquet Nix</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="firefox">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🦊</span>
-                  <strong>Mozilla Firefox</strong>
-                  <small>Paquet Nix</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="zen">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🧘</span>
-                  <strong>Zen Browser</strong>
-                  <small>Flatpak</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="librewolf">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🐺</span>
-                  <strong>LibreWolf</strong>
-                  <small>Paquet Nix</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="opera">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🔴</span>
-                  <strong>Opera</strong>
-                  <small>Flatpak</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="browser" value="opera-gx">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🎮</span>
-                  <strong>Opera GX</strong>
-                  <small>Flatpak</small>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Section: Discord -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">💬</span>
-                <div>
-                  <h3>Client de Communication (Discord)</h3>
-                  <p class="card-subtitle">Choisissez votre client Discord favori</p>
-                </div>
-              </div>
-            </div>
-            <div class="radio-grid">
-              <label class="radio-card">
-                <input type="radio" name="discord_client" value="discord">
-                <div class="radio-card-body">
-                  <span class="radio-icon">💬</span>
-                  <strong>Discord Officiel</strong>
-                  <small>Paquet Nix Natif</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="discord_client" value="equibop">
-                <div class="radio-card-body">
-                  <span class="radio-icon">✨</span>
-                  <strong>Equibop</strong>
-                  <small>Flatpak Client Moddé</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="discord_client" value="vesktop">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🛡️</span>
-                  <strong>Vesktop</strong>
-                  <small>Flatpak Vencord</small>
-                </div>
-              </label>
-              <label class="radio-card">
-                <input type="radio" name="discord_client" value="none">
-                <div class="radio-card-body">
-                  <span class="radio-icon">🚫</span>
-                  <strong>Aucun</strong>
-                  <small>Pas de client Discord</small>
-                </div>
-              </label>
-            </div>
+          <!-- Barre de Navigation des Catégories -->
+          <div class="config-categories-nav">
+            <button class="cat-pill active" data-category="all" type="button">
+              <span class="cat-icon">✨</span>
+              <span class="cat-name">Toutes les catégories</span>
+            </button>
+            <button class="cat-pill" data-category="gaming" type="button">
+              <span class="cat-icon">🎮</span>
+              <span class="cat-name">Gaming</span>
+              <span class="cat-counter" id="cat-count-gaming">0/9</span>
+            </button>
+            <button class="cat-pill" data-category="emulation" type="button">
+              <span class="cat-icon">🕹️</span>
+              <span class="cat-name">Émulation</span>
+              <span class="cat-counter" id="cat-count-emulation">0/11</span>
+            </button>
+            <button class="cat-pill" data-category="browser" type="button">
+              <span class="cat-icon">🌐</span>
+              <span class="cat-name">Navigateurs</span>
+            </button>
+            <button class="cat-pill" data-category="communication" type="button">
+              <span class="cat-icon">💬</span>
+              <span class="cat-name">Communication</span>
+            </button>
+            <button class="cat-pill" data-category="multimedia" type="button">
+              <span class="cat-icon">📺</span>
+              <span class="cat-name">Multimédia</span>
+              <span class="cat-counter" id="cat-count-multimedia">0/4</span>
+            </button>
+            <button class="cat-pill" data-category="video" type="button">
+              <span class="cat-icon">🎬</span>
+              <span class="cat-name">Montage & Vidéo</span>
+              <span class="cat-counter" id="cat-count-video">0/2</span>
+            </button>
+            <button class="cat-pill" data-category="audio" type="button">
+              <span class="cat-icon">🎵</span>
+              <span class="cat-name">Production Audio</span>
+              <span class="cat-counter" id="cat-count-audio">0/2</span>
+            </button>
+            <button class="cat-pill" data-category="creation3d" type="button">
+              <span class="cat-icon">🎨</span>
+              <span class="cat-name">Création 3D & Jeux</span>
+              <span class="cat-counter" id="cat-count-creation3d">0/2</span>
+            </button>
+            <button class="cat-pill" data-category="system" type="button">
+              <span class="cat-icon">🛠️</span>
+              <span class="cat-name">Utilitaires & Système</span>
+              <span class="cat-counter" id="cat-count-system">0/7</span>
+            </button>
           </div>
 
           <!-- Section: Gaming -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">🎮</span>
-                <div>
-                  <h3>Suite Gaming & Lanceurs de Jeux</h3>
-                  <p class="card-subtitle">Lanceurs, outils et périphériques de simulation</p>
+          <div class="config-category-panel" data-category="gaming">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🎮</span>
+                  <div>
+                    <h3>Suite Gaming, Lanceurs & Performances</h3>
+                    <p class="card-subtitle">Plateformes de jeux, sessions console, overlays et périphériques de simulation</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="toggles-grid">
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-steam">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">💨</span>
-                  <div class="toggle-text">
-                    <strong>Steam</strong>
-                    <small>Plateforme Valve avec Proton intégré</small>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-steam">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">💨</span>
+                    <div class="toggle-text">
+                      <strong>Steam</strong>
+                      <small>Plateforme Valve avec Proton intégré pour jeux Windows</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-lutris">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🍷</span>
-                  <div class="toggle-text">
-                    <strong>Lutris</strong>
-                    <small>Gestionnaire universel de jeux Windows & runners</small>
+                <div class="toggle-card-wrapper">
+                  <label class="toggle-card" id="cfg-card-gamescope">
+                    <input type="checkbox" id="cfg-gamescope-session">
+                    <div class="toggle-card-body">
+                      <span class="toggle-icon">📺</span>
+                      <div class="toggle-text">
+                        <strong>Session Steam GameScope</strong>
+                        <small>Session graphique plein écran dédiée GameScope (mode console type Steam Deck)</small>
+                      </div>
+                    </div>
+                    <div class="switch"></div>
+                  </label>
+                  <div id="gamescope-nvidia-warning" class="card-warning-badge hidden">
+                    <span>⚠️</span>
+                    <span>Non disponible sur GPU NVIDIA (incompatibilité session GameScope sous Wayland)</span>
                   </div>
                 </div>
-                <div class="switch"></div>
-              </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-heroic">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">⚔️</span>
-                  <div class="toggle-text">
-                    <strong>Heroic Games Launcher</strong>
-                    <small>Client Epic Games, GOG & Prime Gaming</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-goverlay">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">📊</span>
+                    <div class="toggle-text">
+                      <strong>GovErlay (Overlays MangoHud)</strong>
+                      <small>Interface graphique pour configurer l'affichage des FPS et monitoring</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-faugus">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🦅</span>
-                  <div class="toggle-text">
-                    <strong>Faugus Launcher</strong>
-                    <small>Lanceur rapide avec intégration Steam</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-lutris">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🍷</span>
+                    <div class="toggle-text">
+                      <strong>Lutris</strong>
+                      <small>Gestionnaire universel de jeux Windows, Battle.net & runners</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-decky">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🧩</span>
-                  <div class="toggle-text">
-                    <strong>Decky Loader</strong>
-                    <small>Gestionnaire de plugins pour Steam Gaming Mode</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-heroic">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">⚔️</span>
+                    <div class="toggle-text">
+                      <strong>Heroic Games Launcher</strong>
+                      <small>Client open-source Epic Games, GOG & Prime Gaming</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-geforce">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">☁️</span>
-                  <div class="toggle-text">
-                    <strong>GeForce NOW</strong>
-                    <small>Cloud Gaming NVIDIA en haute fidélité</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-faugus">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🦅</span>
+                    <div class="toggle-text">
+                      <strong>Faugus Launcher</strong>
+                      <small>Lanceur rapide avec intégration Steam et Wine/Proton</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-wheels">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🏎️</span>
-                  <div class="toggle-text">
-                    <strong>Volants & Simracing (Oversteer)</strong>
-                    <small>Pilotes Logitech, Thrustmaster, Fanatec + FFB</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-decky">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🧩</span>
+                    <div class="toggle-text">
+                      <strong>Decky Loader</strong>
+                      <small>Gestionnaire de plugins pour Steam Gaming Mode (TDP, audio, thèmes)</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-geforce">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">☁️</span>
+                    <div class="toggle-text">
+                      <strong>GeForce NOW</strong>
+                      <small>Cloud Gaming NVIDIA officiel en haute fidélité</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-wheels">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🏎️</span>
+                    <div class="toggle-text">
+                      <strong>Volants & Simracing (Oversteer)</strong>
+                      <small>Pilotes Logitech, Thrustmaster, Fanatec + retour de force FFB</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+              </div>
             </div>
           </div>
 
           <!-- Section: Émulation -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">🕹️</span>
-                <div>
-                  <h3>Émulation & Rétrogaming</h3>
-                  <p class="card-subtitle">Suite rétro avec cœurs 2D et émulateurs autonomes</p>
+          <div class="config-category-panel" data-category="emulation">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🕹️</span>
+                  <div>
+                    <h3>Émulation & Rétrogaming</h3>
+                    <p class="card-subtitle">Frontend ES-DE, pack RetroArch et émulateurs autonomes nouvelle génération</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="toggles-grid">
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-esde">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">👾</span>
-                  <div class="toggle-text">
-                    <strong>Frontend ES-DE</strong>
-                    <small>Interface plein écran EmulationStation Desktop</small>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-esde">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">👾</span>
+                    <div class="toggle-text">
+                      <strong>Frontend ES-DE</strong>
+                      <small>Interface plein écran EmulationStation Desktop Edition</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-retroarch">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🎯</span>
-                  <div class="toggle-text">
-                    <strong>RetroArch</strong>
-                    <small>Pack de cœurs 2D/Arcade, SNES, GBA, PS1</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-retroarch">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎯</span>
+                    <div class="toggle-text">
+                      <strong>RetroArch</strong>
+                      <small>Pack de cœurs 2D/Arcade, SNES, Genesis, GBA</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-eden">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🔴</span>
-                  <div class="toggle-text">
-                    <strong>Eden (Nintendo Switch)</strong>
-                    <small>Émulateur Switch ultra-performant</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-duckstation">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🦆</span>
+                    <div class="toggle-text">
+                      <strong>DuckStation (PlayStation 1)</strong>
+                      <small>Émulateur PS1 de référence avec upscaling et rendu Vulkan</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-dolphin">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🐬</span>
-                  <div class="toggle-text">
-                    <strong>Dolphin (GameCube / Wii)</strong>
-                    <small>Émulateur haute résolution avec manettes GameCube</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-pcsx2">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">💿</span>
+                    <div class="toggle-text">
+                      <strong>PCSX2 (PlayStation 2)</strong>
+                      <small>Émulateur PS2 haute performance avec rendu Vulkan 4K</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-duckstation">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🦆</span>
-                  <div class="toggle-text">
-                    <strong>DuckStation (PlayStation 1)</strong>
-                    <small>Émulateur PS1 de référence avec upscaling et rendu Vulkan</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-eden">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🔴</span>
+                    <div class="toggle-text">
+                      <strong>Eden (Nintendo Switch)</strong>
+                      <small>Émulateur Switch ultra-performant nouvelle génération</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-pcsx2">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">💿</span>
-                  <div class="toggle-text">
-                    <strong>PCSX2 (PlayStation 2)</strong>
-                    <small>Émulateur PS2 avec rendu Vulkan 4K</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-dolphin">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🐬</span>
+                    <div class="toggle-text">
+                      <strong>Dolphin (GameCube / Wii)</strong>
+                      <small>Émulateur haute résolution avec adaptateurs manettes GC</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-ppsspp">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">📱</span>
-                  <div class="toggle-text">
-                    <strong>PPSSPP (PlayStation Portable)</strong>
-                    <small>Émulateur PSP fluide avec texture scaling</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-ppsspp">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">📱</span>
+                    <div class="toggle-text">
+                      <strong>PPSSPP (PlayStation Portable)</strong>
+                      <small>Émulateur PSP fluide avec texture scaling et shaders</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-azahar">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🔷</span>
-                  <div class="toggle-text">
-                    <strong>Azahar (Nintendo 3DS)</strong>
-                    <small>Émulateur 3DS moderne unstable</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-azahar">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🔷</span>
+                    <div class="toggle-text">
+                      <strong>Azahar (Nintendo 3DS)</strong>
+                      <small>Émulateur 3DS moderne avec support écrans multiples</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-melonds">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🎮</span>
-                  <div class="toggle-text">
-                    <strong>melonDS (Nintendo DS)</strong>
-                    <small>Émulation précise double écran et tactile</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-melonds">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎮</span>
+                    <div class="toggle-text">
+                      <strong>melonDS (Nintendo DS)</strong>
+                      <small>Émulation précise double écran, tactile et microphone</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-mgba">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🔋</span>
-                  <div class="toggle-text">
-                    <strong>mGBA (Game Boy / GBA)</strong>
-                    <small>Émulateur GB / GBC / GBA natif Qt</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-mgba">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🔋</span>
+                    <div class="toggle-text">
+                      <strong>mGBA (Game Boy / GBA)</strong>
+                      <small>Émulateur GB / GBC / GBA natif Qt précis et léger</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-rpcs3">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">⬛</span>
-                  <div class="toggle-text">
-                    <strong>RPCS3 (PlayStation 3)</strong>
-                    <small>Émulateur PS3 haute compatibilité</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-rpcs3">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">⬛</span>
+                    <div class="toggle-text">
+                      <strong>RPCS3 (PlayStation 3)</strong>
+                      <small>Émulateur PS3 complet (nécessite un processeur puissant)</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- Section: Multimédia & Réseau -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">📺</span>
-                <div>
-                  <h3>Multimédia, Réseau & Partage</h3>
-                  <p class="card-subtitle">Lecteurs, VPN maillé et transfert local de fichiers</p>
+          <!-- Section: Navigateur -->
+          <div class="config-category-panel" data-category="browser">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🌐</span>
+                  <div>
+                    <h3>Navigateur Web Principal</h3>
+                    <p class="card-subtitle">Navigateur préconfiguré par défaut dans le système</p>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="toggles-grid">
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-stremio">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🎬</span>
-                  <div class="toggle-text">
-                    <strong>Stremio</strong>
-                    <small>Plateforme de streaming de vidéos, séries et films</small>
+              <div class="radio-grid">
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="brave">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🦁</span>
+                    <strong>Brave Browser</strong>
+                    <small>Paquet Nix</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
-
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-vlc">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🧡</span>
-                  <div class="toggle-text">
-                    <strong>VLC Media Player</strong>
-                    <small>Lecteur multimédia universel tous formats</small>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="chrome">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🟡</span>
+                    <strong>Google Chrome</strong>
+                    <small>Paquet Nix</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
-
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-mpv">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">⚡</span>
-                  <div class="toggle-text">
-                    <strong>MPV</strong>
-                    <small>Lecteur vidéo minimaliste ultra-rapide avec décodage GPU</small>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="firefox">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🦊</span>
+                    <strong>Mozilla Firefox</strong>
+                    <small>Paquet Nix</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
-
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-localsend">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">📲</span>
-                  <div class="toggle-text">
-                    <strong>LocalSend</strong>
-                    <small>Partage instantané de fichiers en réseau local (AirDrop libre)</small>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="zen">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🧘</span>
+                    <strong>Zen Browser</strong>
+                    <small>Flatpak</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
-
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-tailscale">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🔒</span>
-                  <div class="toggle-text">
-                    <strong>Tailscale VPN</strong>
-                    <small>VPN WireGuard maillé sans ouverture de ports</small>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="librewolf">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🐺</span>
+                    <strong>LibreWolf</strong>
+                    <small>Paquet Nix</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
-
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-motrix">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🚀</span>
-                  <div class="toggle-text">
-                    <strong>Motrix</strong>
-                    <small>Gestionnaire de téléchargements HTTP, FTP et BitTorrent</small>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="opera">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🔴</span>
+                    <strong>Opera</strong>
+                    <small>Flatpak</small>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="browser" value="opera-gx">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🎮</span>
+                    <strong>Opera GX</strong>
+                    <small>Flatpak</small>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
 
-          <!-- Section: Création & Outils -->
-          <div class="card config-card">
-            <div class="card-header">
-              <div class="card-title-wrap">
-                <span class="card-icon">🎨</span>
-                <div>
-                  <h3>Création, Enregistrement & Outils Pro</h3>
-                  <p class="card-subtitle">Logiciels 3D, moteurs de jeu, capture vidéo et productivité</p>
+          <!-- Section: Discord -->
+          <div class="config-category-panel" data-category="communication">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">💬</span>
+                  <div>
+                    <h3>Client de Communication (Discord)</h3>
+                    <p class="card-subtitle">Choisissez votre client Discord favori ou désactivez-le</p>
+                  </div>
+                </div>
+              </div>
+              <div class="radio-grid">
+                <label class="radio-card">
+                  <input type="radio" name="discord_client" value="discord">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">💬</span>
+                    <strong>Discord Officiel</strong>
+                    <small>Paquet Nix Natif</small>
+                  </div>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="discord_client" value="equibop">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">✨</span>
+                    <strong>Equibop</strong>
+                    <small>Flatpak Client Moddé</small>
+                  </div>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="discord_client" value="vesktop">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🛡️</span>
+                    <strong>Vesktop</strong>
+                    <small>Flatpak Vencord avec intégrations</small>
+                  </div>
+                </label>
+                <label class="radio-card">
+                  <input type="radio" name="discord_client" value="none">
+                  <div class="radio-card-body">
+                    <span class="radio-icon">🚫</span>
+                    <strong>Aucun</strong>
+                    <small>Pas de client Discord</small>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Multimédia & Streaming -->
+          <div class="config-category-panel" data-category="multimedia">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">📺</span>
+                  <div>
+                    <h3>Multimédia & Streaming</h3>
+                    <p class="card-subtitle">Lecteurs vidéo universels, musique et centres de streaming</p>
+                  </div>
+                </div>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-stremio">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎬</span>
+                    <div class="toggle-text">
+                      <strong>Stremio</strong>
+                      <small>Plateforme de streaming de vidéos, séries et films</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-vlc">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🧡</span>
+                    <div class="toggle-text">
+                      <strong>VLC Media Player</strong>
+                      <small>Lecteur multimédia universel tous formats</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-mpv">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">⚡</span>
+                    <div class="toggle-text">
+                      <strong>MPV</strong>
+                      <small>Lecteur vidéo minimaliste ultra-rapide avec décodage GPU</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-pear">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🍐</span>
+                    <div class="toggle-text">
+                      <strong>Pear Desktop</strong>
+                      <small>Lecteur YouTube Music enrichi avec bloqueur et égaliseur</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Montage & Vidéo -->
+          <div class="config-category-panel" data-category="video">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🎬</span>
+                  <div>
+                    <h3>Montage & Capture Vidéo</h3>
+                    <p class="card-subtitle">Logiciels de montage professionnel, capture en jeu et streaming</p>
+                  </div>
+                </div>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-obs">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">📹</span>
+                    <div class="toggle-text">
+                      <strong>OBS Studio (Plugins Inclus)</strong>
+                      <small>Suite complète : Vulkan vkcapture, PipeWire, IA background</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-kdenlive">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎞️</span>
+                    <div class="toggle-text">
+                      <strong>Kdenlive</strong>
+                      <small>Montage vidéo multi-pistes open-source complet</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+              </div>
+
+              <div style="margin-top: 18px;">
+                <h4 style="font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 10px;">🎞️ DaVinci Resolve</h4>
+                <div class="radio-grid">
+                  <label class="radio-card">
+                    <input type="radio" name="davinci_resolve" value="none">
+                    <div class="radio-card-body">
+                      <span class="radio-icon">🚫</span>
+                      <strong>Aucun</strong>
+                      <small>Non installé</small>
+                    </div>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="davinci_resolve" value="free">
+                    <div class="radio-card-body">
+                      <span class="radio-icon">🎬</span>
+                      <strong>DaVinci Resolve (Gratuit)</strong>
+                      <small>Version gratuite complète</small>
+                    </div>
+                  </label>
+                  <label class="radio-card">
+                    <input type="radio" name="davinci_resolve" value="studio">
+                    <div class="radio-card-body">
+                      <span class="radio-icon">👑</span>
+                      <strong>DaVinci Resolve Studio</strong>
+                      <small>Version Studio (licence requise)</small>
+                    </div>
+                  </label>
                 </div>
               </div>
             </div>
-            <div class="toggles-grid">
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-obs">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">📹</span>
-                  <div class="toggle-text">
-                    <strong>OBS Studio (Plugins Inclus)</strong>
-                    <small>Suite complète : Vulkan vkcapture, PipeWire, IA background</small>
-                  </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+          </div>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-kdenlive">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🎞️</span>
-                  <div class="toggle-text">
-                    <strong>Kdenlive</strong>
-                    <small>Montage vidéo multi-pistes open-source complet</small>
+          <!-- Section: Production Audio -->
+          <div class="config-category-panel" data-category="audio">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🎵</span>
+                  <div>
+                    <h3>Production Audio & Musique</h3>
+                    <p class="card-subtitle">Enregistrement multipiste, stations de travail audio numériques (DAW) et montage son</p>
                   </div>
                 </div>
-                <div class="switch"></div>
-              </label>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-audacity">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎙️</span>
+                    <div class="toggle-text">
+                      <strong>Audacity</strong>
+                      <small>Enregistreur et éditeur audio multipiste libre universel</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-blender">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🎨</span>
-                  <div class="toggle-text">
-                    <strong>Blender 3D</strong>
-                    <small>Suite de modélisation 3D, animation et rendu GPU</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-ardour">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎹</span>
+                    <div class="toggle-text">
+                      <strong>Ardour DAW</strong>
+                      <small>Station de travail audio numérique professionnelle pour mixage et mastering</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
+              </div>
+            </div>
+          </div>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-godot">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🤖</span>
-                  <div class="toggle-text">
-                    <strong>Godot Engine</strong>
-                    <small>Moteur de jeu vidéo 2D & 3D léger et puissant</small>
+          <!-- Section: Création 3D & Jeux -->
+          <div class="config-category-panel" data-category="creation3d">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🎨</span>
+                  <div>
+                    <h3>Création 3D & Moteurs de Jeu</h3>
+                    <p class="card-subtitle">Modélisation, animation 3D, rendu GPU et développement de jeux vidéo</p>
                   </div>
                 </div>
-                <div class="switch"></div>
-              </label>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-blender">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🎨</span>
+                    <div class="toggle-text">
+                      <strong>Blender 3D</strong>
+                      <small>Suite complète de modélisation 3D, animation et rendu GPU</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-kvm">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">📦</span>
-                  <div class="toggle-text">
-                    <strong>Virtualisation KVM / Virt-Manager</strong>
-                    <small>Hyperviseur matériel pour machines virtuelles</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-godot">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🤖</span>
+                    <div class="toggle-text">
+                      <strong>Godot Engine</strong>
+                      <small>Moteur de jeu vidéo 2D & 3D libre, ultra-léger et puissant</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
+              </div>
+            </div>
+          </div>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-antigravity">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🚀</span>
-                  <div class="toggle-text">
-                    <strong>Antigravity IDE</strong>
-                    <small>Assistant de programmation et IDE agentique IA</small>
+          <!-- Section: Utilitaires & Système -->
+          <div class="config-category-panel" data-category="system">
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🛠️</span>
+                  <div>
+                    <h3>Utilitaires, Réseau & Système</h3>
+                    <p class="card-subtitle">Permissions Flatpak, VPN WireGuard, transferts locaux, virtualisation et IA</p>
                   </div>
                 </div>
-                <div class="switch"></div>
-              </label>
+              </div>
+              <div class="toggles-grid">
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-flatseal">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🛡️</span>
+                    <div class="toggle-text">
+                      <strong>Flatseal (Permissions Flatpak)</strong>
+                      <small>Gestionnaire graphique des droits et permissions des applications Flatpak</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-pear">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🍐</span>
-                  <div class="toggle-text">
-                    <strong>Pear Desktop</strong>
-                    <small>Lecteur YouTube Music enrichi avec bloqueur et égaliseur</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-tailscale">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🔒</span>
+                    <div class="toggle-text">
+                      <strong>Tailscale VPN</strong>
+                      <small>VPN WireGuard maillé sécurisé sans ouverture de ports</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
 
-              <label class="toggle-card">
-                <input type="checkbox" id="cfg-aisuite">
-                <div class="toggle-card-body">
-                  <span class="toggle-icon">🧠</span>
-                  <div class="toggle-text">
-                    <strong>Suite IA Locale (Ollama + WebUI)</strong>
-                    <small>LLM locaux accélérés sur VRAM ROCm / CUDA</small>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-localsend">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">📲</span>
+                    <div class="toggle-text">
+                      <strong>LocalSend</strong>
+                      <small>Partage instantané de fichiers en réseau local (AirDrop libre)</small>
+                    </div>
                   </div>
-                </div>
-                <div class="switch"></div>
-              </label>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-motrix">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🚀</span>
+                    <div class="toggle-text">
+                      <strong>Motrix</strong>
+                      <small>Gestionnaire de téléchargements HTTP, FTP et BitTorrent</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-kvm">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">📦</span>
+                    <div class="toggle-text">
+                      <strong>Virtualisation KVM / Virt-Manager</strong>
+                      <small>Hyperviseur matériel pour machines virtuelles</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-antigravity">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🚀</span>
+                    <div class="toggle-text">
+                      <strong>Antigravity IDE</strong>
+                      <small>Assistant de programmation et IDE agentique IA</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-aisuite">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🧠</span>
+                    <div class="toggle-text">
+                      <strong>Suite IA Locale (Ollama + WebUI)</strong>
+                      <small>LLM locaux accélérés sur VRAM ROCm / CUDA</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+              </div>
             </div>
           </div>
         </div>

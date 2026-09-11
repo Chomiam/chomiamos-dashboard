@@ -332,6 +332,7 @@ async function loadConfig() {
     if (!c) return;
     currentConfig = c;
     initialConfigStr = JSON.stringify(c);
+    setupCategoryNavigation();
     populateConfigUI(c);
     attachConfigChangeListeners();
   } catch (err) {
@@ -344,8 +345,38 @@ function populateConfigUI(c) {
   setRadioVal("browser", c.browser);
   setRadioVal("discord_client", c.discord_client);
 
-  // Gaming
+  // Gaming & Nvidia rule for Gamescope
+  const isNvidia = (c.gpu_driver === "nvidia" || c.gpu_driver === "nvidia-legacy");
+  const gamescopeCard = document.getElementById("cfg-card-gamescope");
+  const gamescopeInput = document.getElementById("cfg-gamescope-session");
+  const gamescopeWarning = document.getElementById("gamescope-nvidia-warning");
+
+  if (isNvidia) {
+    if (gamescopeInput) {
+      gamescopeInput.checked = false;
+      gamescopeInput.disabled = true;
+    }
+    if (gamescopeCard) {
+      gamescopeCard.classList.add("disabled");
+    }
+    if (gamescopeWarning) {
+      gamescopeWarning.classList.remove("hidden");
+    }
+  } else {
+    if (gamescopeInput) {
+      gamescopeInput.disabled = false;
+      gamescopeInput.checked = !!c.gaming.gamescope_session;
+    }
+    if (gamescopeCard) {
+      gamescopeCard.classList.remove("disabled");
+    }
+    if (gamescopeWarning) {
+      gamescopeWarning.classList.add("hidden");
+    }
+  }
+
   setCheck("cfg-steam", c.gaming.steam);
+  setCheck("cfg-goverlay", c.gaming.goverlay);
   setCheck("cfg-lutris", c.gaming.lutris);
   setCheck("cfg-heroic", c.gaming.heroic);
   setCheck("cfg-faugus", c.gaming.faugus);
@@ -370,20 +401,31 @@ function populateConfigUI(c) {
   setCheck("cfg-stremio", c.media.stremio);
   setCheck("cfg-vlc", c.media.vlc);
   setCheck("cfg-mpv", c.media.mpv);
-  setCheck("cfg-localsend", c.media.localsend);
-  setCheck("cfg-tailscale", c.media.tailscale);
-  setCheck("cfg-motrix", c.media.motrix);
+  setCheck("cfg-pear", c.creation.pear_desktop);
 
-  // Creation
+  // Video & DaVinci Resolve
   setCheck("cfg-obs", c.creation.obs_studio);
   setCheck("cfg-kdenlive", c.creation.kdenlive);
+  setRadioVal("davinci_resolve", c.creation.davinci_resolve || "none");
+
+  // Audio Production
+  setCheck("cfg-audacity", c.creation.audacity);
+  setCheck("cfg-ardour", c.creation.ardour);
+
+  // Creation 3D & Engine
   setCheck("cfg-blender", c.creation.blender);
   setCheck("cfg-godot", c.creation.godot);
+
+  // System & Utilities
+  setCheck("cfg-flatseal", c.media.flatseal);
+  setCheck("cfg-tailscale", c.media.tailscale);
+  setCheck("cfg-localsend", c.media.localsend);
+  setCheck("cfg-motrix", c.media.motrix);
   setCheck("cfg-kvm", c.creation.virtualisation);
   setCheck("cfg-antigravity", c.creation.antigravity);
-  setCheck("cfg-pear", c.creation.pear_desktop);
   setCheck("cfg-aisuite", c.creation.ai_suite);
 
+  updateCategoryPillCounters();
   checkDirtyState();
 }
 
@@ -419,7 +461,10 @@ function readConfigFromUI() {
   const discordRadio = document.querySelector('input[name="discord_client"]:checked');
   if (discordRadio) currentConfig.discord_client = discordRadio.value;
 
+  const isNvidia = (currentConfig.gpu_driver === "nvidia" || currentConfig.gpu_driver === "nvidia-legacy");
+  currentConfig.gaming.gamescope_session = isNvidia ? false : isChecked("cfg-gamescope-session");
   currentConfig.gaming.steam = isChecked("cfg-steam");
+  currentConfig.gaming.goverlay = isChecked("cfg-goverlay");
   currentConfig.gaming.lutris = isChecked("cfg-lutris");
   currentConfig.gaming.heroic = isChecked("cfg-heroic");
   currentConfig.gaming.faugus = isChecked("cfg-faugus");
@@ -442,18 +487,70 @@ function readConfigFromUI() {
   currentConfig.media.stremio = isChecked("cfg-stremio");
   currentConfig.media.vlc = isChecked("cfg-vlc");
   currentConfig.media.mpv = isChecked("cfg-mpv");
+  currentConfig.creation.pear_desktop = isChecked("cfg-pear");
+
+  currentConfig.creation.obs_studio = isChecked("cfg-obs");
+  currentConfig.creation.kdenlive = isChecked("cfg-kdenlive");
+  const davinciRadio = document.querySelector('input[name="davinci_resolve"]:checked');
+  if (davinciRadio) currentConfig.creation.davinci_resolve = davinciRadio.value;
+
+  currentConfig.creation.audacity = isChecked("cfg-audacity");
+  currentConfig.creation.ardour = isChecked("cfg-ardour");
+
+  currentConfig.creation.blender = isChecked("cfg-blender");
+  currentConfig.creation.godot = isChecked("cfg-godot");
+
+  currentConfig.media.flatseal = isChecked("cfg-flatseal");
   currentConfig.media.localsend = isChecked("cfg-localsend");
   currentConfig.media.tailscale = isChecked("cfg-tailscale");
   currentConfig.media.motrix = isChecked("cfg-motrix");
 
-  currentConfig.creation.obs_studio = isChecked("cfg-obs");
-  currentConfig.creation.kdenlive = isChecked("cfg-kdenlive");
-  currentConfig.creation.blender = isChecked("cfg-blender");
-  currentConfig.creation.godot = isChecked("cfg-godot");
   currentConfig.creation.virtualisation = isChecked("cfg-kvm");
   currentConfig.creation.antigravity = isChecked("cfg-antigravity");
-  currentConfig.creation.pear_desktop = isChecked("cfg-pear");
   currentConfig.creation.ai_suite = isChecked("cfg-aisuite");
+
+  updateCategoryPillCounters();
+}
+
+function setupCategoryNavigation() {
+  const pills = document.querySelectorAll(".cat-pill");
+  pills.forEach(pill => {
+    pill.onclick = () => {
+      pills.forEach(p => p.classList.remove("active"));
+      pill.classList.add("active");
+      const cat = pill.getAttribute("data-category");
+      filterConfigCategories(cat);
+    };
+  });
+}
+
+function filterConfigCategories(cat) {
+  const panels = document.querySelectorAll(".config-category-panel");
+  panels.forEach(panel => {
+    if (cat === "all" || panel.getAttribute("data-category") === cat) {
+      panel.classList.remove("hidden");
+    } else {
+      panel.classList.add("hidden");
+    }
+  });
+}
+
+function updateCategoryPillCounters() {
+  const updateCount = (cat, total) => {
+    const panel = document.querySelector(`.config-category-panel[data-category="${cat}"]`);
+    const counter = document.getElementById(`cat-count-${cat}`);
+    if (!panel || !counter) return;
+    const checkedCount = panel.querySelectorAll('input[type="checkbox"]:checked').length;
+    counter.textContent = `${checkedCount}/${total}`;
+  };
+
+  updateCount("gaming", 9);
+  updateCount("emulation", 11);
+  updateCount("multimedia", 4);
+  updateCount("video", 2);
+  updateCount("audio", 2);
+  updateCount("creation3d", 2);
+  updateCount("system", 7);
 }
 
 function isChecked(id) {

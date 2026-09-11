@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GamingConfig {
     pub steam: bool,
+    pub gamescope_session: bool,
+    pub goverlay: bool,
     pub lutris: bool,
     pub heroic: bool,
     pub faugus: bool,
@@ -32,6 +34,7 @@ pub struct EmulationConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaConfig {
     pub stremio: bool,
+    pub flatseal: bool,
     pub vlc: bool,
     pub mpv: bool,
     pub tailscale: bool,
@@ -43,6 +46,8 @@ pub struct MediaConfig {
 pub struct CreationConfig {
     pub davinci_resolve: String, // "none" | "free" | "studio"
     pub blender: bool,
+    pub audacity: bool,
+    pub ardour: bool,
     pub godot: bool,
     pub kdenlive: bool,
     pub obs_studio: bool,
@@ -112,6 +117,8 @@ impl Default for ChomiamConfig {
             desktop_env: "gnome".to_string(),
             gaming: GamingConfig {
                 steam: true,
+                gamescope_session: true,
+                goverlay: true,
                 lutris: true,
                 heroic: true,
                 faugus: true,
@@ -135,6 +142,7 @@ impl Default for ChomiamConfig {
             },
             media: MediaConfig {
                 stremio: true,
+                flatseal: true,
                 vlc: true,
                 mpv: true,
                 tailscale: true,
@@ -144,6 +152,8 @@ impl Default for ChomiamConfig {
             creation: CreationConfig {
                 davinci_resolve: "none".to_string(),
                 blender: true,
+                audacity: false,
+                ardour: false,
                 godot: true,
                 kdenlive: true,
                 obs_studio: true,
@@ -230,7 +240,16 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     }
 
     // Gaming
+    let is_nvidia = cfg.gpu_driver == "nvidia" || cfg.gpu_driver == "nvidia-legacy";
     cfg.gaming.steam = get_bool("steam", true);
+    cfg.gaming.gamescope_session = if is_nvidia {
+        false
+    } else {
+        extract_bool_var_in_block(&content, "gaming", "gamescopeSession")
+            .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "gaming", "gamescopeSession")))
+            .unwrap_or(true)
+    };
+    cfg.gaming.goverlay = get_bool("goverlay", true);
     cfg.gaming.lutris = get_bool("lutris", true);
     cfg.gaming.heroic = get_bool("heroic", true);
     cfg.gaming.faugus = get_bool("faugus", true);
@@ -256,6 +275,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
 
     // Media & Network
     cfg.media.stremio = get_bool("stremio", true);
+    cfg.media.flatseal = get_bool("flatseal", true);
     cfg.media.vlc = get_bool("vlc", true);
     cfg.media.mpv = get_bool("mpv", true);
     cfg.media.tailscale = get_bool("tailscale", true);
@@ -264,6 +284,8 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
 
     // Creation & Tools
     cfg.creation.blender = get_bool("blender", false);
+    cfg.creation.audacity = get_bool("audacity", false);
+    cfg.creation.ardour = get_bool("ardour", false);
     cfg.creation.godot = get_bool("godot", false);
     cfg.creation.kdenlive = get_bool("kdenlive", false);
     cfg.creation.obs_studio = get_bool("obsStudio", true);
@@ -355,6 +377,7 @@ r#"{{
   # Options du mode Gaming
   gaming = {{
     enable = true;
+    gamescopeSession = {gamescope_session};
     launchers = {{
       steam = {steam};
       lutris = {lutris};
@@ -401,6 +424,10 @@ r#"{{
 
   # Applications Réseau & Partage
   tailscale = {tailscale};
+  flatseal = {flatseal};
+  goverlay = {goverlay};
+  audacity = {audacity};
+  ardour = {ardour};
   localsend = {localsend};
   motrix = {motrix};
 
@@ -437,6 +464,11 @@ r#"{{
         desktop_env = c.desktop_env,
         gpu_driver = c.gpu_driver,
         steam = c.gaming.steam,
+        gamescope_session = c.gaming.gamescope_session,
+        goverlay = c.gaming.goverlay,
+        flatseal = c.media.flatseal,
+        audacity = c.creation.audacity,
+        ardour = c.creation.ardour,
         lutris = c.gaming.lutris,
         heroic = c.gaming.heroic,
         faugus = c.gaming.faugus,

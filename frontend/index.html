@@ -289,6 +289,24 @@
             </div>
           </div>
 
+          <!-- Network / DNS Diagnostic & Auto-Recovery Banner -->
+          <div class="speedtest-alert-banner" id="speedtest-alert-banner" style="display: none;">
+            <div class="alert-banner-left">
+              <span class="alert-banner-icon" id="alert-banner-icon">⚠️</span>
+              <div class="alert-banner-content">
+                <strong id="alert-banner-title">Problème de Résolution DNS</strong>
+                <p id="alert-banner-desc">Impossible de joindre le serveur de test. Votre serveur DNS ne répond pas.</p>
+              </div>
+            </div>
+            <div class="alert-banner-actions">
+              <button class="btn-repair-dns" id="btn-repair-dns" onclick="attemptDnsAutoRepair()">
+                <span class="btn-icon">🛠️</span>
+                <span id="btn-repair-dns-text">Réparer le DNS</span>
+              </button>
+              <button class="btn-banner-close" onclick="dismissSpeedtestAlert()" title="Masquer l'alerte">✕</button>
+            </div>
+          </div>
+
           <!-- 3 Main Digital Metrics -->
           <div class="speedtest-main-grid">
             <!-- Ping Card -->

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 mod config;
 mod firewall;
 mod disks;
@@ -681,6 +682,101 @@ fn get_commit_security_info() -> Result<CommitSecurityInfo, String> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkDiagnostic {
+    pub internet_ip_ok: bool,
+    pub dns_ok: bool,
+    pub current_dns: String,
+    pub details: String,
+}
+
+#[tauri::command]
+async fn diagnose_network() -> Result<NetworkDiagnostic, String> {
+    // 1. Tester la connectivité IP directe (sans résolution DNS)
+    let ip_ok = tokio::time::timeout(
+        tokio::time::Duration::from_millis(1500),
+        tokio::net::TcpStream::connect("1.1.1.1:443")
+    ).await.map(|r| r.is_ok()).unwrap_or(false)
+    || tokio::time::timeout(
+        tokio::time::Duration::from_millis(1500),
+        tokio::net::TcpStream::connect("8.8.8.8:53")
+    ).await.map(|r| r.is_ok()).unwrap_or(false);
+
+    // 2. Tester la résolution DNS vers speed.cloudflare.com et cloudflare.com
+    let dns_ok = tokio::time::timeout(
+        tokio::time::Duration::from_millis(2000),
+        tokio::net::lookup_host("speed.cloudflare.com:443")
+    ).await.map(|r| r.is_ok()).unwrap_or(false)
+    || tokio::time::timeout(
+        tokio::time::Duration::from_millis(2000),
+        tokio::net::lookup_host("cloudflare.com:443")
+    ).await.map(|r| r.is_ok()).unwrap_or(false);
+
+    // 3. Récupérer les serveurs DNS actifs
+    let dns_output = std::process::Command::new("resolvectl")
+        .arg("status")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+
+    let mut current_dns = String::new();
+    for line in dns_output.lines() {
+        if line.contains("Current DNS Server:") || line.contains("DNS Servers:") {
+            current_dns = line.trim().to_string();
+            break;
+        }
+    }
+    if current_dns.is_empty() {
+        current_dns = "Non détecté (DHCP/Système)".to_string();
+    }
+
+    let details = if !ip_ok {
+        "Pas d'accès internet par IP (câble/Wi-Fi déconnecté ou passerelle injoignable).".to_string()
+    } else if !dns_ok {
+        format!("Internet est accessible par adresse IP, mais le serveur DNS ({}) ne répond pas ou bloque la résolution.", current_dns)
+    } else {
+        "Connexion internet et résolution DNS opérationnelles.".to_string()
+    };
+
+    Ok(NetworkDiagnostic {
+        internet_ip_ok: ip_ok,
+        dns_ok,
+        current_dns,
+        details,
+    })
+}
+
+#[tauri::command]
+async fn repair_network_dns() -> Result<String, String> {
+    // 1. Vider le cache DNS de systemd-resolved
+    let _ = std::process::Command::new("resolvectl")
+        .arg("flush-caches")
+        .output();
+
+    // 2. Tenter de redémarrer systemd-resolved
+    let _ = std::process::Command::new("systemctl")
+        .args(["restart", "systemd-resolved"])
+        .output();
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+
+    // 3. Tester à nouveau la résolution
+    let dns_repaired = tokio::time::timeout(
+        tokio::time::Duration::from_millis(2500),
+        tokio::net::lookup_host("speed.cloudflare.com:443")
+    ).await.map(|r| r.is_ok()).unwrap_or(false)
+    || tokio::time::timeout(
+        tokio::time::Duration::from_millis(2500),
+        tokio::net::lookup_host("cloudflare.com:443")
+    ).await.map(|r| r.is_ok()).unwrap_or(false);
+
+    if dns_repaired {
+        Ok("Cache DNS vidé et résolution rétablie avec succès !".to_string())
+    } else {
+        Err("La résolution DNS échoue toujours. Le serveur DNS de votre box internet ou de votre session semble injoignable.".to_string())
+    }
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -717,7 +813,9 @@ fn main() {
             remove_custom_package,
             get_firewall_state,
             save_firewall_state,
-            get_commit_security_info
+            get_commit_security_info,
+            diagnose_network,
+            repair_network_dns
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

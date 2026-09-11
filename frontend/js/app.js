@@ -2660,13 +2660,78 @@ function stopSpeedtest() {
   setSpeedtestUIState("ready");
 }
 
+function dismissSpeedtestAlert() {
+  const banner = document.getElementById("speedtest-alert-banner");
+  if (banner) banner.style.display = "none";
+}
+
+function showSpeedtestAlert(title, desc, isDnsIssue = true) {
+  const banner = document.getElementById("speedtest-alert-banner");
+  const titleEl = document.getElementById("alert-banner-title");
+  const descEl = document.getElementById("alert-banner-desc");
+  const btn = document.getElementById("btn-repair-dns");
+  const icon = document.getElementById("alert-banner-icon");
+
+  if (!banner || !titleEl || !descEl) return;
+
+  banner.classList.remove("resolved");
+  titleEl.textContent = title;
+  descEl.textContent = desc;
+  if (icon) icon.textContent = isDnsIssue ? "⚠️" : "🌐";
+  if (btn) {
+    btn.style.display = isDnsIssue ? "inline-flex" : "none";
+    const btnText = document.getElementById("btn-repair-dns-text");
+    if (btnText) btnText.textContent = "Réparer le DNS";
+    btn.disabled = false;
+  }
+  banner.style.display = "flex";
+}
+
+async function attemptDnsAutoRepair() {
+  const btn = document.getElementById("btn-repair-dns");
+  const btnText = document.getElementById("btn-repair-dns-text");
+  const banner = document.getElementById("speedtest-alert-banner");
+  const titleEl = document.getElementById("alert-banner-title");
+  const descEl = document.getElementById("alert-banner-desc");
+
+  if (btn) btn.disabled = true;
+  if (btnText) btnText.textContent = "⏳ Réparation en cours...";
+  showToast("Purge du cache DNS et réinitialisation de systemd-resolved...", "info");
+
+  try {
+    const res = await invoke("repair_network_dns");
+    showToast(res || "Résolution DNS rétablie !", "success");
+
+    if (banner) banner.classList.add("resolved");
+    if (titleEl) titleEl.textContent = "✅ Résolution DNS rétablie avec succès !";
+    if (descEl) descEl.textContent = "Le cache DNS a été purgé et le serveur DNS répond désormais. Relance automatique du speedtest...";
+    if (btn) btn.style.display = "none";
+
+    setTimeout(() => {
+      dismissSpeedtestAlert();
+      startSpeedtest();
+    }, 1500);
+
+  } catch (err) {
+    console.error("Échec réparation automatique DNS :", err);
+    showToast("Échec réparation : " + err, "error");
+    if (btn) {
+      btn.disabled = false;
+      if (btnText) btnText.textContent = "Réessayer la réparation";
+    }
+    if (titleEl) titleEl.textContent = "❌ Serveur DNS toujours injoignable";
+    if (descEl) descEl.textContent = (typeof err === "string" ? err : err.message) + " 💡 Conseil : Activez 'DNS Automatique (DHCP)' dans vos paramètres réseau de bureau pour utiliser le résolveur de votre box internet.";
+  }
+}
+
 async function startSpeedtest() {
   if (speedtestRunning) return;
   speedtestRunning = true;
   speedtestAbortController = new AbortController();
   const signal = speedtestAbortController.signal;
 
-  // Reset UI
+  // Reset UI & masquage de l'alerte précédente
+  dismissSpeedtestAlert();
   resetSpeedtestMetrics();
   setSpeedtestUIState("running");
   graphPoints = [];
@@ -2678,7 +2743,27 @@ async function startSpeedtest() {
     const reachable = await verifySpeedtestServerConnectivity(signal);
     if (signal.aborted) return;
     if (!reachable) {
-      throw new Error("Impossible de joindre le serveur de test. Vérifiez votre connexion internet ou vos serveurs DNS (blocage de speed.cloudflare.com).");
+      // Diagnostic approfondi via le backend Rust
+      let diagDetails = "Impossible de joindre le serveur de test.";
+      try {
+        const diag = await invoke("diagnose_network");
+        if (diag) {
+          if (diag.internet_ip_ok && !diag.dns_ok) {
+            diagDetails = `Internet est accessible par adresse IP, mais votre résolveur DNS (${diag.current_dns}) ne répond pas ou bloque les requêtes.`;
+            showSpeedtestAlert("🚨 Problème de Résolution DNS détecté", diagDetails, true);
+          } else if (!diag.internet_ip_ok) {
+            diagDetails = "Votre ordinateur n'a pas accès à internet (câble/Wi-Fi déconnecté ou passerelle injoignable).";
+            showSpeedtestAlert("🌐 Pas d'accès internet", diagDetails, false);
+          } else {
+            diagDetails = diag.details || diagDetails;
+            showSpeedtestAlert("⚠️ Serveur de test injoignable", diagDetails, true);
+          }
+        }
+      } catch (diagErr) {
+        console.warn("Échec diagnostic backend :", diagErr);
+        showSpeedtestAlert("⚠️ Erreur de connexion DNS", "Impossible de joindre le serveur de test. Vérifiez votre connexion ou vos serveurs DNS.", true);
+      }
+      throw new Error(diagDetails);
     }
 
     // Phase 1 : Ping & Jitter
@@ -2705,7 +2790,7 @@ async function startSpeedtest() {
       showToast(err.message, "error");
       const badge = document.getElementById("speedtest-status-badge");
       if (badge) {
-        badge.textContent = "Erreur réseau";
+        badge.textContent = "Erreur réseau / DNS";
         badge.className = "speedtest-status-badge";
       }
       setSpeedtestUIState("ready");

@@ -2491,7 +2491,7 @@ function initSpeedtest() {
   });
 }
 
-// 1. Fetch Location, ISP, CDN Node, and IP (Multi-source avec ipwho.is + Cloudflare fallback)
+// 1. Fetch Location, ISP, CDN Node, and IP (via backend Rust natif pour fiabilité absolue sous KDE/GNOME)
 async function fetchSpeedtestMetadata() {
   const locEl = document.getElementById("net-info-location");
   const ispEl = document.getElementById("net-info-isp");
@@ -2502,9 +2502,28 @@ async function fetchSpeedtestMetadata() {
   if (ispEl) ispEl.textContent = "Recherche du FAI...";
   if (srvEl) srvEl.textContent = "Serveur : Optimisation...";
 
-  let detected = false;
+  // Méthode 1 : Invocation Rust native (utilise curl système, 100% insensible aux restrictions WebKit/KDE)
+  try {
+    const meta = await invoke("get_network_metadata");
+    if (meta && meta.ip) {
+      currentPublicIp = meta.ip;
+      updateIpDisplay();
 
-  // Source 1 : ipwho.is (CORS complet, FAI exact, Ville, Pays, ASN et Emoji drapeau)
+      const asnStr = meta.asn ? ` (AS${meta.asn})` : "";
+      if (ispEl) ispEl.textContent = `Fournisseur : ${meta.isp}${asnStr}`;
+
+      const locText = [meta.flag, meta.city, meta.country].filter(Boolean).join(" ");
+      if (locEl) locEl.textContent = locText || "France";
+
+      if (srvEl) srvEl.textContent = `Serveur : ${activeSpeedServer.name}`;
+      return;
+    }
+  } catch (e) {
+    console.warn("Échec get_network_metadata backend, tentative fallback webview fetch...", e);
+  }
+
+  // Méthode 2 : Fallback webview fetch ipwho.is
+  let detected = false;
   try {
     const res = await fetch("https://ipwho.is/", {
       cache: "no-store",
@@ -2531,63 +2550,13 @@ async function fetchSpeedtestMetadata() {
       }
     }
   } catch (e) {
-    console.warn("ipwho.is indisponible, tentative fallback Cloudflare...", e);
-  }
-
-  // Source 2 : Cloudflare fallback
-  if (!detected) {
-    try {
-      const res = await fetch("https://speed.cloudflare.com/__down?bytes=0", {
-        cache: "no-store",
-        signal: AbortSignal.timeout(3000),
-      });
-
-      const ip = res.headers.get("cf-meta-ip") || "";
-      if (ip) {
-        currentPublicIp = ip;
-        updateIpDisplay();
-      }
-
-      const city = res.headers.get("cf-meta-city") || res.headers.get("city") || "";
-      const country = res.headers.get("cf-meta-country") || res.headers.get("country") || "";
-      const colo = res.headers.get("cf-meta-colo") || res.headers.get("colo") || "CDG";
-      const asn = res.headers.get("cf-meta-asn") || res.headers.get("asn") || "";
-
-      const ispName = resolveIspFromAsn(asn);
-      if (ispEl) ispEl.textContent = ispName ? `Fournisseur : ${ispName} (AS${asn})` : (asn ? `ASN ${asn}` : "Fournisseur détecté");
-      if (locEl) locEl.textContent = city && country ? `${city}, ${country}` : (country || "Localisation détectée");
-      detected = true;
-    } catch (err) {
-      console.warn("Échec détection Cloudflare :", err);
-    }
-  }
-
-  // Source 3 : Backup ultime country.is pour au moins avoir l'IP et le pays
-  if (!detected) {
-    try {
-      const res = await fetch("https://api.country.is", {
-        cache: "no-store",
-        signal: AbortSignal.timeout(2500),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ip) {
-          currentPublicIp = data.ip;
-          updateIpDisplay();
-        }
-        if (locEl) locEl.textContent = `Pays : ${data.country || "France"}`;
-        if (ispEl) ispEl.textContent = "Fournisseur : Détecté";
-        detected = true;
-      }
-    } catch (e) {
-      console.warn("Échec ultime country.is :", e);
-    }
+    console.warn("ipwho.is webview indisponible :", e);
   }
 
   if (!detected) {
-    if (locEl) locEl.textContent = "Réseau local / Déconnecté";
-    if (ispEl) ispEl.textContent = "Fournisseur : --";
-    if (ipEl) ipEl.textContent = "IP : --";
+    if (locEl) locEl.textContent = "Réseau local";
+    if (ispEl) ispEl.textContent = "Fournisseur : Inconnu";
+    if (ipEl) ipEl.textContent = "IP : Inconnue";
   }
 
   if (srvEl) {

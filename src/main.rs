@@ -682,6 +682,77 @@ fn get_commit_security_info() -> Result<CommitSecurityInfo, String> {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct NetworkMetadata {
+    pub ip: String,
+    pub isp: String,
+    pub city: String,
+    pub country: String,
+    pub flag: String,
+    pub asn: String,
+}
+
+#[tauri::command]
+async fn get_network_metadata() -> Result<NetworkMetadata, String> {
+    // 1. Tenter ipwho.is via curl système natif (insensible aux soucis WebKitGTK/libsoup)
+    let output = std::process::Command::new("curl")
+        .args(["-s", "--max-time", "3", "https://ipwho.is/"])
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                if val.get("success").and_then(|s| s.as_bool()).unwrap_or(true) {
+                    let ip = val.get("ip").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let city = val.get("city").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let country = val.get("country").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let flag = val.get("flag").and_then(|f| f.get("emoji")).and_then(|e| e.as_str()).unwrap_or("").to_string();
+                    let connection = val.get("connection");
+                    let isp = connection.and_then(|c| c.get("isp").or_else(|| c.get("org"))).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                    let asn = connection.and_then(|c| c.get("asn")).map(|a| a.to_string()).unwrap_or_default();
+
+                    if !ip.is_empty() {
+                        return Ok(NetworkMetadata {
+                            ip,
+                            isp,
+                            city,
+                            country,
+                            flag,
+                            asn,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback api.country.is
+    let fallback = std::process::Command::new("curl")
+        .args(["-s", "--max-time", "3", "https://api.country.is/"])
+        .output();
+
+    if let Ok(out) = fallback {
+        if out.status.success() {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                let ip = val.get("ip").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let country = val.get("country").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                if !ip.is_empty() {
+                    return Ok(NetworkMetadata {
+                        ip,
+                        isp: "Fournisseur détecté".to_string(),
+                        city: String::new(),
+                        country,
+                        flag: "🇫🇷".to_string(),
+                        asn: String::new(),
+                    });
+                }
+            }
+        }
+    }
+
+    Err("Impossible de récupérer l'adresse IP et les métadonnées réseau".to_string())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkDiagnostic {
     pub internet_ip_ok: bool,
@@ -815,7 +886,8 @@ fn main() {
             save_firewall_state,
             get_commit_security_info,
             diagnose_network,
-            repair_network_dns
+            repair_network_dns,
+            get_network_metadata
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

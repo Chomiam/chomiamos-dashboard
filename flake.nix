@@ -34,6 +34,8 @@
             libsoup_3
             openssl
             glib
+            glib-networking
+            gsettings-desktop-schemas
             cairo
             pango
             gdk-pixbuf

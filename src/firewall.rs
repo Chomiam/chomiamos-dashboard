@@ -3,8 +3,9 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
-const FIREWALL_FILE: &str = "/etc/nixos/modules/core/firewall.nix";
-const FIREWALL_BACKUP: &str = "/etc/nixos/modules/core/.firewall.nix.backup";
+const SYS_FIREWALL_FILE: &str = "/etc/nixos/modules/core/firewall.nix";
+const USER_FIREWALL_FILE: &str = "/etc/nixos/firewall-user.nix";
+const USER_FIREWALL_BACKUP: &str = "/etc/nixos/.firewall-user.nix.backup";
 const VARS_FILE: &str = "/etc/nixos/vars.nix";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -25,39 +26,81 @@ pub struct FirewallState {
     pub rules: Vec<FirewallPortRule>,
 }
 
-/// Charge l'état complet du pare-feu depuis vars.nix et modules/core/firewall.nix
+/// Charge l'état complet du pare-feu en combinant firewall.nix (système) et firewall-user.nix (personnalisé)
 pub fn load_firewall_state() -> Result<FirewallState, String> {
     let enabled = read_firewall_enabled_from_vars();
 
-    let content = if Path::new(FIREWALL_FILE).exists() {
-        fs::read_to_string(FIREWALL_FILE)
-            .map_err(|e| format!("Impossible de lire {}: {}", FIREWALL_FILE, e))?
-    } else if Path::new(FIREWALL_BACKUP).exists() {
-        fs::read_to_string(FIREWALL_BACKUP)
-            .map_err(|e| format!("Impossible de lire {}: {}", FIREWALL_BACKUP, e))?
+    // 1. Règles système (modules/core/firewall.nix)
+    let sys_content = if Path::new(SYS_FIREWALL_FILE).exists() {
+        fs::read_to_string(SYS_FIREWALL_FILE).unwrap_or_else(|_| default_sys_firewall_content())
     } else {
-        default_firewall_nix_content()
+        default_sys_firewall_content()
     };
+    let sys_rules = parse_firewall_rules(&sys_content, true);
 
-    let rules = parse_firewall_rules(&content);
+    // 2. Règles utilisateur personnalisées (firewall-user.nix)
+    let user_content = if Path::new(USER_FIREWALL_FILE).exists() {
+        fs::read_to_string(USER_FIREWALL_FILE).unwrap_or_default()
+    } else if Path::new(USER_FIREWALL_BACKUP).exists() {
+        fs::read_to_string(USER_FIREWALL_BACKUP).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let user_rules = parse_firewall_rules(&user_content, false);
 
-    Ok(FirewallState { enabled, rules })
+    // 3. Fusionner les règles : règles système en premier, puis règles utilisateur
+    let mut all_rules = Vec::new();
+    let mut existing_singles: HashSet<(u16, String)> = HashSet::new(); // (port, proto)
+    let mut existing_ranges: HashSet<(u16, u16, String)> = HashSet::new(); // (from, to, proto)
+
+    for r in sys_rules {
+        if let Some(port) = r.port {
+            existing_singles.insert((port, r.protocol.clone()));
+            if r.protocol == "both" {
+                existing_singles.insert((port, "tcp".to_string()));
+                existing_singles.insert((port, "udp".to_string()));
+            }
+        }
+        if let (Some(from), Some(to)) = (r.from_port, r.to_port) {
+            existing_ranges.insert((from, to, r.protocol.clone()));
+            if r.protocol == "both" {
+                existing_ranges.insert((from, to, "tcp".to_string()));
+                existing_ranges.insert((from, to, "udp".to_string()));
+            }
+        }
+        all_rules.push(r);
+    }
+
+    for r in user_rules {
+        if let Some(port) = r.port {
+            if existing_singles.contains(&(port, r.protocol.clone())) || (r.protocol == "both" && (existing_singles.contains(&(port, "tcp".to_string())) || existing_singles.contains(&(port, "udp".to_string())))) {
+                continue; // Éviter doublon exact avec le système
+            }
+        }
+        if let (Some(from), Some(to)) = (r.from_port, r.to_port) {
+            if existing_ranges.contains(&(from, to, r.protocol.clone())) {
+                continue;
+            }
+        }
+        all_rules.push(r);
+    }
+
+    Ok(FirewallState { enabled, rules: all_rules })
 }
 
-/// Sauvegarde l'état complet du pare-feu dans vars.nix et modules/core/firewall.nix
+/// Sauvegarde uniquement les règles personnalisées dans firewall-user.nix et l'état global dans vars.nix
 pub fn save_firewall_state(enabled: bool, rules: Vec<FirewallPortRule>) -> Result<(), String> {
     // 1. Mettre à jour firewall = true/false dans vars.nix
     update_firewall_enabled_in_vars(enabled)?;
 
-    // 2. Générer le contenu Nix de firewall.nix
-    let nix_content = generate_firewall_nix_content(&rules);
+    // 2. Filtrer uniquement les règles personnalisées par l'utilisateur (!is_default)
+    let user_rules: Vec<FirewallPortRule> = rules.into_iter().filter(|r| !r.is_default).collect();
 
-    // 3. Écriture atomique dans modules/core/firewall.nix
-    let path = Path::new(FIREWALL_FILE);
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
+    // 3. Générer le contenu Nix pour firewall-user.nix
+    let nix_content = generate_user_firewall_nix_content(&user_rules);
 
+    // 4. Écriture atomique dans /etc/nixos/firewall-user.nix
+    let path = Path::new(USER_FIREWALL_FILE);
     let tmp_path = path.with_extension("nix.tmp");
     fs::write(&tmp_path, &nix_content)
         .map_err(|e| format!("Impossible d'écrire temporairement dans {}: {}", tmp_path.display(), e))?;
@@ -65,8 +108,8 @@ pub fn save_firewall_state(enabled: bool, rules: Vec<FirewallPortRule>) -> Resul
     fs::rename(&tmp_path, path)
         .map_err(|e| format!("Impossible de remplacer {}: {}", path.display(), e))?;
 
-    // 4. Mettre à jour la sauvegarde inviolable locale
-    let _ = fs::write(FIREWALL_BACKUP, &nix_content);
+    // 5. Mettre à jour la sauvegarde inviolable locale
+    let _ = fs::write(USER_FIREWALL_BACKUP, &nix_content);
 
     Ok(())
 }
@@ -81,7 +124,6 @@ fn read_firewall_enabled_from_vars() -> bool {
         Err(_) => return false,
     };
 
-    // Cherche firewall = true; ou firewall = false;
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("firewall") {
@@ -121,7 +163,6 @@ fn update_firewall_enabled_in_vars(enabled: bool) -> Result<(), String> {
     }
 
     if !found {
-        // Insérer avant la dernière accolade fermante
         if let Some(pos) = new_lines.iter().rposition(|l| l.trim() == "}") {
             new_lines.insert(pos, format!("  # Pare-feu réseau\n  firewall = {};\n", enabled));
         } else {
@@ -137,13 +178,12 @@ fn update_firewall_enabled_in_vars(enabled: bool) -> Result<(), String> {
     fs::rename(&tmp_path, path)
         .map_err(|e| format!("Impossible de remplacer {}: {}", path.display(), e))?;
 
-    // Mettre à jour la sauvegarde de vars.nix si présente
     let _ = fs::write("/etc/nixos/.vars.nix.backup", &updated_content);
 
     Ok(())
 }
 
-fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
+fn parse_firewall_rules(content: &str, is_default: bool) -> Vec<FirewallPortRule> {
     let tcp_ports = parse_single_ports_list(content, "allowedTCPPorts");
     let udp_ports = parse_single_ports_list(content, "allowedUDPPorts");
     let tcp_ranges = parse_port_ranges_list(content, "allowedTCPPortRanges");
@@ -152,7 +192,6 @@ fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
     let mut rules = Vec::new();
     let mut processed_udp_single: HashSet<u16> = HashSet::new();
 
-    // Fusionner les ports simples
     let udp_map: HashMap<u16, String> = udp_ports.into_iter().collect();
     for (port, tcp_label) in tcp_ports {
         if let Some(udp_label) = udp_map.get(&port) {
@@ -163,25 +202,25 @@ fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
                 udp_label.clone()
             };
             rules.push(FirewallPortRule {
-                id: format!("single-both-{}", port),
+                id: format!("single-both-{}-{}", port, if is_default { "sys" } else { "usr" }),
                 rule_type: "single".to_string(),
                 protocol: "both".to_string(),
                 port: Some(port),
                 from_port: None,
                 to_port: None,
                 label,
-                is_default: is_default_port(port, "both"),
+                is_default,
             });
         } else {
             rules.push(FirewallPortRule {
-                id: format!("single-tcp-{}", port),
+                id: format!("single-tcp-{}-{}", port, if is_default { "sys" } else { "usr" }),
                 rule_type: "single".to_string(),
                 protocol: "tcp".to_string(),
                 port: Some(port),
                 from_port: None,
                 to_port: None,
                 label: tcp_label,
-                is_default: is_default_port(port, "tcp"),
+                is_default,
             });
         }
     }
@@ -189,19 +228,18 @@ fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
     for (port, udp_label) in udp_map {
         if !processed_udp_single.contains(&port) {
             rules.push(FirewallPortRule {
-                id: format!("single-udp-{}", port),
+                id: format!("single-udp-{}-{}", port, if is_default { "sys" } else { "usr" }),
                 rule_type: "single".to_string(),
                 protocol: "udp".to_string(),
                 port: Some(port),
                 from_port: None,
                 to_port: None,
                 label: udp_label,
-                is_default: is_default_port(port, "udp"),
+                is_default,
             });
         }
     }
 
-    // Fusionner les plages de ports
     let mut processed_udp_ranges: HashSet<(u16, u16)> = HashSet::new();
     let udp_range_map: HashMap<(u16, u16), String> = udp_ranges
         .into_iter()
@@ -217,25 +255,25 @@ fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
                 udp_label.clone()
             };
             rules.push(FirewallPortRule {
-                id: format!("range-both-{}-{}", from, to),
+                id: format!("range-both-{}-{}-{}", from, to, if is_default { "sys" } else { "usr" }),
                 rule_type: "range".to_string(),
                 protocol: "both".to_string(),
                 port: None,
                 from_port: Some(from),
                 to_port: Some(to),
                 label,
-                is_default: is_default_range(from, to, "both"),
+                is_default,
             });
         } else {
             rules.push(FirewallPortRule {
-                id: format!("range-tcp-{}-{}", from, to),
+                id: format!("range-tcp-{}-{}-{}", from, to, if is_default { "sys" } else { "usr" }),
                 rule_type: "range".to_string(),
                 protocol: "tcp".to_string(),
                 port: None,
                 from_port: Some(from),
                 to_port: Some(to),
                 label: tcp_label,
-                is_default: is_default_range(from, to, "tcp"),
+                is_default,
             });
         }
     }
@@ -243,14 +281,14 @@ fn parse_firewall_rules(content: &str) -> Vec<FirewallPortRule> {
     for ((from, to), udp_label) in udp_range_map {
         if !processed_udp_ranges.contains(&(from, to)) {
             rules.push(FirewallPortRule {
-                id: format!("range-udp-{}-{}", from, to),
+                id: format!("range-udp-{}-{}-{}", from, to, if is_default { "sys" } else { "usr" }),
                 rule_type: "range".to_string(),
                 protocol: "udp".to_string(),
                 port: None,
                 from_port: Some(from),
                 to_port: Some(to),
                 label: udp_label,
-                is_default: is_default_range(from, to, "udp"),
+                is_default,
             });
         }
     }
@@ -339,15 +377,7 @@ fn extract_list_block<'a>(content: &'a str, list_name: &str) -> Option<&'a str> 
     Some(&after_bracket[..end_bracket])
 }
 
-fn is_default_port(port: u16, _proto: &str) -> bool {
-    port == 53317 // LocalSend
-}
-
-fn is_default_range(from: u16, to: u16, _proto: &str) -> bool {
-    (from == 27015 && to == 27030) || (from == 3000 && to == 3010) || (from == 27000 && to == 27100)
-}
-
-fn generate_firewall_nix_content(rules: &[FirewallPortRule]) -> String {
+fn generate_user_firewall_nix_content(rules: &[FirewallPortRule]) -> String {
     let mut tcp_singles = Vec::new();
     let mut udp_singles = Vec::new();
     let mut tcp_ranges = Vec::new();
@@ -430,26 +460,25 @@ r#"{{ config, pkgs, ... }}:
 
 {{
   # =========================================================================
-  # 🛡️ GESTION DU PARE-FEU & RÈGLES DE SÉCURITÉ RÉSEAU
-  # Modifié via le Dashboard ChomiamOS
+  # 🛡️ RÈGLES DE PARE-FEU PERSONNALISÉES (CHOMIAMOS)
+  # Ce fichier est géré par l'onglet Pare-feu du Dashboard ChomiamOS.
+  # Vous pouvez également y ajouter ou supprimer des règles manuellement.
   # =========================================================================
 
   networking.firewall = {{
-    enable = config.chomiamos.firewall.enable;
-
-    # Ports TCP autorisés
+    # Ports TCP personnalisés autorisés
     allowedTCPPorts = [
 {tcp_singles_str}    ];
 
-    # Ports UDP autorisés
+    # Ports UDP personnalisés autorisés
     allowedUDPPorts = [
 {udp_singles_str}    ];
 
-    # Plages de ports TCP autorisées
+    # Plages de ports TCP personnalisées autorisées
     allowedTCPPortRanges = [
 {tcp_ranges_str}    ];
 
-    # Plages de ports UDP autorisées
+    # Plages de ports UDP personnalisées autorisées
     allowedUDPPortRanges = [
 {udp_ranges_str}    ];
   }};
@@ -458,42 +487,24 @@ r#"{{ config, pkgs, ... }}:
     )
 }
 
-fn default_firewall_nix_content() -> String {
+fn default_sys_firewall_content() -> String {
     r#"{ config, pkgs, ... }:
 
 {
-  # =========================================================================
-  # 🛡️ GESTION DU PARE-FEU & RÈGLES DE SÉCURITÉ RÉSEAU
-  # =========================================================================
-
   networking.firewall = {
     enable = config.chomiamos.firewall.enable;
-
-    # Ports TCP autorisés
     allowedTCPPorts = [
       53317 # LocalSend (Partage de fichiers local)
+      8080  # OpenWebUI (Interface web IA locale)
+      8888  # SearXNG (Moteur de recherche méta privé)
     ];
-
-    # Ports UDP autorisés
     allowedUDPPorts = [
       53317 # LocalSend (Découverte d'appareils réseau local)
-    ];
-
-    # Plages de ports TCP autorisées
-    allowedTCPPortRanges = [
-      { from = 27015; to = 27030; } # Jeux Paradox (Stellaris) & Steam session
-    ];
-
-    # Plages de ports UDP autorisées
-    allowedUDPPortRanges = [
-      { from = 3000; to = 3010; }   # Moteur Clausewitz (Multi direct Paradox)
-      { from = 27000; to = 27100; } # Jeux Paradox (Stellaris / Matchmaking P2P)
     ];
   };
 }
 "#.to_string()
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -501,13 +512,17 @@ mod tests {
 
     #[test]
     fn test_parse_firewall() {
-        let content = default_firewall_nix_content();
-        let rules = parse_firewall_rules(&content);
+        let content = default_sys_firewall_content();
+        let rules = parse_firewall_rules(&content, true);
         assert!(!rules.is_empty());
         let localsend = rules.iter().find(|r| r.port == Some(53317));
         assert!(localsend.is_some());
         assert_eq!(localsend.unwrap().protocol, "both");
-        let stellaris = rules.iter().find(|r| r.from_port == Some(27015));
-        assert!(stellaris.is_some());
+        let openwebui = rules.iter().find(|r| r.port == Some(8080));
+        assert!(openwebui.is_some());
+        assert_eq!(openwebui.unwrap().protocol, "tcp");
+        let searchxng = rules.iter().find(|r| r.port == Some(8888));
+        assert!(searchxng.is_some());
+        assert_eq!(searchxng.unwrap().protocol, "tcp");
     }
 }

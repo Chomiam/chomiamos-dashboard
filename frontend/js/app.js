@@ -3455,8 +3455,12 @@ function renderFirewallRules() {
       : `<span class="fw-port-num">${r.from_port} ➔ ${r.to_port}</span>`;
 
     const statusTag = r.is_default
-      ? `<span class="fw-default-tag" title="Règle système par défaut de ChomiamOS">Par défaut</span>`
-      : `<span class="fw-custom-tag">Personnalisé</span>`;
+      ? `<span class="fw-default-tag" title="Règle système intégrée (modules/core/firewall.nix)">🔒 Système</span>`
+      : `<span class="fw-custom-tag" title="Règle personnalisée (firewall-user.nix)">Personnalisé</span>`;
+
+    const actionBtn = r.is_default
+      ? `<button type="button" class="btn-del-rule disabled" disabled title="Règle système protégée (modules/core/firewall.nix)">🔒</button>`
+      : `<button type="button" class="btn-del-rule" onclick="deleteFirewallRule('${r.id}')" title="Supprimer cette ouverture de port">🗑️</button>`;
 
     html += `
       <div class="fw-rule-item" id="fw-rule-${r.id}">
@@ -3472,9 +3476,7 @@ function renderFirewallRules() {
         </div>
         <div class="fw-rule-right">
           ${statusTag}
-          <button type="button" class="btn-del-rule" onclick="deleteFirewallRule('${r.id}')" title="Supprimer cette ouverture de port">
-            🗑️
-          </button>
+          ${actionBtn}
         </div>
       </div>
     `;
@@ -3506,7 +3508,7 @@ function updateFirewallDirtyUI() {
 
 async function applyFirewallDeploy() {
   try {
-    showToast("Enregistrement de firewall.nix...", "info");
+    showToast("Enregistrement de firewall-user.nix...", "info");
 
     await invoke("save_firewall_state", {
       enabled: currentFirewallState.enabled,
@@ -3516,7 +3518,7 @@ async function applyFirewallDeploy() {
     firewallDirty = false;
     updateFirewallDirtyUI();
 
-    showToast("Fichier modules/core/firewall.nix mis à jour avec succès !", "success");
+    showToast("Fichier firewall-user.nix mis à jour avec succès !", "success");
 
     // Lancer la reconstruction NixOS
     runTerminalTask("apply-firewall", "🛡️ Application des règles du pare-feu NixOS (nh os switch)");

@@ -108,8 +108,8 @@ fi
 if [ -f /etc/nixos/hosts/desktop/mount.nix ]; then
   cp -f /etc/nixos/hosts/desktop/mount.nix /etc/nixos/.mount.nix.backup
 fi
-if [ -f /etc/nixos/modules/core/firewall.nix ]; then
-  cp -f /etc/nixos/modules/core/firewall.nix /etc/nixos/modules/core/.firewall.nix.backup
+if [ -f /etc/nixos/firewall-user.nix ]; then
+  cp -f /etc/nixos/firewall-user.nix /etc/nixos/.firewall-user.nix.backup
 fi
 if [ -f /etc/nixos/secrets/github-token.conf ]; then
   cp -f /etc/nixos/secrets/github-token.conf /etc/nixos/secrets/.github-token.conf.backup
@@ -156,12 +156,12 @@ if ! git pull --no-rebase --no-edit origin main; then
   fi
 
   # Si firewall.nix a un conflit lors du pull, préserver les règles du pare-feu
-  if git status --porcelain | grep -q "firewall\.nix"; then
-    echo -e "\033[1;33m🛡️ Préservation de vos règles de pare-feu personnelles (firewall.nix)...\033[0m"
-    if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
-      cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
+  if git status --porcelain | grep -q "firewall-user\.nix"; then
+    echo -e "\033[1;33m🛡️ Préservation de vos règles de pare-feu personnelles (firewall-user.nix)...\033[0m"
+    if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
+      cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
     fi
-    git add modules/core/firewall.nix
+    git add firewall-user.nix
   fi
 
   git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
@@ -188,11 +188,11 @@ if [ "$DID_STASH" = "1" ]; then
       fi
       git add hosts/desktop/mount.nix
     fi
-    if git status --porcelain | grep -E "firewall\.nix"; then
-      if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
-        cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
+    if git status --porcelain | grep -E "firewall-user\.nix"; then
+      if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
+        cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
       fi
-      git add modules/core/firewall.nix
+      git add firewall-user.nix
     fi
     git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
     git stash drop || true
@@ -204,9 +204,9 @@ if [ -f /etc/nixos/.vars.nix.backup ]; then
   echo -e "\033[1;34m🛡️ Préservation de vos paramètres locaux et choix de bureau (vars.nix)...\033[0m"
   cp -f /etc/nixos/.vars.nix.backup /etc/nixos/vars.nix
 fi
-if [ -f /etc/nixos/modules/core/.firewall.nix.backup ]; then
-  echo -e "\033[1;34m🛡️ Préservation de vos règles de pare-feu personnelles (firewall.nix)...\033[0m"
-  cp -f /etc/nixos/modules/core/.firewall.nix.backup /etc/nixos/modules/core/firewall.nix
+if [ -f /etc/nixos/.firewall-user.nix.backup ]; then
+  echo -e "\033[1;34m🛡️ Préservation de vos règles de pare-feu personnelles (firewall-user.nix)...\033[0m"
+  cp -f /etc/nixos/.firewall-user.nix.backup /etc/nixos/firewall-user.nix
 fi
 
 # Détection de sécurité avancée : vérifier avec l'UID 1000 du système local

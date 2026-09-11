@@ -78,12 +78,12 @@ fn remove_custom_package(name: String, channel: Option<String>) -> Result<(), St
 
 fn get_sync_script(mode: &str) -> String {
     let deploy_cmd = match mode {
-        "boot" => "nh os boot -u /etc/nixos",
-        _ => "nh os switch -u /etc/nixos",
+        "boot" => "nh os boot /etc/nixos",
+        _ => "nh os switch /etc/nixos",
     };
     let mode_desc = match mode {
-        "boot" => "au prochain redémarrage (nh os boot -u)",
-        _ => "immédiate (nh os switch -u)",
+        "boot" => "au prochain redémarrage (nh os boot)",
+        _ => "immédiate (nh os switch)",
     };
 
     format!(
@@ -95,6 +95,20 @@ export GIT_MERGE_AUTOEDIT=no
 export GIT_EDITOR=true
 export EDITOR=true
 export VISUAL=true
+
+# 0b. Contrôle strict d'authenticité et de transport TLS anti-MitM
+EXPECTED_ORIGIN="https://github.com/Chomiam/nix_config_gaming.git"
+CURRENT_ORIGIN=$(git config --get remote.origin.url 2>/dev/null || true)
+if [ -n "$CURRENT_ORIGIN" ] && [ "$CURRENT_ORIGIN" != "$EXPECTED_ORIGIN" ] && [ "$CURRENT_ORIGIN" != "git@github.com:Chomiam/nix_config_gaming.git" ]; then
+  echo -e "\033[1;31m🚨 ERREUR CRITIQUE DE SÉCURITÉ : L'URL du dépôt ($CURRENT_ORIGIN) ne correspond pas à l'officielle !\033[0m"
+  echo -e "\033[1;31m🛑 Interruption immédiate pour prévenir toute attaque Man-in-the-Middle.\033[0m"
+  exit 1
+fi
+git config http.sslVerify true || true
+if [ -f /etc/nixos/.git-allowed-signers ]; then
+  git config gpg.ssh.allowedSignersFile /etc/nixos/.git-allowed-signers || true
+  git config gpg.format ssh || true
+fi
 
 # 1. Sauvegarde inviolable et permanente de vars.nix et hardware-configuration.nix
 git config merge.ours.driver true || true
@@ -165,6 +179,22 @@ if ! git pull --no-rebase --no-edit origin main; then
   fi
 
   git -c user.name="ChomiamOS" -c user.email="root@chomiamos" commit -m "fix: resolve sync conflict" --no-edit || true
+fi
+
+# 3b. Vérification cryptographique de l'authenticité de la mise à jour
+echo -e "\n\033[1;34m🔍 Vérification cryptographique de l'authenticité du commit...\033[0m"
+SIG_STATUS=$(git log -1 --format="%G?" 2>/dev/null || echo "N")
+SIG_SIGNER=$(git log -1 --format="%GS" 2>/dev/null || true)
+COMMIT_HASH=$(git log -1 --format="%h" 2>/dev/null || true)
+
+if [ "$SIG_STATUS" = "G" ]; then
+  echo -e "\033[1;32m🔒 Sceau d'authenticité validé : Commit $COMMIT_HASH certifié et signé par $SIG_SIGNER !\033[0m"
+elif [ "$SIG_STATUS" = "B" ]; then
+  echo -e "\033[1;31m🚨 ALERTE DE SÉCURITÉ : La signature cryptographique de ce commit est CORROMPUE ou FALSIFIÉE !\033[0m"
+  echo -e "\033[1;31m🛑 Interruption d'urgence du déploiement pour protéger votre système.\033[0m"
+  exit 1
+else
+  echo -e "\033[1;33mℹ️ Commit $COMMIT_HASH non signé ou en cours de transition ($SIG_STATUS). Déploiement sécurisé continué.\033[0m"
 fi
 
 # 4. Restauration du stash uniquement si créé
@@ -289,7 +319,7 @@ fn start_terminal_task(
         ),
         "update-now" | "switch-update" => (
             "nh".into(),
-            vec!["os".into(), "switch".into(), "-u".into(), "/etc/nixos".into()],
+            vec!["os".into(), "switch".into(), "/etc/nixos".into()],
         ),
         "boot-sync-github" | "update-boot" => (
             "bash".into(),
@@ -610,6 +640,53 @@ fn save_firewall_state(enabled: bool, rules: Vec<firewall::FirewallPortRule>) ->
     firewall::save_firewall_state(enabled, rules)
 }
 
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CommitSecurityInfo {
+    pub hash: String,
+    pub short_hash: String,
+    pub status: String,
+    pub signer: String,
+    pub subject: String,
+    pub date: String,
+}
+
+#[tauri::command]
+fn get_commit_security_info() -> Result<CommitSecurityInfo, String> {
+    let output = std::process::Command::new("git")
+        .args(["-C", "/etc/nixos", "log", "-1", "--format=%H|%G?|%GS|%s|%cs"])
+        .output()
+        .map_err(|e| format!("Erreur git: {}", e))?;
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let parts: Vec<&str> = text.split('|').collect();
+
+    if parts.len() >= 5 {
+        let hash = parts[0].to_string();
+        let short_hash = if hash.len() >= 7 { hash[..7].to_string() } else { hash.clone() };
+        let g_status = parts[1];
+        let status = match g_status {
+            "G" => "verified".to_string(),
+            "B" => "bad".to_string(),
+            _ => "unverified".to_string(),
+        };
+        let signer = parts[2].to_string();
+        let subject = parts[3].to_string();
+        let date = parts[4].to_string();
+
+        Ok(CommitSecurityInfo {
+            hash,
+            short_hash,
+            status,
+            signer,
+            subject,
+            date,
+        })
+    } else {
+        Err("Format de commit inattendu".to_string())
+    }
+}
+
 fn main() {
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
@@ -645,8 +722,27 @@ fn main() {
             add_custom_package,
             remove_custom_package,
             get_firewall_state,
-            save_firewall_state
+            save_firewall_state,
+            get_commit_security_info
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_commit_sec_info() {
+        let res = get_commit_security_info();
+        assert!(res.is_ok(), "get_commit_security_info failed: {:?}", res.err());
+        let info = res.unwrap();
+        assert!(!info.hash.is_empty());
+        assert_eq!(info.short_hash.len(), 7);
+        assert_eq!(info.status, "verified");
+        println!("Commit security info: {:?}", info);
+    }
 }

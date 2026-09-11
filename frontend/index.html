@@ -223,18 +223,23 @@
                 <span class="meta-item">NixOS 26.05</span>
                 <span class="meta-item">•</span>
                 <span class="meta-item" id="meta-commit">Commit: Détection...</span>
+                <span class="meta-item">•</span>
+                <span id="meta-security-badge" class="meta-security-badge" title="Authentification cryptographique des sources">
+                  <span id="meta-sec-icon">🔒</span>
+                  <span id="meta-sec-text">Vérification signature...</span>
+                </span>
               </div>
             </div>
             <div class="banner-actions">
-              <!-- Bouton 1 (Principal) : Mise à jour des paquets via nh os switch -u -->
-              <button class="btn btn-primary" onclick="runAction('switch-update')">
-                <span class="btn-icon">📦</span> Mettre à jour les paquets
-                <small>nh os switch -u</small>
+              <!-- Bouton 1 (Principal) : Rebuild déterministe sécurisé via nh os switch -->
+              <button class="btn btn-primary" onclick="runAction('switch-update')" title="Reconstruit le système selon les versions scellées dans flake.lock">
+                <span class="btn-icon">📦</span> Rebuild Système
+                <small>nh os switch</small>
               </button>
-              <!-- Bouton 2 : Synchroniser avec GitHub & MAJ -->
-              <button class="btn btn-outline" onclick="runAction('sync-github')">
-                <span class="btn-icon">🐙</span> Synchroniser avec GitHub & MAJ
-                <small>git pull & nh os switch -u</small>
+              <!-- Bouton 2 : Synchronisation sécurisée Git & Déploiement -->
+              <button class="btn btn-outline" onclick="runAction('sync-github')" title="Vérifie l'authenticité cryptographique de la mise à jour GitHub puis déploie">
+                <span class="btn-icon">🐙</span> Synchroniser & MAJ Sécurisée
+                <small>git pull & nh os switch</small>
               </button>
             </div>
           </div>

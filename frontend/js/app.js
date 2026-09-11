@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initPackageSearch();
   initSpeedtest();
   loadFirewallState();
+  loadCommitSecurityInfo();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
 });
@@ -1753,6 +1754,7 @@ async function checkForUpdates() {
     if (metaCommit && status.github_local_commit) {
       metaCommit.textContent = "Commit: " + status.github_local_commit;
     }
+    loadCommitSecurityInfo();
 
     const alertBanner = document.getElementById("system-update-alert");
     const alertIcon = document.getElementById("update-suggestion-icon");
@@ -3538,3 +3540,43 @@ window.addFirewallRuleFromUI = addFirewallRuleFromUI;
 window.deleteFirewallRule = deleteFirewallRule;
 window.filterFirewallRules = filterFirewallRules;
 window.applyFirewallDeploy = applyFirewallDeploy;
+
+
+// ==========================================================================
+// 8. Commit Cryptographic Security & Anti-MitM Inspection
+// ==========================================================================
+
+async function loadCommitSecurityInfo() {
+  try {
+    const info = await invoke("get_commit_security_info");
+    if (!info) return;
+
+    const badge = document.getElementById("meta-security-badge");
+    const icon = document.getElementById("meta-sec-icon");
+    const text = document.getElementById("meta-sec-text");
+    if (!badge) return;
+
+    badge.classList.remove("hidden", "verified", "unverified", "bad");
+
+    if (info.status === "verified") {
+      badge.classList.add("verified");
+      if (icon) icon.textContent = "🔒";
+      if (text) text.textContent = "Signé (" + info.short_hash + " • " + info.signer + ")";
+      badge.title = "Commit authentifié cryptographiquement par " + info.signer + "\nDate : " + info.date + "\nMessage : " + info.subject;
+    } else if (info.status === "bad") {
+      badge.classList.add("bad");
+      if (icon) icon.textContent = "🚨";
+      if (text) text.textContent = "Signature Invalide (" + info.short_hash + ")";
+      badge.title = "ALERTE CRITIQUE : La signature de ce commit est corrompue ou falsifiée !";
+    } else {
+      badge.classList.add("unverified");
+      if (icon) icon.textContent = "ℹ️";
+      if (text) text.textContent = "Non signé (" + info.short_hash + ")";
+      badge.title = "Commit non signé cryptographiquement (" + info.date + ")";
+    }
+  } catch (e) {
+    console.warn("Échec inspection signature commit:", e);
+  }
+}
+
+window.loadCommitSecurityInfo = loadCommitSecurityInfo;

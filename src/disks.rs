@@ -103,7 +103,7 @@ pub fn read_persistent_mounts() -> Vec<PersistentMountConfig> {
     results
 }
 
-pub fn write_persistent_mounts(mounts: &[PersistentMountConfig]) -> Result<(), String> {
+pub fn generate_mount_nix_content(mounts: &[PersistentMountConfig]) -> String {
     let mut tmpfiles_rules = String::new();
     let mut filesystems = String::new();
 
@@ -113,8 +113,13 @@ pub fn write_persistent_mounts(mounts: &[PersistentMountConfig]) -> Result<(), S
             m.mount_point, m.mount_point
         ));
 
+        let mut opts = m.options.clone();
+        if !opts.iter().any(|o| o == "x-gvfs-show") {
+            opts.push("x-gvfs-show".to_string());
+        }
+
         let mut opts_str = String::new();
-        for opt in &m.options {
+        for opt in &opts {
             opts_str.push_str(&format!("      \"{}\"\n", opt));
         }
 
@@ -131,7 +136,7 @@ r#"  fileSystems."{}" = {{
         ));
     }
 
-    let generated = format!(
+    format!(
 r#"{{ config, pkgs, lib, ... }}:
 
 let
@@ -150,7 +155,11 @@ in
 }}
 "#,
         tmpfiles_rules, filesystems
-    );
+    )
+}
+
+pub fn write_persistent_mounts(mounts: &[PersistentMountConfig]) -> Result<(), String> {
+    let generated = generate_mount_nix_content(mounts);
 
     let path = Path::new(MOUNT_NIX_PATH);
     if let Some(parent) = path.parent() {
@@ -160,6 +169,7 @@ in
     fs::write(path, generated)
         .map_err(|e| format!("Impossible d'écrire dans {} : {}", MOUNT_NIX_PATH, e))
 }
+
 
 #[derive(Deserialize)]
 struct LsblkItem {
@@ -210,6 +220,16 @@ pub fn list_storage_devices() -> Result<Vec<DiskDevice>, String> {
         .map_err(|e| format!("Erreur de désérialisation du JSON lsblk : {}", e))?;
 
     let persistent_mounts = read_persistent_mounts();
+
+    // Auto-migration GNOME / Nautilus : injecter x-gvfs-show si absent dans mount.nix
+    if !persistent_mounts.is_empty()
+        && persistent_mounts
+            .iter()
+            .any(|m| !m.options.iter().any(|o| o == "x-gvfs-show"))
+    {
+        let _ = write_persistent_mounts(&persistent_mounts);
+    }
+
     let mut devices = Vec::new();
 
     for b in parsed.blockdevices {
@@ -345,8 +365,17 @@ pub fn mount_storage_device(
     mounts.retain(|m| m.uuid != uuid && m.mount_point != clean_mount);
 
     let options = match fs_type.as_str() {
-        "btrfs" => vec!["defaults".into(), "nofail".into(), "compress=zstd".into()],
-        "ext4" => vec!["defaults".into(), "nofail".into()],
+        "btrfs" => vec![
+            "defaults".into(),
+            "nofail".into(),
+            "compress=zstd".into(),
+            "x-gvfs-show".into(),
+        ],
+        "ext4" => vec![
+            "defaults".into(),
+            "nofail".into(),
+            "x-gvfs-show".into(),
+        ],
         "ntfs" | "vfat" | "exfat" => vec![
             "defaults".into(),
             "nofail".into(),
@@ -354,8 +383,13 @@ pub fn mount_storage_device(
             "gid=100".into(),
             "dmask=022".into(),
             "fmask=133".into(),
+            "x-gvfs-show".into(),
         ],
-        _ => vec!["defaults".into(), "nofail".into()],
+        _ => vec![
+            "defaults".into(),
+            "nofail".into(),
+            "x-gvfs-show".into(),
+        ],
     };
 
     mounts.push(PersistentMountConfig {
@@ -370,7 +404,7 @@ pub fn mount_storage_device(
     // 2. Montage immédiat en direct avec permissions
     let username = std::env::var("USER").unwrap_or_else(|_| "chomiam".to_string());
     let script = format!(
-        "mkdir -p '{mnt}' && mount /dev/disk/by-uuid/{uuid} '{mnt}' 2>/dev/null || mount -o remount '{mnt}' 2>/dev/null ; chown -R {user}:users '{mnt}' 2>/dev/null || true",
+        "mkdir -p '{mnt}' && (mount -o x-gvfs-show /dev/disk/by-uuid/{uuid} '{mnt}' 2>/dev/null || mount /dev/disk/by-uuid/{uuid} '{mnt}' 2>/dev/null || mount -o remount,x-gvfs-show '{mnt}' 2>/dev/null) ; chown -R {user}:users '{mnt}' 2>/dev/null || true",
         mnt = clean_mount,
         uuid = uuid,
         user = username
@@ -478,4 +512,33 @@ pub fn format_storage_device(
     }
 
     Ok(format!("Partition {} formatée en {} (Label: {})", device_path, fs_type, clean_label))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_mount_nix_adds_gvfs_show() {
+        let dummy_mounts = vec![
+            PersistentMountConfig {
+                mount_point: "/mnt/hdd4to".to_string(),
+                uuid: "1234-5678".to_string(),
+                fs_type: "ext4".to_string(),
+                options: vec!["defaults".to_string(), "nofail".to_string()],
+            },
+            PersistentMountConfig {
+                mount_point: "/mnt/Emulation".to_string(),
+                uuid: "abcd-ef01".to_string(),
+                fs_type: "btrfs".to_string(),
+                options: vec!["defaults".to_string(), "compress=zstd".to_string(), "x-gvfs-show".to_string()],
+            },
+        ];
+
+        let generated = generate_mount_nix_content(&dummy_mounts);
+        assert!(generated.contains(r#""x-gvfs-show""#));
+        assert!(generated.contains(r#"fileSystems."/mnt/hdd4to""#));
+        assert!(generated.contains(r#"fileSystems."/mnt/Emulation""#));
+        assert!(generated.contains(r#"options = ["#));
+    }
 }

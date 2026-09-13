@@ -1896,11 +1896,6 @@ function applyDashboardUpdateOrChannel() {
   runAction("update-dashboard", selectedDashboardChannel);
 }
 
-function dismissUpdateAlert() {
-  const alertBanner = document.getElementById("system-update-alert");
-  if (alertBanner) alertBanner.classList.add("hidden");
-}
-
 async function restartDashboard() {
   try {
     await invoke("restart_dashboard");
@@ -1911,7 +1906,6 @@ async function restartDashboard() {
 }
 
 window.checkForUpdates = checkForUpdates;
-window.dismissUpdateAlert = dismissUpdateAlert;
 window.restartDashboard = restartDashboard;
 
 // =========================================================================

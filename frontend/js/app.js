@@ -922,12 +922,17 @@ function runTerminalTask(task, title, extra = null) {
   }, 100);
 }
 
-function runAction(action) {
+function runAction(action, customExtra = null) {
   let task = "";
   let title = "";
-  let extra = null;
+  let extra = customExtra;
 
   switch (action) {
+    case "update-dashboard":
+      task = "update-dashboard";
+      title = "Mise à jour du Dashboard ChomiamOS";
+      extra = customExtra || "stable";
+      break;
     case "switch":
       task = "apply-config";
       title = "Application de la configuration ChomiamOS (Live)";
@@ -1749,10 +1754,15 @@ window.switchToSelectedGeneration = switchToSelectedGeneration;
 // 7. Update Checker Controller (Auto-check on startup)
 // ==========================================================================
 
+let currentDashboardStatus = null;
+let selectedDashboardChannel = "stable";
+
 async function checkForUpdates() {
   try {
     const status = await invoke("check_system_updates");
     if (!status) return;
+
+    currentDashboardStatus = status;
 
     const metaCommit = document.getElementById("meta-commit");
     if (metaCommit && status.github_local_commit) {
@@ -1760,79 +1770,130 @@ async function checkForUpdates() {
     }
     loadCommitSecurityInfo();
 
-    const alertBanner = document.getElementById("system-update-alert");
-    const alertIcon = document.getElementById("update-suggestion-icon");
-    const alertTitle = document.getElementById("update-suggestion-title");
-    const alertDesc = document.getElementById("update-suggestion-desc");
-    const alertBtn = document.getElementById("update-suggestion-btn");
-    const navIndicator = document.getElementById("nav-update-indicator");
+    // 1. Mise à jour de la bulle verte de version et canal dans la navbar
+    const navDashVer = document.getElementById("nav-dashboard-version-text");
+    const navDashArrow = document.getElementById("nav-dashboard-update-arrow");
+    const channel = status.dashboard_channel || "Stable";
 
-    if (status.github_has_updates) {
-      if (alertBanner) {
-        alertBanner.classList.remove("hidden");
-        alertBanner.classList.add("is-github");
-        alertBanner.classList.remove("is-dashboard");
+    if (navDashVer) {
+      navDashVer.textContent = `v${status.current_version} • ${channel}`;
+    }
+
+    if (navDashArrow) {
+      if (status.dashboard_has_updates) {
+        navDashArrow.classList.remove("hidden");
+      } else {
+        navDashArrow.classList.add("hidden");
       }
-      if (alertIcon) alertIcon.textContent = "🐙";
-      if (alertTitle) alertTitle.textContent = "Mises à jour GitHub disponibles !";
-      if (alertDesc) {
-        const remoteSha = status.github_remote_commit || "origin/main";
-        alertDesc.innerHTML = "De nouvelles modifications sont disponibles sur GitHub (distant: <code>" + remoteSha + "</code>). Synchronisez votre système pour en bénéficier.";
-      }
-      if (alertBtn) {
-        alertBtn.innerHTML = "<span>🐙</span> Synchroniser avec GitHub";
-        alertBtn.onclick = () => runAction("sync-github");
-      }
-      if (navIndicator) {
+    }
+
+    // 2. Indicateur de synchronisation globale NixOS si changements distants
+    const navIndicator = document.getElementById("nav-update-indicator");
+    if (navIndicator) {
+      if (status.github_has_updates) {
         navIndicator.classList.remove("hidden");
         navIndicator.innerHTML = "<span>🐙</span> <span>Sync GitHub</span>";
-      }
-    } else if (status.dashboard_has_updates) {
-      if (alertBanner) {
-        alertBanner.classList.remove("hidden");
-        alertBanner.classList.add("is-dashboard");
-        alertBanner.classList.remove("is-github");
-      }
-      if (alertIcon) alertIcon.textContent = "✨";
-      if (alertTitle) alertTitle.textContent = "Nouvelle version du Dashboard disponible !";
-      if (alertDesc) {
-        alertDesc.innerHTML = "Une nouvelle mise à jour du tableau de bord a été publiée. Mettez à jour vos paquets pour l'installer.";
-      }
-      if (alertBtn) {
-        alertBtn.innerHTML = "<span>📦</span> Mettre à jour les paquets";
-        alertBtn.onclick = () => runAction("switch-update");
-      }
-      if (navIndicator) {
-        navIndicator.classList.remove("hidden");
-        navIndicator.innerHTML = "<span>✨</span> <span>MAJ Dashboard</span>";
-      }
-    } else if (status.system_needs_switch) {
-      if (alertBanner) {
-        alertBanner.classList.remove("hidden");
-        alertBanner.classList.add("is-github");
-        alertBanner.classList.remove("is-dashboard");
-      }
-      if (alertIcon) alertIcon.textContent = "⚡";
-      if (alertTitle) alertTitle.textContent = "Mise à jour prête à être déployée !";
-      if (alertDesc) {
-        alertDesc.innerHTML = "Une nouvelle version du tableau de bord ou de la configuration est prête. Déployez-la pour l'activer sur votre session.";
-      }
-      if (alertBtn) {
-        alertBtn.innerHTML = "<span>⚡</span> Déployer (nh os switch)";
-        alertBtn.onclick = () => runAction("switch");
-      }
-      if (navIndicator) {
+        navIndicator.onclick = () => runAction("sync-github");
+      } else if (status.system_needs_switch) {
         navIndicator.classList.remove("hidden");
         navIndicator.innerHTML = "<span>⚡</span> <span>Déployer MAJ</span>";
         navIndicator.onclick = () => runAction("switch");
+      } else {
+        navIndicator.classList.add("hidden");
       }
-    } else {
-      if (alertBanner) alertBanner.classList.add("hidden");
-      if (navIndicator) navIndicator.classList.add("hidden");
     }
   } catch (err) {
     console.warn("Vérification des mises à jour ignorée:", err);
   }
+}
+
+function openDashboardUpdateModal() {
+  const modal = document.getElementById("dashboard-update-modal");
+  if (!modal) return;
+
+  const currentVerEl = document.getElementById("modal-dash-current-ver");
+  const remoteVerEl = document.getElementById("modal-dash-remote-ver");
+  const statusBadgeEl = document.getElementById("modal-dash-status-badge");
+
+  const status = currentDashboardStatus || {};
+  const currentVer = status.current_version || "0.3.1";
+  const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
+  const remoteSha = status.dashboard_remote_commit ? ` (commit ${status.dashboard_remote_commit})` : "";
+  const channel = (status.dashboard_channel || "Stable").toLowerCase();
+
+  selectedDashboardChannel = channel;
+
+  if (currentVerEl) currentVerEl.textContent = `v${currentVer}${lockedSha}`;
+  if (remoteVerEl) remoteVerEl.textContent = status.dashboard_remote_commit ? `v${currentVer}${remoteSha}` : `v${currentVer} (à jour)`;
+
+  if (statusBadgeEl) {
+    if (status.dashboard_has_updates) {
+      statusBadgeEl.className = "dash-status-badge update-available";
+      statusBadgeEl.textContent = "Mise à jour disponible";
+    } else {
+      statusBadgeEl.className = "dash-status-badge up-to-date";
+      statusBadgeEl.textContent = "À jour";
+    }
+  }
+
+  // Radios de sélection de canal
+  const radioStable = document.getElementById("radio-channel-stable");
+  const radioTesting = document.getElementById("radio-channel-testing");
+  const cardStable = document.getElementById("card-channel-stable");
+  const cardTesting = document.getElementById("card-channel-testing");
+
+  if (channel === "testing") {
+    if (radioTesting) radioTesting.checked = true;
+    if (cardTesting) cardTesting.classList.add("active");
+    if (cardStable) cardStable.classList.remove("active");
+  } else {
+    if (radioStable) radioStable.checked = true;
+    if (cardStable) cardStable.classList.add("active");
+    if (cardTesting) cardTesting.classList.remove("active");
+  }
+
+  updateModalActionButton();
+  modal.classList.remove("hidden");
+}
+
+function closeDashboardUpdateModal() {
+  const modal = document.getElementById("dashboard-update-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function onDashboardChannelChange(channel) {
+  selectedDashboardChannel = channel;
+  const cardStable = document.getElementById("card-channel-stable");
+  const cardTesting = document.getElementById("card-channel-testing");
+
+  if (channel === "testing") {
+    if (cardTesting) cardTesting.classList.add("active");
+    if (cardStable) cardStable.classList.remove("active");
+  } else {
+    if (cardStable) cardStable.classList.add("active");
+    if (cardTesting) cardTesting.classList.remove("active");
+  }
+
+  updateModalActionButton();
+}
+
+function updateModalActionButton() {
+  const actionText = document.getElementById("modal-dash-action-text");
+  if (!actionText) return;
+
+  const currentChannel = (currentDashboardStatus?.dashboard_channel || "Stable").toLowerCase();
+  if (selectedDashboardChannel !== currentChannel) {
+    actionText.textContent = `Basculer vers le canal ${selectedDashboardChannel === 'testing' ? 'Testing' : 'Stable'}`;
+  } else if (currentDashboardStatus?.dashboard_has_updates) {
+    actionText.textContent = "Mettre à jour le Dashboard maintenant";
+  } else {
+    actionText.textContent = "Mettre à jour le Dashboard";
+  }
+}
+
+function applyDashboardUpdateOrChannel() {
+  closeDashboardUpdateModal();
+  runAction("update-dashboard", selectedDashboardChannel);
 }
 
 function dismissUpdateAlert() {

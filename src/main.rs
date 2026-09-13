@@ -275,8 +275,40 @@ fn start_terminal_task(
         ),
         "update-now" | "switch-update" => (
             "nh".into(),
-            vec!["os".into(), "switch".into(), "/etc/nixos".into()],
+            vec!["os".into(), "switch".into(), "-u".into(), "/etc/nixos".into()],
         ),
+        "update-dashboard" => {
+            let channel = extra.unwrap_or_else(|| "stable".into());
+            let script = format!(
+                r#"
+                set -e
+                echo "🚀 Mise à jour du Dashboard ChomiamOS..."
+                if [ "{}" = "testing" ]; then
+                    echo "🧪 Canal sélectionné : Testing (branche testing)"
+                    if grep -q "github:Chomiam/chomiamos-dashboard/testing" /etc/nixos/flake.nix; then
+                        echo "✓ Déjà configuré sur le canal testing."
+                    elif grep -q "github:Chomiam/chomiamos-dashboard" /etc/nixos/flake.nix; then
+                        echo "→ Basculement vers github:Chomiam/chomiamos-dashboard/testing..."
+                        sed -i "s|github:Chomiam/chomiamos-dashboard.*|github:Chomiam/chomiamos-dashboard/testing\";|" /etc/nixos/flake.nix
+                    fi
+                else
+                    echo "🛡️ Canal sélectionné : Stable (branche main)"
+                    if grep -q "github:Chomiam/chomiamos-dashboard/testing" /etc/nixos/flake.nix; then
+                        echo "→ Basculement vers github:Chomiam/chomiamos-dashboard (stable)..."
+                        sed -i "s|github:Chomiam/chomiamos-dashboard/testing.*|github:Chomiam/chomiamos-dashboard\";|" /etc/nixos/flake.nix
+                    fi
+                fi
+                echo "📦 Mise à jour de l entrée flake du dashboard..."
+                nix flake update chomiamos-dashboard --flake /etc/nixos
+                echo "⚡ Application du système avec nh os switch..."
+                nh os switch /etc/nixos
+                echo ""
+                echo "✅ Opération terminée avec succès ! Vous pouvez recharger le Dashboard."
+                "#,
+                channel
+            );
+            ("bash".into(), vec!["-c".into(), script])
+        },
         "boot-sync-github" | "update-boot" => (
             "bash".into(),
             vec!["-c".into(), get_sync_script("boot")],

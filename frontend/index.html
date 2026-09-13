@@ -65,13 +65,10 @@
         <button id="nav-reload-btn" class="system-status-pill" style="cursor: pointer; background: transparent; border: 1px solid var(--surface1); color: var(--subtext0);" onclick="restartDashboard()" title="Recharger / Relancer le Dashboard">
           <span>🔄</span>
         </button>
-        <div class="system-status-pill">
+        <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-kernel">Linux</span>
-        </div>
-        <div class="uptime-pill">
-          <span class="pill-icon">⏱️</span>
-          <span id="nav-uptime">--</span>
+          <span id="nav-dashboard-version-text">v0.3.1 • Stable</span>
+          <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
     </header>
@@ -191,15 +188,7 @@
           </div>
         </div>
 
-        <!-- Update Suggestion Alert Banner (S'affiche si MAJ GitHub ou Dashboard disponible) -->
-        <div id="system-update-alert" class="update-suggestion-banner hidden">
-          <div class="update-suggestion-content">
-            <span id="update-suggestion-icon" class="update-suggestion-icon">🔔</span>
-            <div>
-              <strong id="update-suggestion-title">Mise à jour disponible</strong>
-              <p id="update-suggestion-desc">Une nouvelle version ou des modifications distantes sont prêtes à être appliquées.</p>
-            </div>
-          </div>
+        
           <div class="update-suggestion-actions">
             <button id="update-suggestion-btn" class="btn btn-primary btn-sm" onclick="runAction('sync-github')">
               <span>⚡</span> Appliquer maintenant
@@ -231,10 +220,10 @@
               </div>
             </div>
             <div class="banner-actions">
-              <!-- Bouton 1 (Principal) : Rebuild déterministe sécurisé via nh os switch -->
-              <button class="btn btn-primary" onclick="runAction('switch-update')" title="Reconstruit le système selon les versions scellées dans flake.lock">
-                <span class="btn-icon">📦</span> Rebuild Système
-                <small>nh os switch</small>
+              <!-- Bouton 1 (Principal) : Mise à jour des paquets via nh os switch -u -->
+              <button class="btn btn-primary" onclick="runAction('switch-update')" title="Met à jour tous les paquets du système via nh os switch -u">
+                <span class="btn-icon">📦</span> Mise à Jour des Paquets
+                <small>nh os switch -u</small>
               </button>
               <!-- Bouton 2 : Synchronisation sécurisée Git & Déploiement -->
               <button class="btn btn-outline" onclick="runAction('sync-github')" title="Vérifie l'authenticité cryptographique de la mise à jour GitHub puis déploie">
@@ -2072,6 +2061,86 @@
           <button class="btn btn-primary" id="confirm-modal-ok-btn">
             <span id="confirm-modal-ok-icon">✓</span>
             <span id="confirm-modal-ok-text">Confirmer</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Modal Mise à Jour du Dashboard & Gestion des Canaux -->
+    <div id="dashboard-update-modal" class="modal-overlay hidden">
+      <div class="modal-card" style="max-width: 580px;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">🚀</span>
+            <div>
+              <h3>Mise à Jour du Dashboard ChomiamOS</h3>
+              <p class="modal-subtitle">Gestion des versions et du canal de distribution</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeDashboardUpdateModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="dash-version-box">
+            <div class="dash-version-row">
+              <span class="dash-ver-label">Version actuelle installée :</span>
+              <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.3.1</span>
+            </div>
+            <div class="dash-version-row">
+              <span class="dash-ver-label">Version disponible sur GitHub :</span>
+              <span id="modal-dash-remote-ver" class="dash-ver-badge remote">Recherche...</span>
+            </div>
+            <div class="dash-version-row">
+              <span class="dash-ver-label">Statut :</span>
+              <span id="modal-dash-status-badge" class="dash-status-badge up-to-date">À jour</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 18px;">
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px;">
+              Canal de mise à jour :
+            </label>
+            <div class="dash-channel-grid">
+              <label class="dash-channel-card" id="card-channel-stable">
+                <input type="radio" name="dash-channel-radio" value="stable" id="radio-channel-stable" onchange="onDashboardChannelChange('stable')">
+                <div class="dash-channel-body">
+                  <div class="dash-channel-header">
+                    <span class="dash-channel-icon">🛡️</span>
+                    <strong>Stable</strong>
+                    <span class="dash-channel-tag tag-stable">Recommandé</span>
+                  </div>
+                  <p class="dash-channel-desc">Branche <code>main</code> — Versions éprouvées et stables pour une utilisation quotidienne.</p>
+                </div>
+              </label>
+
+              <label class="dash-channel-card" id="card-channel-testing">
+                <input type="radio" name="dash-channel-radio" value="testing" id="radio-channel-testing" onchange="onDashboardChannelChange('testing')">
+                <div class="dash-channel-body">
+                  <div class="dash-channel-header">
+                    <span class="dash-channel-icon">🧪</span>
+                    <strong>Testing</strong>
+                    <span class="dash-channel-tag tag-testing">Avant-première</span>
+                  </div>
+                  <p class="dash-channel-desc">Branche <code>testing</code> — Accès anticipé aux fonctionnalités expérimentales et corrections rapides.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div id="modal-dash-info-note" class="info-alert" style="margin-top: 16px; background: rgba(137, 180, 250, 0.08); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 6px; display: flex; gap: 10px; align-items: center;">
+            <span style="font-size: 18px;">💡</span>
+            <span style="font-size: 12.5px; color: var(--subtext0); line-height: 1.4;">
+              Le changement de canal met à jour la configuration flake et reconstruit le tableau de bord automatiquement.
+            </span>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <button class="btn btn-outline" onclick="closeDashboardUpdateModal()">Fermer</button>
+          <button id="modal-dash-action-btn" class="btn btn-primary" onclick="applyDashboardUpdateOrChannel()">
+            <span id="modal-dash-action-icon">🔄</span>
+            <span id="modal-dash-action-text">Mettre à jour le Dashboard</span>
           </button>
         </div>
       </div>

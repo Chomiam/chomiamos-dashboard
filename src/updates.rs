@@ -11,6 +11,8 @@ pub struct UpdateCheckResult {
     pub dashboard_has_updates: bool,
     pub dashboard_remote_commit: Option<String>,
     pub dashboard_locked_commit: Option<String>,
+    pub dashboard_channel: String,
+    pub dashboard_remote_version: Option<String>,
     pub system_needs_switch: bool,
     pub current_version: String,
     pub message: String,
@@ -46,8 +48,6 @@ pub fn check_system_updates() -> UpdateCheckResult {
             if let Some(token) = text.split_whitespace().next() {
                 github_remote_commit = Some(token[..7.min(token.len())].to_string());
                 if !full_local_commit.is_empty() && token != full_local_commit {
-                    // Vérifier si le commit distant est déjà ancêtre du HEAD local
-                    // (ex: si l'utilisateur a des commits locaux d'avance)
                     let is_ancestor = Command::new("git")
                         .args(["-C", "/etc/nixos", "merge-base", "--is-ancestor", token, "HEAD"])
                         .status()
@@ -62,10 +62,22 @@ pub fn check_system_updates() -> UpdateCheckResult {
         }
     }
 
-    // 3. Vérification de la version du dashboard dans /etc/nixos/flake.lock vs GitHub
+    // 3. Détection du canal actuel du dashboard depuis /etc/nixos/flake.nix
+    let mut dashboard_channel = "Stable".to_string();
+    if let Ok(flake_nix) = fs::read_to_string("/etc/nixos/flake.nix") {
+        for line in flake_nix.lines() {
+            if line.contains("chomiamos-dashboard") && line.contains("/testing") {
+                dashboard_channel = "Testing".to_string();
+                break;
+            }
+        }
+    }
+
+    // 4. Vérification de la version du dashboard dans /etc/nixos/flake.lock vs GitHub
     let mut dashboard_has_updates = false;
     let mut dashboard_locked_commit = None;
     let mut dashboard_remote_commit = None;
+    let mut dashboard_remote_version = None;
 
     if let Ok(content) = fs::read_to_string("/etc/nixos/flake.lock") {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
@@ -78,11 +90,17 @@ pub fn check_system_updates() -> UpdateCheckResult {
             {
                 dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
 
+                let target_ref = if dashboard_channel == "Testing" {
+                    "refs/heads/testing"
+                } else {
+                    "refs/heads/main"
+                };
+
                 let remote_dash = Command::new("git")
                     .args([
                         "ls-remote",
                         "https://github.com/Chomiam/chomiamos-dashboard.git",
-                        "HEAD",
+                        target_ref,
                     ])
                     .output();
 
@@ -101,7 +119,7 @@ pub fn check_system_updates() -> UpdateCheckResult {
         }
     }
 
-    // 4. Vérification si la configuration locale a des modifications non déployées
+    // 5. Vérification si la configuration locale a des modifications non déployées
     let mut system_needs_switch = false;
     let sys_profile = std::path::Path::new("/nix/var/nix/profiles/system");
     if let Ok(sys_meta) = std::fs::symlink_metadata(sys_profile) {
@@ -136,7 +154,7 @@ pub fn check_system_updates() -> UpdateCheckResult {
     let message = if github_has_updates {
         "Modifications disponibles sur le dépôt GitHub de ChomiamOS".to_string()
     } else if dashboard_has_updates {
-        "Nouvelle version du Dashboard ChomiamOS disponible sur GitHub".to_string()
+        format!("Nouvelle version du Dashboard disponible sur le canal {}", dashboard_channel)
     } else if system_needs_switch {
         "Nouvelle version prête à être déployée (nh os switch)".to_string()
     } else {
@@ -150,6 +168,8 @@ pub fn check_system_updates() -> UpdateCheckResult {
         dashboard_has_updates,
         dashboard_remote_commit,
         dashboard_locked_commit,
+        dashboard_channel,
+        dashboard_remote_version,
         system_needs_switch,
         current_version,
         message,

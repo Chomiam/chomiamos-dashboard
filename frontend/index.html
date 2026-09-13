@@ -1,8 +1,17 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" style="background-color: #1e1e2e;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Critical Catppuccin Mocha Base Background to eliminate FOUC / white flash */
+    html, body {
+      background-color: #1e1e2e !important;
+      color: #cdd6f4;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
   <title>ChomiamOS Dashboard</title>
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="stylesheet" href="css/style.css">
@@ -11,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="theme-mocha">
+<body class="theme-mocha" style="background-color: #1e1e2e;">
   <div class="app-container">
     <!-- Top Navigation Bar -->
     <header class="navbar">
@@ -67,7 +76,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.3.2 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.3.3 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2076,7 +2085,7 @@
           <div class="dash-version-box">
             <div class="dash-version-row">
               <span class="dash-ver-label">Version actuelle installée :</span>
-              <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.3.2</span>
+              <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.3.3</span>
             </div>
             <div class="dash-version-row">
               <span class="dash-ver-label">Version disponible sur GitHub :</span>

@@ -282,7 +282,7 @@ fn start_terminal_task(
             let script = format!(
                 r#"
                 set -e
-                echo -e "[1;35m🚀 Mise à jour ciblée du Dashboard ChomiamOS (v0.3.2)...[0m
+                echo -e "[1;35m🚀 Mise à jour ciblée du Dashboard ChomiamOS (v0.3.3)...[0m
 "
                 nix profile remove chomiamos-dashboard 2>/dev/null || true
                 if [ "{}" = "testing" ]; then

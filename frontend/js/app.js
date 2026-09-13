@@ -1816,7 +1816,7 @@ function openDashboardUpdateModal() {
   const statusBadgeEl = document.getElementById("modal-dash-status-badge");
 
   const status = currentDashboardStatus || {};
-  const currentVer = status.current_version || "0.3.2";
+  const currentVer = status.current_version || "0.3.3";
   const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
   const remoteSha = status.dashboard_remote_commit ? ` (commit ${status.dashboard_remote_commit})` : "";
   const channel = (status.dashboard_channel || "Stable").toLowerCase();

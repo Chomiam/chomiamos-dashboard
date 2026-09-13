@@ -62,57 +62,89 @@ pub fn check_system_updates() -> UpdateCheckResult {
         }
     }
 
-    // 3. Détection du canal actuel du dashboard depuis /etc/nixos/flake.nix
+    // 3. Détection du canal actuel du dashboard et du commit installé
     let mut dashboard_channel = "Stable".to_string();
-    if let Ok(flake_nix) = fs::read_to_string("/etc/nixos/flake.nix") {
-        for line in flake_nix.lines() {
-            if line.contains("chomiamos-dashboard") && line.contains("/testing") {
-                dashboard_channel = "Testing".to_string();
-                break;
+    let mut installed_commit: Option<String> = None;
+
+    // A. Priorité au profil utilisateur (~/.nix-profile/manifest.json)
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/chomiam".into());
+    let manifest_path = format!("{}/.nix-profile/manifest.json", home);
+    if let Ok(content) = fs::read_to_string(&manifest_path) {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(dash) = json.get("elements").and_then(|e| e.get("chomiamos-dashboard")) {
+                if let Some(orig) = dash.get("originalUrl").and_then(|u| u.as_str()) {
+                    if orig.contains("/testing") {
+                        dashboard_channel = "Testing".to_string();
+                    }
+                }
+                if let Some(url) = dash.get("url").and_then(|u| u.as_str()) {
+                    if let Some(rev_part) = url.split('/').nth(2) {
+                        let clean_rev = rev_part.split('?').next().unwrap_or(rev_part);
+                        if !clean_rev.is_empty() {
+                            installed_commit = Some(clean_rev.to_string());
+                        }
+                    }
+                }
             }
         }
     }
 
-    // 4. Vérification de la version du dashboard dans /etc/nixos/flake.lock vs GitHub
+    // B. Si pas dans le profil utilisateur, lire /etc/nixos/flake.nix et flake.lock
+    if installed_commit.is_none() {
+        if let Ok(flake_nix) = fs::read_to_string("/etc/nixos/flake.nix") {
+            for line in flake_nix.lines() {
+                if line.contains("chomiamos-dashboard") && line.contains("/testing") {
+                    dashboard_channel = "Testing".to_string();
+                    break;
+                }
+            }
+        }
+
+        if let Ok(content) = fs::read_to_string("/etc/nixos/flake.lock") {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(rev) = json
+                    .get("nodes")
+                    .and_then(|n| n.get("chomiamos-dashboard"))
+                    .and_then(|d| d.get("locked"))
+                    .and_then(|l| l.get("rev"))
+                    .and_then(|r| r.as_str())
+                {
+                    installed_commit = Some(rev.to_string());
+                }
+            }
+        }
+    }
+
+    // 4. Vérification de la disponibilité d'une mise à jour sur GitHub
     let mut dashboard_has_updates = false;
     let mut dashboard_locked_commit = None;
     let mut dashboard_remote_commit = None;
     let mut dashboard_remote_version = None;
 
-    if let Ok(content) = fs::read_to_string("/etc/nixos/flake.lock") {
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(rev) = json
-                .get("nodes")
-                .and_then(|n| n.get("chomiamos-dashboard"))
-                .and_then(|d| d.get("locked"))
-                .and_then(|l| l.get("rev"))
-                .and_then(|r| r.as_str())
-            {
-                dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
+    if let Some(rev) = installed_commit {
+        dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
 
-                let target_ref = if dashboard_channel == "Testing" {
-                    "refs/heads/testing"
-                } else {
-                    "refs/heads/main"
-                };
+        let target_ref = if dashboard_channel == "Testing" {
+            "refs/heads/testing"
+        } else {
+            "refs/heads/main"
+        };
 
-                let remote_dash = Command::new("git")
-                    .args([
-                        "ls-remote",
-                        "https://github.com/Chomiam/chomiamos-dashboard.git",
-                        target_ref,
-                    ])
-                    .output();
+        let remote_dash = Command::new("git")
+            .args([
+                "ls-remote",
+                "https://github.com/Chomiam/chomiamos-dashboard.git",
+                target_ref,
+            ])
+            .output();
 
-                if let Ok(out) = remote_dash {
-                    if out.status.success() {
-                        let text = String::from_utf8_lossy(&out.stdout);
-                        if let Some(token) = text.split_whitespace().next() {
-                            dashboard_remote_commit = Some(token[..7.min(token.len())].to_string());
-                            if token != rev {
-                                dashboard_has_updates = true;
-                            }
-                        }
+        if let Ok(out) = remote_dash {
+            if out.status.success() {
+                let text = String::from_utf8_lossy(&out.stdout);
+                if let Some(token) = text.split_whitespace().next() {
+                    dashboard_remote_commit = Some(token[..7.min(token.len())].to_string());
+                    if token != rev {
+                        dashboard_has_updates = true;
                     }
                 }
             }

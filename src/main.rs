@@ -282,28 +282,29 @@ fn start_terminal_task(
             let script = format!(
                 r#"
                 set -e
-                echo "🚀 Mise à jour du Dashboard ChomiamOS..."
+                echo -e "[1;35m🚀 Mise à jour ciblée du Dashboard ChomiamOS (v0.3.2)...[0m
+"
                 if [ "{}" = "testing" ]; then
-                    echo "🧪 Canal sélectionné : Testing (branche testing)"
-                    if grep -q "github:Chomiam/chomiamos-dashboard/testing" /etc/nixos/flake.nix; then
-                        echo "✓ Déjà configuré sur le canal testing."
-                    elif grep -q "github:Chomiam/chomiamos-dashboard" /etc/nixos/flake.nix; then
-                        echo "→ Basculement vers github:Chomiam/chomiamos-dashboard/testing..."
-                        sed -i "s|github:Chomiam/chomiamos-dashboard.*|github:Chomiam/chomiamos-dashboard/testing\";|" /etc/nixos/flake.nix
-                    fi
+                    echo -e "[1;36m🧪 Canal sélectionné : Testing (branche testing)[0m"
+                    echo -e "[1;34m⚡ Téléchargement et activation ultra-rapide depuis Cachix...[0m"
+                    nix profile add --refresh github:Chomiam/chomiamos-dashboard/testing
                 else
-                    echo "🛡️ Canal sélectionné : Stable (branche main)"
-                    if grep -q "github:Chomiam/chomiamos-dashboard/testing" /etc/nixos/flake.nix; then
-                        echo "→ Basculement vers github:Chomiam/chomiamos-dashboard (stable)..."
-                        sed -i "s|github:Chomiam/chomiamos-dashboard/testing.*|github:Chomiam/chomiamos-dashboard\";|" /etc/nixos/flake.nix
-                    fi
+                    echo -e "[1;32m🛡️ Canal sélectionné : Stable (branche main)[0m"
+                    echo -e "[1;34m⚡ Téléchargement et activation ultra-rapide depuis Cachix...[0m"
+                    nix profile add --refresh github:Chomiam/chomiamos-dashboard
                 fi
-                echo "📦 Mise à jour de l entrée flake du dashboard..."
-                nix flake update chomiamos-dashboard --flake /etc/nixos
-                echo "⚡ Application du système avec nh os switch..."
-                nh os switch /etc/nixos
-                echo ""
-                echo "✅ Opération terminée avec succès ! Vous pouvez recharger le Dashboard."
+
+                # Synchronisation optionnelle de flake.lock en arrière-plan sans reconstruire tout l'OS
+                if [ -w /etc/nixos/flake.lock ]; then
+                    echo -e "
+[1;30m📦 Synchronisation de flake.lock (/etc/nixos) en arrière-plan...[0m"
+                    nix flake update chomiamos-dashboard --flake /etc/nixos 2>/dev/null || true
+                fi
+
+                echo -e "
+[1;32m✅ Dashboard mis à jour avec succès en quelques secondes (sans mot de passe root) ![0m"
+                echo -e "[1;36m💡 Cliquez sur le bouton 🔄 en haut à droite pour recharger l'interface.[0m
+"
                 "#,
                 channel
             );
@@ -484,9 +485,14 @@ fn restart_dashboard(app: AppHandle) {
     // Pour exécuter la NOUVELLE version après un nh os switch, on cible en priorité
     // le lien système actif /run/current-system/sw/bin/chomiamos-dashboard.
     let user = std::env::var("USER").unwrap_or_else(|_| "chomiam".into());
+    let home = std::env::var("HOME").unwrap_or_else(|_| format!("/home/{}", user));
+    let nix_profile_path = format!("{}/.nix-profile/bin/chomiamos-dashboard", home);
+    let nix_state_profile_path = format!("{}/.local/state/nix/profile/bin/chomiamos-dashboard", home);
     let per_user_path = format!("/etc/profiles/per-user/{}/bin/chomiamos-dashboard", user);
 
     let candidates = [
+        nix_profile_path.as_str(),
+        nix_state_profile_path.as_str(),
         "/run/current-system/sw/bin/chomiamos-dashboard",
         &per_user_path,
     ];

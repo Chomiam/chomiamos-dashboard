@@ -443,7 +443,7 @@ function populateConfigUI(c) {
   setCheck("cfg-motrix", c.media.motrix);
   setCheck("cfg-kvm", c.creation.virtualisation);
   setCheck("cfg-antigravity", c.creation.antigravity);
-  setCheck("cfg-aisuite", c.creation.ai_suite);
+  setCheck("cfg-omniroute", c.creation.omniroute);
 
   updateCategoryPillCounters();
   checkDirtyState();
@@ -535,7 +535,7 @@ function readConfigFromUI() {
 
   currentConfig.creation.virtualisation = isChecked("cfg-kvm");
   currentConfig.creation.antigravity = isChecked("cfg-antigravity");
-  currentConfig.creation.ai_suite = isChecked("cfg-aisuite");
+  currentConfig.creation.omniroute = isChecked("cfg-omniroute");
 
   updateCategoryPillCounters();
 }

@@ -68,7 +68,7 @@ pub struct CreationConfig {
     pub antigravity: bool,
     pub pear_desktop: bool,
     pub virtualisation: bool,
-    pub ai_suite: bool,
+    pub omniroute: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -196,7 +196,7 @@ impl Default for ChomiamConfig {
                 antigravity: true,
                 pear_desktop: true,
                 virtualisation: true,
-                ai_suite: false,
+                omniroute: false,
             },
             slicers: SlicersConfig::default(),
         }
@@ -353,7 +353,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.creation.antigravity = get_bool("antigravity", true);
     cfg.creation.pear_desktop = get_bool("pearDesktop", true);
     cfg.creation.virtualisation = get_bool_in_block("virtualisation", "enable", false);
-    cfg.creation.ai_suite = get_bool_in_block("aiSuite", "enable", false);
+    cfg.creation.omniroute = get_bool_in_block("omniroute", "enable", false) || get_bool_in_block("aiSuite", "enable", false);
 
     Ok(cfg)
 }
@@ -520,14 +520,13 @@ r#"{{
   kdenlive = {kdenlive};
   obsStudio = {obs_studio};
 
-  # Suite IA Locale
-  aiSuite = {{
-    enable = {ai_suite};
-    rocmOverrideGfx = "12.0.1";
-    keepAlive = "0s";
-    openWebUiPort = 8080;
-    searxPort = 8888;
+  # Passerelle IA OmniRoute (Conteneur Podman léger, 350+ fournisseurs cloud)
+  # Interface web accessible sur http://localhost:20128
+  omniroute = {{
+    enable = {omniroute};
+    port = 20128;
     openFirewall = false;
+    memoryMb = 2048;
   }};
 }}
 "#,
@@ -588,7 +587,7 @@ r#"{{
         pear_desktop = c.creation.pear_desktop,
         kdenlive = c.creation.kdenlive,
         obs_studio = c.creation.obs_studio,
-        ai_suite = c.creation.ai_suite,
+        omniroute = c.creation.omniroute,
     )
 }
 

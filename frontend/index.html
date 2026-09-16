@@ -472,6 +472,14 @@
                   <small>Bash, Zsh & Fish</small>
                 </div>
               </button>
+
+              <button type="button" class="nix-shell-subnav-btn" data-subtab="nix-subtab-systemd" onclick="switchNixShellSubtab('nix-subtab-systemd')">
+                <span class="nix-shell-subnav-icon">⚙️</span>
+                <div class="nix-shell-subnav-text">
+                  <strong>Services Systemd</strong>
+                  <small>Démons & Processus</small>
+                </div>
+              </button>
             </nav>
 
             <div class="nix-shell-sidebar-footer">
@@ -687,6 +695,103 @@
                     </button>
                   </div>
                 </div>
+              </div>
+
+            </div>
+
+            <!-- ================= SOUS-ONGLET 3 : Services Systemd ================= -->
+            <div id="nix-subtab-systemd" class="nix-shell-subtab-pane">
+              <div class="section-title">
+                <h2>Gestionnaire des Services Systemd</h2>
+                <p>Supervisez l'état des services et démons en direct. Démarrez, arrêtez ou redémarrez n'importe quel service d'un clic.</p>
+              </div>
+
+              <!-- Systemd Controls & Statistics Bar -->
+              <div class="card systemd-overview-card">
+                <div class="systemd-stats-row">
+                  <div class="systemd-stat-item">
+                    <span class="stat-label">Total :</span>
+                    <strong id="systemd-stat-total" class="stat-val">--</strong>
+                  </div>
+                  <div class="systemd-stat-item">
+                    <span class="stat-label">Actifs :</span>
+                    <strong id="systemd-stat-active" class="stat-val stat-active">--</strong>
+                  </div>
+                  <div class="systemd-stat-item">
+                    <span class="stat-label">Arrêtés :</span>
+                    <strong id="systemd-stat-inactive" class="stat-val stat-inactive">--</strong>
+                  </div>
+                  <div class="systemd-stat-item">
+                    <span class="stat-label">En échec :</span>
+                    <strong id="systemd-stat-failed" class="stat-val stat-failed">--</strong>
+                  </div>
+                </div>
+
+                <div class="systemd-scope-controls">
+                  <div class="scope-toggle-group">
+                    <button type="button" class="btn btn-sm scope-toggle-btn active" id="btn-scope-system" onclick="switchSystemdScope('system')">
+                      🖥️ Système
+                    </button>
+                    <button type="button" class="btn btn-sm scope-toggle-btn" id="btn-scope-user" onclick="switchSystemdScope('user')">
+                      👤 Session Utilisateur
+                    </button>
+                  </div>
+                  <button type="button" class="btn btn-outline btn-sm" onclick="loadSystemdServices(true)" title="Rafraîchir la liste des services">
+                    <span class="btn-icon">🔄</span> Actualiser
+                  </button>
+                </div>
+              </div>
+
+              <!-- Toolbar de Recherche & Filtrage Rapide -->
+              <div class="card systemd-toolbar-card">
+                <div class="systemd-search-box">
+                  <span class="search-icon">🔍</span>
+                  <input type="text" id="systemd-search-input" placeholder="Rechercher un service (ex: bluetooth, ssh, cups, display-manager...)" oninput="filterSystemdServices()" />
+                  <button type="button" class="search-clear-btn hidden" id="systemd-search-clear" onclick="clearSystemdSearch()">✕</button>
+                </div>
+
+                <div class="systemd-filter-pills">
+                  <button type="button" class="filter-pill active" data-status="all" onclick="setSystemdStatusFilter('all')">
+                    Tous <span id="pill-count-all" class="pill-badge">0</span>
+                  </button>
+                  <button type="button" class="filter-pill" data-status="active" onclick="setSystemdStatusFilter('active')">
+                    Actifs <span id="pill-count-active" class="pill-badge badge-green">0</span>
+                  </button>
+                  <button type="button" class="filter-pill" data-status="inactive" onclick="setSystemdStatusFilter('inactive')">
+                    Arrêtés <span id="pill-count-inactive" class="pill-badge badge-gray">0</span>
+                  </button>
+                  <button type="button" class="filter-pill" data-status="failed" onclick="setSystemdStatusFilter('failed')">
+                    En échec <span id="pill-count-failed" class="pill-badge badge-red">0</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Table des Services Systemd -->
+              <div class="card table-card systemd-table-card">
+                <div id="systemd-loading" class="systemd-state-box">
+                  <div class="spinner"></div>
+                  <p>Chargement des services systemd...</p>
+                </div>
+
+                <div id="systemd-empty" class="systemd-state-box hidden">
+                  <span class="empty-icon">🔍</span>
+                  <p>Aucun service systemd ne correspond à votre filtre.</p>
+                </div>
+
+                <table class="systemd-table hidden" id="systemd-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 30%;">Service</th>
+                      <th style="width: 14%;">Statut</th>
+                      <th style="width: 14%;">Sous-état</th>
+                      <th style="width: 20%;">Description</th>
+                      <th style="width: 22%; text-align: right;">Actions Rapides</th>
+                    </tr>
+                  </thead>
+                  <tbody id="systemd-tbody">
+                    <!-- Généré dynamiquement -->
+                  </tbody>
+                </table>
               </div>
 
             </div>
@@ -2655,6 +2760,52 @@
             <span id="modal-dash-action-icon">🔄</span>
             <span id="modal-dash-action-text">Mettre à jour le Dashboard</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SYSTEMD SERVICE LOGS MODAL ==================== -->
+    <div id="systemd-logs-modal" class="modal-overlay hidden">
+      <div class="modal-card" style="max-width: 880px; width: 92vw;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">📋</span>
+            <div>
+              <h3 id="systemd-modal-title">Journaux du service</h3>
+              <p class="modal-subtitle" id="systemd-modal-subtitle">Journalctl en temps réel</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeSystemdLogsModal()">✕</button>
+        </div>
+
+        <div class="modal-body" style="padding-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 0.8rem; color: var(--subtext0);">Nombre de lignes :</span>
+              <select id="systemd-log-lines" class="select-input" onchange="refreshSystemdLogs()" style="padding: 4px 8px; font-size: 0.8rem;">
+                <option value="50">50 lignes</option>
+                <option value="100" selected>100 lignes</option>
+                <option value="250">250 lignes</option>
+                <option value="500">500 lignes</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="refreshSystemdLogs()">
+                <span>🔄</span> Actualiser
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="copySystemdLogs()">
+                <span id="systemd-copy-icon">📋</span> Copier
+              </button>
+            </div>
+          </div>
+
+          <div class="podman-terminal-container" style="max-height: 480px; min-height: 260px;">
+            <pre id="systemd-modal-output" class="podman-terminal-pre">Chargement des journaux...</pre>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeSystemdLogsModal()">Fermer</button>
         </div>
       </div>
     </div>

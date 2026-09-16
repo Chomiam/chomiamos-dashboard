@@ -9,6 +9,8 @@ mod system;
 mod updates;
 mod network;
 use network::*;
+mod systemd;
+use systemd::{list_systemd_services, control_systemd_service as do_control_systemd_service, get_systemd_logs, SystemdOverview};
 
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
@@ -44,6 +46,27 @@ fn delete_nix_generations(ids: Vec<u32>) -> Result<String, String> {
 #[tauri::command]
 fn switch_nix_generation(id: u32) -> Result<String, String> {
     do_switch_to_generation(id)
+}
+
+#[tauri::command]
+async fn get_systemd_services(scope: String) -> Result<SystemdOverview, String> {
+    tokio::task::spawn_blocking(move || list_systemd_services(&scope))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+async fn control_systemd_service(unit_name: String, action: String, is_user: bool) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || do_control_systemd_service(&unit_name, &action, is_user))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+async fn get_systemd_service_logs(unit_name: String, lines: u32, is_user: bool) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || get_systemd_logs(&unit_name, lines, is_user))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -971,7 +994,10 @@ fn main() {
             stop_podman_container,
             start_podman_container,
             get_user_shell,
-            set_user_shell
+            set_user_shell,
+            get_systemd_services,
+            control_systemd_service,
+            get_systemd_service_logs
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

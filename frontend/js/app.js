@@ -4582,6 +4582,8 @@ function switchNixShellSubtab(subtabId) {
     loadGenerations();
   } else if (subtabId === "nix-subtab-shell") {
     loadUserShell();
+  } else if (subtabId === "nix-subtab-systemd") {
+    loadSystemdServices(false);
   }
 }
 
@@ -4693,3 +4695,344 @@ window.selectShell = selectShell;
 window.applySelectedShell = applySelectedShell;
 window.applyShellAndRebuild = applyShellAndRebuild;
 window.loadUserShell = loadUserShell;
+
+
+// =========================================================================
+// ⚙️ SYSTEMD SERVICES MANAGER : GESTIONNAIRE DES SERVICES EN DIRECT
+// =========================================================================
+
+let currentSystemdOverview = null;
+let currentSystemdScope = "system";
+let currentSystemdFilter = "all";
+let currentSystemdLogUnit = null;
+let currentSystemdLogIsUser = false;
+let systemdSearchDebounce = null;
+
+async function loadSystemdServices(forceRefresh = false) {
+  const loading = document.getElementById("systemd-loading");
+  const empty = document.getElementById("systemd-empty");
+  const table = document.getElementById("systemd-table");
+
+  if (!currentSystemdOverview || forceRefresh) {
+    if (loading) loading.classList.remove("hidden");
+    if (empty) empty.classList.add("hidden");
+    if (table) table.classList.add("hidden");
+  }
+
+  try {
+    const overview = await invoke("get_systemd_services", { scope: currentSystemdScope });
+    currentSystemdOverview = overview;
+
+    const statTotal = document.getElementById("systemd-stat-total");
+    const statActive = document.getElementById("systemd-stat-active");
+    const statInactive = document.getElementById("systemd-stat-inactive");
+    const statFailed = document.getElementById("systemd-stat-failed");
+
+    if (statTotal) statTotal.textContent = overview.total;
+    if (statActive) statActive.textContent = overview.active_count;
+    if (statInactive) statInactive.textContent = overview.inactive_count;
+    if (statFailed) statFailed.textContent = overview.failed_count;
+
+    const pillAll = document.getElementById("pill-count-all");
+    const pillActive = document.getElementById("pill-count-active");
+    const pillInactive = document.getElementById("pill-count-inactive");
+    const pillFailed = document.getElementById("pill-count-failed");
+
+    if (pillAll) pillAll.textContent = overview.total;
+    if (pillActive) pillActive.textContent = overview.active_count;
+    if (pillInactive) pillInactive.textContent = overview.inactive_count;
+    if (pillFailed) pillFailed.textContent = overview.failed_count;
+
+    if (forceRefresh) {
+      showToast("Liste des services systemd actualisée", "info");
+    }
+
+    renderSystemdServices();
+  } catch (err) {
+    console.error("Erreur chargement systemd:", err);
+    if (loading) loading.classList.add("hidden");
+    showToast("Erreur lors de la récupération des services : " + err, "error");
+  }
+}
+
+function switchSystemdScope(scope) {
+  if (scope === currentSystemdScope) return;
+  currentSystemdScope = scope;
+
+  const btnSys = document.getElementById("btn-scope-system");
+  const btnUsr = document.getElementById("btn-scope-user");
+
+  if (btnSys) btnSys.classList.toggle("active", scope === "system");
+  if (btnUsr) btnUsr.classList.toggle("active", scope === "user");
+
+  loadSystemdServices(true);
+}
+
+function setSystemdStatusFilter(status) {
+  currentSystemdFilter = status;
+
+  const pills = document.querySelectorAll(".systemd-filter-pills .filter-pill");
+  pills.forEach(p => {
+    if (p.getAttribute("data-status") === status) {
+      p.classList.add("active");
+    } else {
+      p.classList.remove("active");
+    }
+  });
+
+  renderSystemdServices();
+}
+
+function filterSystemdServices() {
+  const searchInput = document.getElementById("systemd-search-input");
+  const clearBtn = document.getElementById("systemd-search-clear");
+  if (clearBtn && searchInput) {
+    if (searchInput.value.trim().length > 0) {
+      clearBtn.classList.remove("hidden");
+    } else {
+      clearBtn.classList.add("hidden");
+    }
+  }
+
+  if (systemdSearchDebounce) clearTimeout(systemdSearchDebounce);
+  systemdSearchDebounce = setTimeout(() => {
+    renderSystemdServices();
+  }, 150);
+}
+
+function clearSystemdSearch() {
+  const searchInput = document.getElementById("systemd-search-input");
+  const clearBtn = document.getElementById("systemd-search-clear");
+  if (searchInput) searchInput.value = "";
+  if (clearBtn) clearBtn.classList.add("hidden");
+  renderSystemdServices();
+}
+
+function renderSystemdServices() {
+  const loading = document.getElementById("systemd-loading");
+  const empty = document.getElementById("systemd-empty");
+  const table = document.getElementById("systemd-table");
+  const tbody = document.getElementById("systemd-tbody");
+
+  if (loading) loading.classList.add("hidden");
+
+  if (!currentSystemdOverview || !currentSystemdOverview.services) {
+    if (empty) empty.classList.remove("hidden");
+    if (table) table.classList.add("hidden");
+    return;
+  }
+
+  const searchInput = document.getElementById("systemd-search-input");
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  const filtered = currentSystemdOverview.services.filter(svc => {
+    if (query) {
+      const matchName = svc.name.toLowerCase().includes(query);
+      const matchUnit = svc.unit.toLowerCase().includes(query);
+      const matchDesc = svc.description.toLowerCase().includes(query);
+      if (!matchName && !matchUnit && !matchDesc) return false;
+    }
+
+    const isFailed = svc.active === "failed" || svc.sub === "failed";
+    const isActive = svc.active === "active";
+
+    if (currentSystemdFilter === "active") return isActive;
+    if (currentSystemdFilter === "inactive") return !isActive && !isFailed;
+    if (currentSystemdFilter === "failed") return isFailed;
+
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    if (empty) empty.classList.remove("hidden");
+    if (table) table.classList.add("hidden");
+    return;
+  }
+
+  if (empty) empty.classList.add("hidden");
+  if (table) table.classList.remove("hidden");
+
+  if (!tbody) return;
+
+  const isUser = currentSystemdScope === "user";
+
+  tbody.innerHTML = filtered.map(svc => {
+    const isFailed = svc.active === "failed" || svc.sub === "failed";
+    const isActive = svc.active === "active";
+
+    let badgeClass = "badge-inactive";
+    let badgeLabel = "● Arrêté";
+    let icon = "⚪";
+
+    if (isFailed) {
+      badgeClass = "badge-failed";
+      badgeLabel = "✕ En échec";
+      icon = "🔴";
+    } else if (isActive) {
+      badgeClass = "badge-active";
+      badgeLabel = "● Actif";
+      icon = "🟢";
+    }
+
+    let actionButtons = "";
+    if (isActive) {
+      actionButtons += `
+        <button type="button" class="btn-action-sm btn-stop" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'stop', ${isUser})" title="Arrêter le service">
+          <span>⏹️</span> Arrêter
+        </button>
+        <button type="button" class="btn-action-sm btn-restart" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'restart', ${isUser})" title="Redémarrer le service">
+          <span>🔄</span> Redémarrer
+        </button>
+      `;
+    } else if (isFailed) {
+      actionButtons += `
+        <button type="button" class="btn-action-sm btn-start" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'start', ${isUser})" title="Démarrer le service">
+          <span>▶️</span> Démarrer
+        </button>
+        <button type="button" class="btn-action-sm btn-restart" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'restart', ${isUser})" title="Relancer le service">
+          <span>🔄</span> Relancer
+        </button>
+      `;
+    } else {
+      actionButtons += `
+        <button type="button" class="btn-action-sm btn-start" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'start', ${isUser})" title="Démarrer le service">
+          <span>▶️</span> Démarrer
+        </button>
+      `;
+    }
+
+    actionButtons += `
+      <button type="button" class="btn-action-sm btn-logs" onclick="viewSystemdLogs('${escapeHtml(svc.unit)}', ${isUser})" title="Afficher les journaux (journalctl)">
+        <span>📋</span> Logs
+      </button>
+    `;
+
+    return `
+      <tr>
+        <td>
+          <div class="systemd-unit-title">
+            <span class="unit-icon">${icon}</span>
+            <span>${escapeHtml(svc.name)}</span>
+          </div>
+          <div class="systemd-unit-desc" title="${escapeHtml(svc.description || svc.unit)}">
+            ${escapeHtml(svc.description || svc.unit)}
+          </div>
+        </td>
+        <td>
+          <span class="badge-systemd ${badgeClass}">${badgeLabel}</span>
+        </td>
+        <td>
+          <code class="systemd-sub-state">${escapeHtml(svc.sub || "inconnu")}</code>
+        </td>
+        <td>
+          <span style="font-size: 0.8rem; color: var(--subtext0);">${escapeHtml(svc.unit)}</span>
+        </td>
+        <td>
+          <div class="systemd-actions-cell">
+            ${actionButtons}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function controlSystemdUnit(unitName, action, isUser) {
+  const actionLabels = {
+    start: "Démarrage",
+    stop: "Arrêt",
+    restart: "Redémarrage"
+  };
+  const label = actionLabels[action] || action;
+
+  showToast(`${label} de ${unitName}...`, "info");
+
+  try {
+    const msg = await invoke("control_systemd_service", { unitName, action, isUser });
+    showToast(msg || `Opération ${action} réussie sur ${unitName}`, "success");
+    await loadSystemdServices(false);
+  } catch (err) {
+    showToast(`Erreur sur ${unitName} : ${err}`, "error");
+  }
+}
+
+function viewSystemdLogs(unitName, isUser) {
+  currentSystemdLogUnit = unitName;
+  currentSystemdLogIsUser = isUser;
+
+  const modal = document.getElementById("systemd-logs-modal");
+  const title = document.getElementById("systemd-modal-title");
+  const subtitle = document.getElementById("systemd-modal-subtitle");
+
+  if (title) title.textContent = `Journaux : ${unitName}`;
+  if (subtitle) subtitle.textContent = `Journalctl ${isUser ? "--user" : "--system"} -u ${unitName}`;
+  if (modal) modal.classList.remove("hidden");
+
+  fetchSystemdLogs();
+}
+
+async function fetchSystemdLogs() {
+  if (!currentSystemdLogUnit) return;
+
+  const output = document.getElementById("systemd-modal-output");
+  const linesSelect = document.getElementById("systemd-log-lines");
+  const lines = linesSelect ? parseInt(linesSelect.value, 10) : 100;
+
+  if (output) output.textContent = `Chargement des logs pour ${currentSystemdLogUnit}...`;
+
+  try {
+    const logs = await invoke("get_systemd_service_logs", {
+      unitName: currentSystemdLogUnit,
+      lines,
+      isUser: currentSystemdLogIsUser
+    });
+
+    if (output) {
+      output.textContent = logs || `Aucun journal disponible pour ${currentSystemdLogUnit}.`;
+      const container = output.parentElement;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+  } catch (err) {
+    if (output) output.textContent = `Erreur lors de la récupération des journaux : ${err}`;
+  }
+}
+
+function refreshSystemdLogs() {
+  fetchSystemdLogs();
+}
+
+function copySystemdLogs() {
+  const output = document.getElementById("systemd-modal-output");
+  const icon = document.getElementById("systemd-copy-icon");
+  if (!output) return;
+
+  navigator.clipboard.writeText(output.textContent).then(() => {
+    if (icon) icon.textContent = "✅";
+    showToast("Journaux copiés dans le presse-papier !", "success");
+    setTimeout(() => {
+      if (icon) icon.textContent = "📋";
+    }, 2000);
+  }).catch(err => {
+    showToast("Impossible de copier : " + err, "error");
+  });
+}
+
+function closeSystemdLogsModal() {
+  const modal = document.getElementById("systemd-logs-modal");
+  if (modal) modal.classList.add("hidden");
+  currentSystemdLogUnit = null;
+}
+
+window.loadSystemdServices = loadSystemdServices;
+window.switchSystemdScope = switchSystemdScope;
+window.setSystemdStatusFilter = setSystemdStatusFilter;
+window.filterSystemdServices = filterSystemdServices;
+window.clearSystemdSearch = clearSystemdSearch;
+window.controlSystemdUnit = controlSystemdUnit;
+window.viewSystemdLogs = viewSystemdLogs;
+window.fetchSystemdLogs = fetchSystemdLogs;
+window.refreshSystemdLogs = refreshSystemdLogs;
+window.copySystemdLogs = copySystemdLogs;
+window.closeSystemdLogsModal = closeSystemdLogsModal;

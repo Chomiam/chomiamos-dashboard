@@ -5454,3 +5454,390 @@ body {
     min-width: 160px;
   }
 }
+
+
+/* ==========================================================================
+   SYSTEMD SERVICES MANAGER (NIX & SHELL SUBTAB)
+   ========================================================================== */
+
+.systemd-overview-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.systemd-stats-row {
+  display: flex;
+  gap: 22px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.systemd-stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.88rem;
+}
+
+.systemd-stat-item .stat-label {
+  color: var(--overlay1);
+}
+
+.systemd-stat-item .stat-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.systemd-stat-item .stat-active {
+  color: var(--green);
+}
+
+.systemd-stat-item .stat-inactive {
+  color: var(--subtext0);
+}
+
+.systemd-stat-item .stat-failed {
+  color: var(--red);
+}
+
+.systemd-scope-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.scope-toggle-group {
+  display: inline-flex;
+  background: var(--surface0);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--surface1);
+}
+
+.scope-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--subtext0);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.scope-toggle-btn:hover {
+  color: var(--text);
+}
+
+.scope-toggle-btn.active {
+  background: var(--mantle);
+  color: var(--mauve);
+  box-shadow: var(--shadow-sm);
+}
+
+.systemd-toolbar-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.systemd-search-box {
+  position: relative;
+  flex: 1;
+  min-width: 260px;
+  max-width: 440px;
+  display: flex;
+  align-items: center;
+}
+
+.systemd-search-box input {
+  width: 100%;
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  border-radius: var(--radius-md);
+  padding: 9px 34px 9px 36px;
+  color: var(--text);
+  font-size: 0.84rem;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.systemd-search-box input:focus {
+  border-color: var(--mauve);
+}
+
+.systemd-search-box .search-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 0.95rem;
+  color: var(--overlay1);
+  pointer-events: none;
+}
+
+.systemd-search-box .search-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--overlay1);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 4px;
+}
+
+.systemd-search-box .search-clear-btn:hover {
+  color: var(--text);
+}
+
+.systemd-filter-pills {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface0);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  color: var(--subtext0);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-pill:hover {
+  background: var(--surface1);
+  color: var(--text);
+}
+
+.filter-pill.active {
+  background: rgba(203, 166, 247, 0.15);
+  border-color: var(--mauve);
+  color: var(--mauve);
+  font-weight: 600;
+}
+
+.pill-badge {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--surface1);
+  color: var(--text);
+}
+
+.filter-pill.active .pill-badge {
+  background: var(--mauve);
+  color: var(--mantle);
+}
+
+.pill-badge.badge-green {
+  background: rgba(166, 227, 161, 0.2);
+  color: var(--green);
+}
+
+.pill-badge.badge-gray {
+  background: rgba(166, 173, 200, 0.2);
+  color: var(--subtext0);
+}
+
+.pill-badge.badge-red {
+  background: rgba(243, 139, 168, 0.2);
+  color: var(--red);
+}
+
+.systemd-table-card {
+  padding: 0;
+  overflow-x: auto;
+}
+
+.systemd-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.systemd-table th {
+  background: rgba(24, 24, 37, 0.8);
+  padding: 12px 16px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--overlay1);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--surface0);
+}
+
+.systemd-table td {
+  padding: 12px 16px;
+  font-size: 0.84rem;
+  border-bottom: 1px solid rgba(49, 50, 68, 0.5);
+  vertical-align: middle;
+}
+
+.systemd-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.systemd-unit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+
+.systemd-unit-title .unit-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.systemd-unit-desc {
+  font-size: 0.75rem;
+  color: var(--overlay1);
+  margin-top: 3px;
+  max-width: 380px;
+  line-height: 1.35;
+}
+
+.badge-systemd {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.badge-systemd.badge-active {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.35);
+}
+
+.badge-systemd.badge-inactive {
+  background: rgba(108, 112, 134, 0.15);
+  color: var(--overlay1);
+  border: 1px solid rgba(108, 112, 134, 0.3);
+}
+
+.badge-systemd.badge-failed {
+  background: rgba(243, 139, 168, 0.2);
+  color: var(--red);
+  border: 1px solid rgba(243, 139, 168, 0.4);
+}
+
+.systemd-sub-state {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--subtext0);
+}
+
+.systemd-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
+}
+
+.btn-action-sm {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--surface1);
+  background: var(--surface0);
+  color: var(--text);
+}
+
+.btn-action-sm:hover {
+  transform: translateY(-1px);
+}
+
+.btn-action-sm.btn-start {
+  border-color: rgba(166, 227, 161, 0.4);
+  color: var(--green);
+  background: rgba(166, 227, 161, 0.08);
+}
+
+.btn-action-sm.btn-start:hover {
+  background: rgba(166, 227, 161, 0.2);
+}
+
+.btn-action-sm.btn-stop {
+  border-color: rgba(243, 139, 168, 0.4);
+  color: var(--red);
+  background: rgba(243, 139, 168, 0.08);
+}
+
+.btn-action-sm.btn-stop:hover {
+  background: rgba(243, 139, 168, 0.2);
+}
+
+.btn-action-sm.btn-restart {
+  border-color: rgba(137, 180, 250, 0.4);
+  color: var(--blue);
+  background: rgba(137, 180, 250, 0.08);
+}
+
+.btn-action-sm.btn-restart:hover {
+  background: rgba(137, 180, 250, 0.2);
+}
+
+.btn-action-sm.btn-logs {
+  border-color: var(--surface1);
+  color: var(--subtext0);
+}
+
+.btn-action-sm.btn-logs:hover {
+  background: var(--surface1);
+  color: var(--text);
+}
+
+.systemd-state-box {
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--subtext0);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.systemd-state-box .empty-icon {
+  font-size: 2rem;
+  opacity: 0.6;
+}

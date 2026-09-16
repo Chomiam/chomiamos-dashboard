@@ -353,7 +353,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.creation.antigravity = get_bool("antigravity", true);
     cfg.creation.pear_desktop = get_bool("pearDesktop", true);
     cfg.creation.virtualisation = get_bool_in_block("virtualisation", "enable", false);
-    cfg.creation.omniroute = get_bool_in_block("omniroute", "enable", false) || get_bool_in_block("aiSuite", "enable", false);
+    cfg.creation.omniroute = get_bool_in_block("iaSuite", "enable", false) || get_bool_in_block("aiSuite", "enable", false) || get_bool_in_block("omniroute", "enable", false);
 
     Ok(cfg)
 }
@@ -520,13 +520,10 @@ r#"{{
   kdenlive = {kdenlive};
   obsStudio = {obs_studio};
 
-  # Passerelle IA OmniRoute (Conteneur Podman léger, 350+ fournisseurs cloud)
-  # Interface web accessible sur http://localhost:20128
-  omniroute = {{
+  # Suite IA locale complète (Open WebUI, Ollama accéléré par GPU, Agent IA Hermes)
+  # Interfaces : Open WebUI sur http://localhost:8080, Hermes Dashboard sur http://localhost:9119
+  iaSuite = {{
     enable = {omniroute};
-    port = 20128;
-    openFirewall = false;
-    memoryMb = 2048;
   }};
 }}
 "#,

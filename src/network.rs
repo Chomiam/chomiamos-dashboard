@@ -867,6 +867,48 @@ pub async fn restart_podman_container(unit_name: String) -> Result<String, Strin
     }
 }
 
+#[tauri::command]
+pub async fn stop_podman_container(unit_name: String) -> Result<String, String> {
+    let target_unit = if !unit_name.ends_with(".service") {
+        format!("podman-{}.service", unit_name)
+    } else {
+        unit_name
+    };
+
+    let res = Command::new("systemctl")
+        .args(["stop", &target_unit])
+        .output()
+        .map_err(|e| format!("Erreur système: {}", e))?;
+
+    if res.status.success() {
+        Ok(format!("Conteneur {} arrêté avec succès !", target_unit))
+    } else {
+        let err = String::from_utf8_lossy(&res.stderr).to_string();
+        Err(format!("Erreur lors de l'arrêt: {}", err))
+    }
+}
+
+#[tauri::command]
+pub async fn start_podman_container(unit_name: String) -> Result<String, String> {
+    let target_unit = if !unit_name.ends_with(".service") {
+        format!("podman-{}.service", unit_name)
+    } else {
+        unit_name
+    };
+
+    let res = Command::new("systemctl")
+        .args(["start", &target_unit])
+        .output()
+        .map_err(|e| format!("Erreur système: {}", e))?;
+
+    if res.status.success() {
+        Ok(format!("Conteneur {} démarré avec succès !", target_unit))
+    } else {
+        let err = String::from_utf8_lossy(&res.stderr).to_string();
+        Err(format!("Erreur lors du démarrage: {}", err))
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

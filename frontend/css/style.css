@@ -1272,6 +1272,17 @@ body {
   border-color: var(--red);
 }
 
+.btn-success-outline {
+  background: transparent;
+  border: 1px solid rgba(166, 227, 161, 0.4);
+  color: var(--green);
+}
+
+.btn-success-outline:hover {
+  background: rgba(166, 227, 161, 0.15);
+  border-color: var(--green);
+}
+
 /* Modals */
 .modal-card {
   background: var(--base);

@@ -957,7 +957,9 @@ fn main() {
             apply_dns_server,
             get_podman_overview,
             get_podman_logs,
-            restart_podman_container
+            restart_podman_container,
+            stop_podman_container,
+            start_podman_container
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

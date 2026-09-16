@@ -4394,11 +4394,20 @@ function renderPodmanContainers() {
 
       <div class="podman-card-actions">
         <button type="button" class="btn btn-secondary btn-sm" onclick="viewContainerLogs('${escapeHtml(c.unit_name)}')">
-          <span>📜</span> Voir les logs
+          <span>📜</span> Logs
         </button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="restartPodmanUnit('${escapeHtml(c.unit_name)}')">
-          <span>🔄</span> Redémarrer
-        </button>
+        ${c.is_active ? `
+          <button type="button" class="btn btn-secondary btn-sm" onclick="restartPodmanUnit('${escapeHtml(c.unit_name)}')">
+            <span>🔄</span> Redémarrer
+          </button>
+          <button type="button" class="btn btn-danger-outline btn-sm" onclick="stopPodmanUnit('${escapeHtml(c.unit_name)}')">
+            <span>⏹️</span> Arrêter
+          </button>
+        ` : `
+          <button type="button" class="btn btn-success-outline btn-sm" onclick="startPodmanUnit('${escapeHtml(c.unit_name)}')">
+            <span>▶️</span> Démarrer
+          </button>
+        `}
       </div>
     `;
 
@@ -4505,6 +4514,30 @@ async function restartPodmanUnit(unitName) {
     await fetchPodmanLogs();
   } catch (err) {
     showToast("Erreur lors du redémarrage : " + err, "error");
+  }
+}
+
+async function stopPodmanUnit(unitName) {
+  showToast(`Arrêt de ${unitName}...`, "info");
+  try {
+    const msg = await invoke("stop_podman_container", { unitName });
+    showToast(msg || "Conteneur arrêté avec succès !", "success");
+    await loadPodmanOverview(false);
+    await fetchPodmanLogs();
+  } catch (err) {
+    showToast("Erreur lors de l'arrêt : " + err, "error");
+  }
+}
+
+async function startPodmanUnit(unitName) {
+  showToast(`Démarrage de ${unitName}...`, "info");
+  try {
+    const msg = await invoke("start_podman_container", { unitName });
+    showToast(msg || "Conteneur démarré avec succès !", "success");
+    await loadPodmanOverview(false);
+    await fetchPodmanLogs();
+  } catch (err) {
+    showToast("Erreur lors du démarrage : " + err, "error");
   }
 }
 

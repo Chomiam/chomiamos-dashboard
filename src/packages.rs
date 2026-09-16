@@ -324,6 +324,15 @@ pub fn get_system_conflicts() -> HashMap<String, String> {
         if config.emulation.azahar {
             conflicts.insert("azahar".into(), "Émulateur 3DS Azahar configuré dans vars.nix".into());
         }
+        if config.creation.antigravity {
+            conflicts.insert("antigravity-ide".into(), "IDE Antigravity configuré dans vars.nix".into());
+        }
+        if config.creation.zed {
+            conflicts.insert("zed-editor".into(), "IDE Zed configuré dans vars.nix".into());
+        }
+        if config.creation.vscode {
+            conflicts.insert("vscode".into(), "IDE Visual Studio Code configuré dans vars.nix".into());
+        }
     }
 
     conflicts

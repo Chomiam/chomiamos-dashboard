@@ -445,7 +445,9 @@ function populateConfigUI(c) {
   setCheck("cfg-localsend", c.media.localsend);
   setCheck("cfg-motrix", c.media.motrix);
   setCheck("cfg-kvm", c.creation.virtualisation);
-  setCheck("cfg-antigravity", c.creation.antigravity);
+  setCheck("cfg-ide-zed", c.creation.zed);
+  setCheck("cfg-ide-antigravity", c.creation.antigravity);
+  setCheck("cfg-ide-vscode", c.creation.vscode);
   setCheck("cfg-omniroute", c.creation.omniroute);
 
   updateCategoryPillCounters();
@@ -538,7 +540,9 @@ function readConfigFromUI() {
   currentConfig.media.motrix = isChecked("cfg-motrix");
 
   currentConfig.creation.virtualisation = isChecked("cfg-kvm");
-  currentConfig.creation.antigravity = isChecked("cfg-antigravity");
+  currentConfig.creation.zed = isChecked("cfg-ide-zed");
+  currentConfig.creation.antigravity = isChecked("cfg-ide-antigravity");
+  currentConfig.creation.vscode = isChecked("cfg-ide-vscode");
   currentConfig.creation.omniroute = isChecked("cfg-omniroute");
 
   updateCategoryPillCounters();

@@ -67,6 +67,8 @@ pub struct CreationConfig {
     pub kdenlive: bool,
     pub obs_studio: bool,
     pub antigravity: bool,
+    pub zed: bool,
+    pub vscode: bool,
     pub pear_desktop: bool,
     pub virtualisation: bool,
     pub omniroute: bool,
@@ -196,6 +198,8 @@ impl Default for ChomiamConfig {
                 kdenlive: true,
                 obs_studio: true,
                 antigravity: true,
+                zed: true,
+                vscode: false,
                 pear_desktop: true,
                 virtualisation: true,
                 omniroute: false,
@@ -353,7 +357,9 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.slicers.bambustudio = get_bool_in_block("slicers", "bambustudio", false);
     cfg.creation.kdenlive = get_bool("kdenlive", false);
     cfg.creation.obs_studio = get_bool("obsStudio", true);
-    cfg.creation.antigravity = get_bool("antigravity", true);
+    cfg.creation.antigravity = get_bool_in_block("ide", "antigravity", false) || get_bool("antigravity", true);
+    cfg.creation.zed = get_bool_in_block("ide", "zed", false) || get_bool("zed", false);
+    cfg.creation.vscode = get_bool_in_block("ide", "vscode", false) || get_bool("vscode", false);
     cfg.creation.pear_desktop = get_bool("pearDesktop", true);
     cfg.creation.virtualisation = get_bool_in_block("virtualisation", "enable", false);
     cfg.creation.omniroute = get_bool_in_block("iaSuite", "enable", false) || get_bool_in_block("aiSuite", "enable", false) || get_bool_in_block("omniroute", "enable", false);
@@ -518,8 +524,15 @@ r#"{{
   vlc = {vlc};
   mpv = {mpv};
 
-  # Productivité & Outils
+  # Environnements de Développement & IDEs (Choix multiple)
+  ide = {{
+    zed = {zed};
+    antigravity = {antigravity};
+    vscode = {vscode};
+  }};
   antigravity = {antigravity};
+  zed = {zed};
+  vscode = {vscode};
   pearDesktop = {pear_desktop};
   kdenlive = {kdenlive};
   obsStudio = {obs_studio};
@@ -586,6 +599,8 @@ r#"{{
         vlc = c.media.vlc,
         mpv = c.media.mpv,
         antigravity = c.creation.antigravity,
+        zed = c.creation.zed,
+        vscode = c.creation.vscode,
         pear_desktop = c.creation.pear_desktop,
         kdenlive = c.creation.kdenlive,
         obs_studio = c.creation.obs_studio,

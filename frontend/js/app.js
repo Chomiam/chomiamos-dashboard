@@ -1782,6 +1782,21 @@ async function checkForUpdates() {
     }
     loadCommitSecurityInfo();
 
+    // Bulle orange si un nouveau commit distant est disponible sur GitHub
+    const metaUpdateBadge = document.getElementById("meta-update-badge");
+    const metaUpdateText = document.getElementById("meta-update-text");
+    if (metaUpdateBadge) {
+      if (status.github_has_updates && status.github_remote_commit) {
+        metaUpdateBadge.classList.remove("hidden");
+        if (metaUpdateText) {
+          metaUpdateText.textContent = `Nouveau commit : ${status.github_remote_commit}`;
+        }
+        metaUpdateBadge.setAttribute("title", `Un nouveau commit (${status.github_remote_commit}) est disponible sur GitHub.\nCliquez pour synchroniser et appliquer la mise à jour.`);
+      } else {
+        metaUpdateBadge.classList.add("hidden");
+      }
+    }
+
     // 1. Mise à jour de la bulle verte de version et canal dans la navbar
     const navDashVer = document.getElementById("nav-dashboard-version-text");
     const navDashArrow = document.getElementById("nav-dashboard-update-arrow");
@@ -4878,56 +4893,54 @@ function renderSystemdServices() {
     if (isActive) {
       actionButtons += `
         <button type="button" class="btn-action-sm btn-stop" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'stop', ${isUser})" title="Arrêter le service">
-          <span>⏹️</span> Arrêter
+          <span>⏹️</span> <span class="btn-label">Arrêter</span>
         </button>
         <button type="button" class="btn-action-sm btn-restart" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'restart', ${isUser})" title="Redémarrer le service">
-          <span>🔄</span> Redémarrer
+          <span>🔄</span> <span class="btn-label">Redémarrer</span>
         </button>
       `;
     } else if (isFailed) {
       actionButtons += `
         <button type="button" class="btn-action-sm btn-start" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'start', ${isUser})" title="Démarrer le service">
-          <span>▶️</span> Démarrer
+          <span>▶️</span> <span class="btn-label">Démarrer</span>
         </button>
         <button type="button" class="btn-action-sm btn-restart" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'restart', ${isUser})" title="Relancer le service">
-          <span>🔄</span> Relancer
+          <span>🔄</span> <span class="btn-label">Relancer</span>
         </button>
       `;
     } else {
       actionButtons += `
         <button type="button" class="btn-action-sm btn-start" onclick="controlSystemdUnit('${escapeHtml(svc.unit)}', 'start', ${isUser})" title="Démarrer le service">
-          <span>▶️</span> Démarrer
+          <span>▶️</span> <span class="btn-label">Démarrer</span>
         </button>
       `;
     }
 
     actionButtons += `
       <button type="button" class="btn-action-sm btn-logs" onclick="viewSystemdLogs('${escapeHtml(svc.unit)}', ${isUser})" title="Afficher les journaux (journalctl)">
-        <span>📋</span> Logs
+        <span>📋</span> <span class="btn-label">Logs</span>
       </button>
     `;
 
     return `
       <tr>
-        <td>
+        <td class="col-service-main">
           <div class="systemd-unit-title">
             <span class="unit-icon">${icon}</span>
-            <span>${escapeHtml(svc.name)}</span>
+            <span class="unit-name-text">${escapeHtml(svc.name)}</span>
+            <span class="unit-code-badge">${escapeHtml(svc.unit)}</span>
           </div>
           <div class="systemd-unit-desc" title="${escapeHtml(svc.description || svc.unit)}">
             ${escapeHtml(svc.description || svc.unit)}
           </div>
         </td>
-        <td>
+        <td class="col-status">
           <span class="badge-systemd ${badgeClass}">${badgeLabel}</span>
         </td>
-        <td>
+        <td class="col-substate">
           <code class="systemd-sub-state">${escapeHtml(svc.sub || "inconnu")}</code>
         </td>
-        <td>
-          <span style="font-size: 0.8rem; color: var(--subtext0);">${escapeHtml(svc.unit)}</span>
-        </td>
-        <td>
+        <td class="col-actions">
           <div class="systemd-actions-cell">
             ${actionButtons}
           </div>

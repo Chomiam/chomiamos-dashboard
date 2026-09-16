@@ -217,6 +217,10 @@
                   <span id="meta-sec-icon">🔒</span>
                   <span id="meta-sec-text">Vérification signature...</span>
                 </span>
+                <span id="meta-update-badge" class="meta-update-badge hidden" title="Un nouveau commit est disponible sur GitHub. Cliquez pour synchroniser." onclick="runAction('sync-github')">
+                  <span class="meta-update-icon">✨</span>
+                  <span id="meta-update-text">Nouveau commit disponible</span>
+                </span>
               </div>
             </div>
             <div class="banner-actions">
@@ -781,11 +785,10 @@
                 <table class="systemd-table hidden" id="systemd-table">
                   <thead>
                     <tr>
-                      <th style="width: 30%;">Service</th>
-                      <th style="width: 14%;">Statut</th>
-                      <th style="width: 14%;">Sous-état</th>
-                      <th style="width: 20%;">Description</th>
-                      <th style="width: 22%; text-align: right;">Actions Rapides</th>
+                      <th class="col-service-main">Service & Description</th>
+                      <th class="col-status">Statut</th>
+                      <th class="col-substate">Sous-état</th>
+                      <th class="col-actions">Actions Rapides</th>
                     </tr>
                   </thead>
                   <tbody id="systemd-tbody">

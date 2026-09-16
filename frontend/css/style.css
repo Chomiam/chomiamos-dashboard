@@ -3654,6 +3654,40 @@ body {
   box-shadow: 0 0 12px rgba(243, 139, 168, 0.25);
 }
 
+/* Orange Badge in Maintenance Banner for New Remote Commit */
+.meta-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(250, 179, 135, 0.16);
+  color: var(--peach, #fab387);
+  border: 1px solid rgba(250, 179, 135, 0.45);
+  box-shadow: 0 0 10px rgba(250, 179, 135, 0.2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  animation: pulse-orange 2.5s infinite;
+}
+
+.meta-update-badge:hover {
+  background: rgba(250, 179, 135, 0.28);
+  border-color: var(--peach, #fab387);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 12px rgba(250, 179, 135, 0.35);
+}
+
+@keyframes pulse-orange {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(250, 179, 135, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(250, 179, 135, 0.4);
+  }
+}
+
 /* ==========================================================================
    🟢 DASHBOARD VERSION PILL & UPDATE MODAL STYLES (CATPPUCCIN MOCHA)
    ========================================================================== */
@@ -5672,27 +5706,30 @@ body {
 .systemd-table-card {
   padding: 0;
   overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .systemd-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  table-layout: auto;
 }
 
 .systemd-table th {
   background: rgba(24, 24, 37, 0.8);
-  padding: 12px 16px;
+  padding: 12px 14px;
   font-size: 0.78rem;
   font-weight: 600;
   color: var(--overlay1);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--surface0);
+  white-space: nowrap;
 }
 
 .systemd-table td {
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 0.84rem;
   border-bottom: 1px solid rgba(49, 50, 68, 0.5);
   vertical-align: middle;
@@ -5700,6 +5737,27 @@ body {
 
 .systemd-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
+}
+
+.col-service-main {
+  min-width: 180px;
+}
+
+.col-status {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.col-substate {
+  width: 105px;
+  white-space: nowrap;
+}
+
+.col-actions {
+  width: 220px;
+  min-width: 210px;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .systemd-unit-title {
@@ -5710,6 +5768,7 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.84rem;
   color: var(--text);
+  flex-wrap: wrap;
 }
 
 .systemd-unit-title .unit-icon {
@@ -5717,11 +5776,22 @@ body {
   flex-shrink: 0;
 }
 
+.unit-code-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  background: rgba(49, 50, 68, 0.6);
+  color: var(--subtext0);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface1);
+  font-weight: 400;
+}
+
 .systemd-unit-desc {
-  font-size: 0.75rem;
+  font-size: 0.76rem;
   color: var(--overlay1);
   margin-top: 3px;
-  max-width: 380px;
+  max-width: 480px;
   line-height: 1.35;
 }
 
@@ -5840,4 +5910,61 @@ body {
 .systemd-state-box .empty-icon {
   font-size: 2rem;
   opacity: 0.6;
+}
+
+
+/* Responsive adjustments for Systemd Table & Actions Column */
+.systemd-actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.btn-action-sm {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1250px) {
+  .nix-shell-layout {
+    gap: 16px;
+  }
+  .nix-shell-sidebar {
+    width: 240px;
+    padding: 16px 12px;
+  }
+  .systemd-actions-cell {
+    gap: 4px;
+  }
+  .btn-action-sm {
+    padding: 4px 6px;
+    font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 1120px) {
+  .col-substate,
+  .systemd-table th.col-substate,
+  .systemd-table td.col-substate {
+    display: none !important;
+  }
+  .unit-code-badge {
+    display: none !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .btn-action-sm span.btn-label {
+    display: none !important;
+  }
+  .btn-action-sm {
+    padding: 6px 8px;
+    font-size: 0.85rem;
+  }
+  .col-actions {
+    min-width: 110px;
+    width: auto;
+  }
 }

@@ -5401,8 +5401,8 @@ function openFolderInDolphinUI(path) {
 function closeSftpModals() {
   const m1 = document.getElementById("modal-sftp-share");
   const m2 = document.getElementById("modal-sftp-user");
-  if (m1) m1.classList.remove("active");
-  if (m2) m2.classList.remove("active");
+  if (m1) m1.classList.add("hidden");
+  if (m2) m2.classList.add("hidden");
 }
 
 function openAddShareModal() {
@@ -5419,7 +5419,7 @@ function openAddShareModal() {
   if (pathInput) pathInput.value = "/home/chomiam/Partages/nouveau_partage";
   if (descInput) descInput.value = "";
 
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.remove("hidden");
 }
 
 function editSftpShare(id) {
@@ -5440,7 +5440,7 @@ function editSftpShare(id) {
   if (pathInput) pathInput.value = share.path;
   if (descInput) descInput.value = share.description || "";
 
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.remove("hidden");
 }
 
 async function submitSaveSftpShare() {
@@ -5531,7 +5531,7 @@ function openAddUserModal() {
   const roRadio = document.querySelector('input[name="sftp-user-perm"][value="ro"]');
   if (roRadio) roRadio.checked = true;
 
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.remove("hidden");
 }
 
 function editSftpUser(username) {
@@ -5565,7 +5565,7 @@ function editSftpUser(username) {
   const permRadio = document.querySelector(`input[name="sftp-user-perm"][value="${user.permission}"]`);
   if (permRadio) permRadio.checked = true;
 
-  if (modal) modal.classList.add("active");
+  if (modal) modal.classList.remove("hidden");
 }
 
 async function submitSaveSftpUser() {

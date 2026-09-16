@@ -2958,71 +2958,79 @@
   <script src="js/app.js"></script>
 
   <!-- MODAL : AJOUTER / ÉDITER UN DOSSIER PARTAGÉ sFTP -->
-  <div id="modal-sftp-share" class="custom-modal">
-    <div class="custom-modal-backdrop" onclick="closeSftpModals()"></div>
-    <div class="custom-modal-content">
-      <div class="custom-modal-header">
-        <h3 id="modal-sftp-share-title">📁 Nouveau Dossier Partagé sFTP</h3>
-        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">×</button>
+  <div id="modal-sftp-share" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon">📁</span>
+          <div>
+            <h3 id="modal-sftp-share-title">Nouveau Dossier Partagé sFTP</h3>
+            <p class="modal-subtitle">Configuration d'un répertoire système partagé</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">✕</button>
       </div>
-      <div class="custom-modal-body">
+      <div class="modal-body">
         <input type="hidden" id="sftp-share-edit-id" value="">
-        <div class="form-group">
-          <label for="sftp-share-name">Nom du Partage <span class="text-danger">*</span></label>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-share-name">Nom du Partage <span class="text-danger">*</span></label>
           <input type="text" id="sftp-share-name" class="form-control" placeholder="ex: Public, Documents, Sauvegardes">
         </div>
-        <div class="form-group">
-          <label for="sftp-share-path">Chemin du Dossier sur la machine <span class="text-danger">*</span></label>
-          <div class="input-group">
-            <input type="text" id="sftp-share-path" class="form-control" placeholder="/home/chomiam/Partages/mon_dossier">
-          </div>
-          <small class="text-muted">Le dossier sera créé automatiquement s'il n'existe pas encore.</small>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-share-path">Chemin du Dossier sur la machine <span class="text-danger">*</span></label>
+          <input type="text" id="sftp-share-path" class="form-control" placeholder="/home/chomiam/Partages/mon_dossier">
+          <small class="text-muted" style="display:block; margin-top:4px;">Le dossier sera créé automatiquement s'il n'existe pas encore.</small>
         </div>
-        <div class="form-group">
-          <label for="sftp-share-desc">Description (facultative)</label>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-share-desc">Description (facultative)</label>
           <input type="text" id="sftp-share-desc" class="form-control" placeholder="ex: Partage pour les échanges de fichiers volumineux">
         </div>
       </div>
-      <div class="custom-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeSftpModals()">Annuler</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeSftpModals()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitSaveSftpShare()">Enregistrer le Partage</button>
       </div>
     </div>
   </div>
 
   <!-- MODAL : CRÉER / ÉDITER UN UTILISATEUR sFTP -->
-  <div id="modal-sftp-user" class="custom-modal">
-    <div class="custom-modal-backdrop" onclick="closeSftpModals()"></div>
-    <div class="custom-modal-content">
-      <div class="custom-modal-header">
-        <h3 id="modal-sftp-user-title">👤 Nouvel Utilisateur sFTP</h3>
-        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">×</button>
-      </div>
-      <div class="custom-modal-body">
-        <div class="form-group">
-          <label for="sftp-user-name">Identifiant de Connexion (Username) <span class="text-danger">*</span></label>
-          <input type="text" id="sftp-user-name" class="form-control" placeholder="ex: invité, client, partenaire">
-          <small class="text-muted">Lettres, chiffres, tirets et underscores uniquement.</small>
-        </div>
-        <div class="form-group">
-          <label for="sftp-user-password" id="lbl-sftp-user-password">Mot de Passe <span class="text-danger">*</span></label>
-          <div class="input-password-wrap">
-            <input type="password" id="sftp-user-password" class="form-control" placeholder="Définir un mot de passe sécurisé">
-            <button type="button" class="btn btn-xs btn-secondary" onclick="toggleSftpPasswordVisibility()">👁️</button>
-            <button type="button" class="btn btn-xs btn-secondary" onclick="generateSftpRandomPassword()">🎲 Générer</button>
+  <div id="modal-sftp-user" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon">👤</span>
+          <div>
+            <h3 id="modal-sftp-user-title">Nouvel Utilisateur sFTP</h3>
+            <p class="modal-subtitle">Accès sécurisé isolé avec permissions granulaires</p>
           </div>
-          <small id="sftp-user-password-hint" class="text-muted">La connexion sFTP se fera avec ce mot de passe sans nécessiter de clé SSH.</small>
         </div>
-        <div class="form-group">
-          <label for="sftp-user-share">Dossier Racine Assigné <span class="text-danger">*</span></label>
-          <select id="sftp-user-share" class="form-control">
+        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-user-name">Identifiant de Connexion (Username) <span class="text-danger">*</span></label>
+          <input type="text" id="sftp-user-name" class="form-control" placeholder="ex: invité, client, partenaire">
+          <small class="text-muted" style="display:block; margin-top:4px;">Lettres, chiffres, tirets et underscores uniquement.</small>
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-user-password" id="lbl-sftp-user-password">Mot de Passe <span class="text-danger">*</span></label>
+          <div class="input-password-wrap" style="display:flex; gap:8px;">
+            <input type="password" id="sftp-user-password" class="form-control" placeholder="Définir un mot de passe sécurisé">
+            <button type="button" class="btn btn-outline btn-sm" onclick="toggleSftpPasswordVisibility()">👁️</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="generateSftpRandomPassword()">🎲 Générer</button>
+          </div>
+          <small id="sftp-user-password-hint" class="text-muted" style="display:block; margin-top:4px;">La connexion sFTP se fera avec ce mot de passe sans nécessiter de clé SSH.</small>
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" for="sftp-user-share">Dossier Racine Assigné <span class="text-danger">*</span></label>
+          <select id="sftp-user-share" class="fw-select" style="width:100%;">
             <!-- Rempli dynamiquement avec les partages -->
           </select>
-          <small class="text-muted">L'utilisateur sera confiné dans ce dossier (environnement sFTP isolé).</small>
+          <small class="text-muted" style="display:block; margin-top:4px;">L'utilisateur sera confiné dans ce dossier (environnement sFTP isolé).</small>
         </div>
         
-        <div class="form-group">
-          <label>Niveau de Permissions <span class="text-danger">*</span></label>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label">Niveau de Permissions <span class="text-danger">*</span></label>
           <div class="sftp-permission-selector">
             <label class="sftp-perm-card">
               <input type="radio" name="sftp-user-perm" value="ro" checked>
@@ -3051,15 +3059,15 @@
           </div>
         </div>
 
-        <div class="form-group form-check">
-          <label class="checkbox-label">
+        <div class="form-group form-check" style="margin-bottom: 8px;">
+          <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
             <input type="checkbox" id="sftp-user-enabled" checked>
             <span>Compte actif et autorisé à se connecter</span>
           </label>
         </div>
       </div>
-      <div class="custom-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeSftpModals()">Annuler</button>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeSftpModals()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitSaveSftpUser()">Enregistrer l'Utilisateur</button>
       </div>
     </div>

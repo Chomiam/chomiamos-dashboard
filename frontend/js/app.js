@@ -58,6 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initPackageSearch();
   initSpeedtest();
   loadFirewallState();
+  initNetworkCenter();
   loadCommitSecurityInfo();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
@@ -89,6 +90,7 @@ function initTabs() {
           }, 50);
         } else if (targetId === "tab-firewall") {
           loadFirewallState();
+  initNetworkCenter();
         }
       }
     });
@@ -3890,3 +3892,590 @@ async function loadCommitSecurityInfo() {
 }
 
 window.loadCommitSecurityInfo = loadCommitSecurityInfo;
+
+
+// =========================================================================
+// 🌐 CENTRE RÉSEAU : SOUS-NAVIGATION, GESTION DNS & CONTENEURS PODMAN
+// =========================================================================
+
+let currentDnsCatalog = null;
+let selectedDnsProviderId = "default";
+let activeDnsFilterCategory = "all";
+let dnsPingCache = {};
+let currentPodmanOverview = null;
+let currentPodmanLogUnit = null;
+
+function initNetworkCenter() {
+  loadDnsCatalog(false);
+  loadPodmanOverview(false);
+}
+
+function switchNetworkSubtab(subtabId) {
+  const subnavBtns = document.querySelectorAll(".net-subnav-btn");
+  subnavBtns.forEach(btn => {
+    if (btn.getAttribute("data-subtab") === subtabId) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+
+  const panes = document.querySelectorAll(".net-subtab-pane");
+  panes.forEach(pane => pane.classList.remove("active"));
+
+  const targetPane = document.getElementById(subtabId);
+  if (targetPane) {
+    targetPane.classList.add("active");
+  }
+
+  if (subtabId === "net-subtab-dns") {
+    if (!currentDnsCatalog) {
+      loadDnsCatalog(true);
+    }
+  } else if (subtabId === "net-subtab-podman") {
+    loadPodmanOverview(false);
+  }
+}
+
+// -------------------------------------------------------------------------
+// GESTION DES RÉSOLVEURS DNS
+// -------------------------------------------------------------------------
+
+async function loadDnsCatalog(autoPing = false) {
+  try {
+    const catalog = await invoke("get_dns_catalog");
+    if (!catalog) return;
+
+    currentDnsCatalog = catalog;
+
+    // Mise à jour de la bannière DNS actif
+    const displayEl = document.getElementById("dns-current-display");
+    const tagEl = document.getElementById("dns-current-provider-tag");
+    if (displayEl) displayEl.textContent = catalog.current_dns || "Automatique (DHCP)";
+
+    const activeProvider = catalog.providers.find(p => p.id === catalog.active_provider_id);
+    if (tagEl) {
+      tagEl.textContent = activeProvider ? activeProvider.name : "Personnalisé / Système";
+    }
+
+    // Fournisseur sélectionné par défaut
+    selectedDnsProviderId = catalog.active_provider_id || "default";
+
+    // Remplir les champs personnalisés si existants
+    const inputPrim = document.getElementById("dns-input-primary");
+    const inputSec = document.getElementById("dns-input-secondary");
+    if (inputPrim && catalog.custom_primary) inputPrim.value = catalog.custom_primary;
+    if (inputSec && catalog.custom_secondary) inputSec.value = catalog.custom_secondary;
+
+    renderDnsCards();
+    updateDnsApplyAnchor();
+
+    if (autoPing) {
+      pingAllDnsServers();
+    }
+  } catch (err) {
+    console.error("Erreur chargement catalogue DNS :", err);
+  }
+}
+
+function renderDnsCards() {
+  const container = document.getElementById("dns-cards-container");
+  if (!container || !currentDnsCatalog) return;
+
+  container.innerHTML = "";
+
+  currentDnsCatalog.providers.forEach(p => {
+    // Filtrage par catégorie
+    if (activeDnsFilterCategory !== "all" && p.category !== activeDnsFilterCategory && p.id !== "custom" && p.id !== "default") {
+      return;
+    }
+
+    const isSelected = p.id === selectedDnsProviderId;
+    const isSystemActive = p.id === currentDnsCatalog.active_provider_id;
+
+    const card = document.createElement("div");
+    card.className = `dns-card ${isSelected ? "selected" : ""} ${isSystemActive ? "active-system" : ""}`;
+    card.setAttribute("data-provider-id", p.id);
+    card.onclick = () => selectDnsProvider(p.id);
+
+    // Ping badge
+    let pingText = "-- ms";
+    let pingClass = "testing";
+    const cachedPing = dnsPingCache[p.primary_ip];
+    if (cachedPing !== undefined) {
+      if (cachedPing === null) {
+        pingText = "Injoignable";
+        pingClass = "slow";
+      } else {
+        pingText = `⚡ ${cachedPing} ms`;
+        if (cachedPing < 30) pingClass = "fast";
+        else if (cachedPing < 70) pingClass = "good";
+        else if (cachedPing < 150) pingClass = "medium";
+        else pingClass = "slow";
+      }
+    } else if (p.primary_ip === "" || p.primary_ip === "Automatique") {
+      pingText = "Système";
+      pingClass = "good";
+    }
+
+    const tagsHtml = (p.tags || []).map(t => `<span class="dns-tag-pill">${escapeHtml(t)}</span>`).join("");
+
+    const ipsDisplay = p.primary_ip && p.primary_ip !== "Automatique" 
+      ? `<span>${escapeHtml(p.primary_ip)}${p.secondary_ip ? ' &nbsp;|&nbsp; ' + escapeHtml(p.secondary_ip) : ''}</span>`
+      : `<span>Gestion DHCP / Automatique</span>`;
+
+    card.innerHTML = `
+      <div class="dns-card-header">
+        <div class="dns-card-title-group">
+          <span class="dns-card-icon">${p.icon || '⚡'}</span>
+          <div>
+            <h4>${escapeHtml(p.name)}</h4>
+          </div>
+        </div>
+        <div class="dns-card-badges">
+          ${isSystemActive ? '<span class="dns-card-active-tag">Actif</span>' : ''}
+          <span class="dns-ping-badge ${pingClass}" id="dns-badge-${p.id}">${pingText}</span>
+        </div>
+      </div>
+      <p class="dns-card-desc">${escapeHtml(p.description)}</p>
+      <div class="dns-ips-box">
+        <small>Adresses IPv4 :</small>
+        ${ipsDisplay}
+      </div>
+      <div class="dns-tags-row">
+        ${tagsHtml}
+      </div>
+      <div class="dns-card-radio-wrap">
+        <button type="button" class="dns-select-btn">
+          ${isSelected ? '✓ Sélectionné' : 'Sélectionner'}
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+}
+
+function filterDnsCategory(category) {
+  activeDnsFilterCategory = category;
+  const buttons = document.querySelectorAll(".dns-filter-btn");
+  buttons.forEach(btn => {
+    if (btn.getAttribute("data-cat") === category) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+  renderDnsCards();
+}
+
+function selectDnsProvider(id) {
+  selectedDnsProviderId = id;
+  const customBox = document.getElementById("dns-custom-box");
+  if (customBox) {
+    if (id === "custom") {
+      customBox.classList.remove("hidden");
+    } else {
+      customBox.classList.add("hidden");
+    }
+  }
+
+  renderDnsCards();
+  updateDnsApplyAnchor();
+}
+
+function onCustomDnsChange() {
+  updateDnsApplyAnchor();
+}
+
+function updateDnsApplyAnchor() {
+  if (!currentDnsCatalog) return;
+  const provider = currentDnsCatalog.providers.find(p => p.id === selectedDnsProviderId);
+  const titleEl = document.getElementById("dns-anchor-selected-title");
+  const subEl = document.getElementById("dns-anchor-selected-sub");
+
+  if (titleEl) {
+    if (selectedDnsProviderId === "custom") {
+      const prim = document.getElementById("dns-input-primary")?.value.trim() || "";
+      titleEl.textContent = prim ? `DNS Personnalisé : ${prim}` : "DNS Personnalisé (Saisir IP)";
+    } else if (provider) {
+      titleEl.textContent = `Fournisseur sélectionné : ${provider.name}`;
+    }
+  }
+
+  if (subEl) {
+    if (selectedDnsProviderId === currentDnsCatalog.active_provider_id) {
+      subEl.textContent = "Actuellement configuré sur votre système NixOS";
+    } else {
+      subEl.textContent = "Prêt pour application immédiate (à chaud) ou enregistrement permanent";
+    }
+  }
+}
+
+async function pingAllDnsServers() {
+  if (!currentDnsCatalog) return;
+
+  const spinIcon = document.getElementById("dns-ping-spin");
+  if (spinIcon) spinIcon.classList.add("spinning");
+
+  // Collecter toutes les adresses IP uniques
+  const ips = [];
+  currentDnsCatalog.providers.forEach(p => {
+    if (p.primary_ip && p.primary_ip !== "Automatique") {
+      if (!ips.includes(p.primary_ip)) ips.push(p.primary_ip);
+    }
+  });
+
+  // Mettre à jour l'état visuel en test
+  currentDnsCatalog.providers.forEach(p => {
+    const badge = document.getElementById(`dns-badge-${p.id}`);
+    if (badge && p.primary_ip && p.primary_ip !== "Automatique") {
+      badge.textContent = "Test...";
+      badge.className = "dns-ping-badge testing";
+    }
+  });
+
+  try {
+    const results = await invoke("ping_dns_servers", { ips });
+    if (results) {
+      Object.assign(dnsPingCache, results);
+      renderDnsCards();
+      showToast("Latence des résolveurs DNS actualisée !", "info");
+    }
+  } catch (err) {
+    console.error("Erreur lors du ping des serveurs DNS :", err);
+  } finally {
+    if (spinIcon) spinIcon.classList.remove("spinning");
+  }
+}
+
+async function pingCustomDns() {
+  const prim = document.getElementById("dns-input-primary")?.value.trim();
+  const sec = document.getElementById("dns-input-secondary")?.value.trim();
+  const ips = [];
+  if (prim) ips.push(prim);
+  if (sec) ips.push(sec);
+
+  if (ips.length === 0) {
+    showToast("Veuillez saisir au moins une adresse IPv4 valide", "error");
+    return;
+  }
+
+  try {
+    const results = await invoke("ping_dns_servers", { ips });
+    if (results) {
+      let msg = "";
+      ips.forEach(ip => {
+        const ms = results[ip];
+        msg += `${ip} : ${ms !== null ? ms + " ms" : "Injoignable"} | `;
+      });
+      showToast(msg.slice(0, -3), "info");
+    }
+  } catch (err) {
+    showToast("Erreur lors du test de latence : " + err, "error");
+  }
+}
+
+async function applySelectedDns(applyRuntime, savePermanent) {
+  const customIps = [];
+  if (selectedDnsProviderId === "custom") {
+    const prim = document.getElementById("dns-input-primary")?.value.trim() || "";
+    const sec = document.getElementById("dns-input-secondary")?.value.trim() || "";
+    if (!prim) {
+      showToast("Veuillez renseigner au moins l'adresse IP primaire", "error");
+      return;
+    }
+    customIps.push(prim);
+    if (sec) customIps.push(sec);
+  }
+
+  try {
+    const msg = await invoke("apply_dns_server", {
+      providerId: selectedDnsProviderId,
+      customIps,
+      applyRuntime,
+      savePermanent,
+    });
+
+    showToast(msg || "Serveurs DNS appliqués avec succès !", "success");
+    await loadDnsCatalog(false);
+  } catch (err) {
+    console.error("Erreur application DNS :", err);
+    showToast("Erreur application DNS : " + err, "error");
+  }
+}
+
+// -------------------------------------------------------------------------
+// GESTION & ACTIVITÉ DES CONTENEURS PODMAN
+// -------------------------------------------------------------------------
+
+async function loadPodmanOverview(showToastFlag = false) {
+  try {
+    const overview = await invoke("get_podman_overview");
+    if (!overview) return;
+
+    currentPodmanOverview = overview;
+
+    // 1. Stats Bar
+    const runningEl = document.getElementById("podman-stat-running");
+    const memoryEl = document.getElementById("podman-stat-memory");
+    const portsEl = document.getElementById("podman-stat-ports");
+    const versionEl = document.getElementById("podman-stat-version");
+    const badgeEl = document.getElementById("podman-badge-count");
+    const countBadgeEl = document.getElementById("podman-containers-badge");
+
+    if (runningEl) runningEl.textContent = `${overview.running_containers} / ${overview.total_containers}`;
+    if (memoryEl) memoryEl.textContent = overview.total_memory_human || "0 Mo";
+
+    let totalPorts = 0;
+    overview.containers.forEach(c => {
+      totalPorts += (c.ports || []).length;
+    });
+    if (portsEl) portsEl.textContent = totalPorts.toString();
+    if (versionEl) versionEl.textContent = overview.engine_version.replace("podman version ", "Podman ");
+    if (badgeEl) badgeEl.textContent = overview.running_containers.toString();
+    if (countBadgeEl) countBadgeEl.textContent = `${overview.total_containers} service(s) OCI`;
+
+    renderPodmanContainers();
+    populatePodmanLogSelect();
+
+    if (showToastFlag) {
+      showToast("Activité des conteneurs Podman actualisée !", "info");
+    }
+  } catch (err) {
+    console.error("Erreur chargement aperçu Podman :", err);
+  }
+}
+
+function renderPodmanContainers() {
+  const grid = document.getElementById("podman-containers-grid");
+  if (!grid || !currentPodmanOverview) return;
+
+  grid.innerHTML = "";
+
+  if (currentPodmanOverview.containers.length === 0) {
+    grid.innerHTML = `
+      <div class="card" style="padding: 24px; text-align: center; grid-column: 1 / -1;">
+        <span style="font-size: 2rem; display: block; margin-bottom: 8px;">🦭</span>
+        <p style="color: var(--subtext0);">Aucun conteneur OCI/Podman configuré ou actif actuellement.</p>
+        <small style="color: var(--overlay1);">Les conteneurs de la Suite IA locale (Open WebUI, Hermes Agent) apparaîtront ici dès leur activation.</small>
+      </div>
+    `;
+    return;
+  }
+
+  currentPodmanOverview.containers.forEach(c => {
+    const card = document.createElement("div");
+    card.className = `podman-card ${c.is_active ? "running" : "stopped"}`;
+
+    const icon = c.name.includes("open-webui") ? "🌐" : c.name.includes("hermes") ? "🤖" : "📦";
+
+    // Ports chips
+    let portsHtml = "";
+    if (c.ports && c.ports.length > 0) {
+      portsHtml = c.ports.map(p => {
+        if (p.url && c.is_active) {
+          return `<a href="#" class="podman-port-chip" onclick="openExternalBrowserUrl('${p.url}'); return false;" title="Ouvrir dans le navigateur">
+            <span>🚪 Port ${p.host_port} (${escapeHtml(p.protocol)})</span>
+            <span>↗</span>
+          </a>`;
+        } else {
+          return `<span class="podman-port-chip-plain">🚪 Port ${p.host_port} (${escapeHtml(p.protocol)})</span>`;
+        }
+      }).join("");
+    } else {
+      portsHtml = `<span style="font-size: 0.78rem; color: var(--overlay1);">Aucun port mappé ou mode host direct</span>`;
+    }
+
+    // Config parameters
+    let configItemsHtml = "";
+    if (c.env_summary) {
+      const keys = Object.keys(c.env_summary);
+      configItemsHtml = keys.slice(0, 4).map(k => `
+        <div class="podman-config-item">
+          <span class="podman-config-key">${escapeHtml(k)} :</span>
+          <span class="podman-config-val">${escapeHtml(c.env_summary[k])}</span>
+        </div>
+      `).join("");
+    }
+
+    card.innerHTML = `
+      <div class="podman-card-header">
+        <div class="podman-card-identity">
+          <span class="podman-card-icon">${icon}</span>
+          <div>
+            <h4>${escapeHtml(c.display_name)}</h4>
+            <small>${escapeHtml(c.unit_name)}</small>
+          </div>
+        </div>
+        <span class="podman-status-badge ${c.is_active ? "active" : "stopped"}">
+          ● ${escapeHtml(c.status_text)}
+        </span>
+      </div>
+
+      <div class="podman-card-image" title="${escapeHtml(c.image)}">
+        🐳 ${escapeHtml(c.image)}
+      </div>
+
+      <div class="podman-metrics-row">
+        <div class="podman-metric-item">
+          <span>💾</span>
+          <div>
+            <strong>${escapeHtml(c.memory_human)}</strong>
+            <small>Mémoire RAM</small>
+          </div>
+        </div>
+        <div class="podman-metric-item">
+          <span>⚙️</span>
+          <div>
+            <strong>${c.cpu_usage_sec} s</strong>
+            <small>Temps CPU</small>
+          </div>
+        </div>
+        <div class="podman-metric-item">
+          <span>🌐</span>
+          <div>
+            <strong>${escapeHtml(c.network_mode.split(' ')[0])}</strong>
+            <small>Mode Réseau</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="podman-ports-group">
+        <span class="podman-ports-label">Accès Réseau & Interfaces :</span>
+        <div class="podman-ports-list">
+          ${portsHtml}
+        </div>
+      </div>
+
+      ${configItemsHtml ? `
+        <div class="podman-config-box">
+          <span class="podman-config-title">Paramètres & Choix de Configuration</span>
+          <div class="podman-config-list">
+            ${configItemsHtml}
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="podman-card-actions">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="viewContainerLogs('${escapeHtml(c.unit_name)}')">
+          <span>📜</span> Voir les logs
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="restartPodmanUnit('${escapeHtml(c.unit_name)}')">
+          <span>🔄</span> Redémarrer
+        </button>
+      </div>
+    `;
+
+    grid.appendChild(card);
+  });
+}
+
+function populatePodmanLogSelect() {
+  const select = document.getElementById("podman-logs-container-select");
+  if (!select || !currentPodmanOverview) return;
+
+  const prevValue = select.value;
+  select.innerHTML = "";
+
+  currentPodmanOverview.containers.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.unit_name;
+    opt.textContent = `${c.name} (${c.is_active ? 'Actif' : 'Arrêté'})`;
+    select.appendChild(opt);
+  });
+
+  if (prevValue && currentPodmanOverview.containers.some(c => c.unit_name === prevValue)) {
+    select.value = prevValue;
+  } else if (currentPodmanOverview.containers.length > 0) {
+    select.value = currentPodmanOverview.containers[0].unit_name;
+    currentPodmanLogUnit = select.value;
+    fetchPodmanLogs();
+  }
+}
+
+function onPodmanLogContainerChange() {
+  const select = document.getElementById("podman-logs-container-select");
+  if (select) {
+    currentPodmanLogUnit = select.value;
+    fetchPodmanLogs();
+  }
+}
+
+function viewContainerLogs(unitName) {
+  const select = document.getElementById("podman-logs-container-select");
+  if (select) {
+    select.value = unitName;
+    currentPodmanLogUnit = unitName;
+    fetchPodmanLogs();
+  }
+
+  const logsSection = document.getElementById("podman-logs-section");
+  if (logsSection) {
+    logsSection.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+async function fetchPodmanLogs() {
+  const select = document.getElementById("podman-logs-container-select");
+  const linesSelect = document.getElementById("podman-logs-lines-select");
+  const output = document.getElementById("podman-terminal-output");
+
+  const unitName = select ? select.value : currentPodmanLogUnit;
+  const lines = linesSelect ? parseInt(linesSelect.value, 10) : 100;
+
+  if (!unitName || !output) return;
+
+  output.textContent = `Chargement des logs pour ${unitName}...`;
+
+  try {
+    const logs = await invoke("get_podman_logs", { unitName, lines });
+    if (logs) {
+      output.textContent = logs;
+      // Défilement automatique vers le bas
+      const container = output.parentElement;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+    } else {
+      output.textContent = `Aucun journal disponible pour ${unitName}.`;
+    }
+  } catch (err) {
+    output.textContent = `Erreur lors de la lecture des logs : ${err}`;
+  }
+}
+
+function copyPodmanLogs() {
+  const output = document.getElementById("podman-terminal-output");
+  const copyIcon = document.getElementById("podman-copy-icon");
+  if (!output) return;
+
+  navigator.clipboard.writeText(output.textContent).then(() => {
+    showToast("Logs copiés dans le presse-papier !", "info");
+    if (copyIcon) {
+      copyIcon.textContent = "✅";
+      setTimeout(() => { copyIcon.textContent = "📋"; }, 1500);
+    }
+  }).catch(err => {
+    showToast("Impossible de copier les logs : " + err, "error");
+  });
+}
+
+async function restartPodmanUnit(unitName) {
+  showToast(`Redémarrage de ${unitName}...`, "info");
+  try {
+    const msg = await invoke("restart_podman_container", { unitName });
+    showToast(msg || "Conteneur redémarré avec succès !", "success");
+    await loadPodmanOverview(false);
+    await fetchPodmanLogs();
+  } catch (err) {
+    showToast("Erreur lors du redémarrage : " + err, "error");
+  }
+}
+
+function openExternalBrowserUrl(url) {
+  invoke("open_external_url", { url }).catch(err => {
+    console.error("Erreur ouverture URL :", err);
+    window.open(url, "_blank");
+  });
+}

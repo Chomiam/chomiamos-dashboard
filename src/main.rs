@@ -7,6 +7,8 @@ mod packages;
 mod pty;
 mod system;
 mod updates;
+mod network;
+use network::*;
 
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
@@ -943,7 +945,13 @@ fn main() {
             get_commit_security_info,
             diagnose_network,
             repair_network_dns,
-            get_network_metadata
+            get_network_metadata,
+            get_dns_catalog,
+            ping_dns_servers,
+            apply_dns_server,
+            get_podman_overview,
+            get_podman_logs,
+            restart_podman_container
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

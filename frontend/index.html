@@ -60,8 +60,8 @@
           <span class="tab-label">Logithèque Nix</span>
         </button>
         <button class="tab-btn" data-tab="tab-firewall">
-          <span class="tab-icon">🛡️</span>
-          <span class="tab-label">Pare-feu</span>
+          <span class="tab-icon">🌐</span>
+          <span class="tab-label">Réseau</span>
           <span id="firewall-dirty-badge" class="badge-dot hidden"></span>
         </button>
       </nav>
@@ -1574,7 +1574,53 @@
     
       <!-- ==================== TAB 6: PARE-FEU & SÉCURITÉ RÉSEAU ==================== -->
       <section id="tab-firewall" class="tab-content">
-        <!-- Master Firewall Card -->
+        <div class="network-layout">
+          <!-- Volet latéral gauche : Sous-navigation Réseau -->
+          <aside class="net-sidebar">
+            <div class="net-sidebar-header">
+              <div class="net-sidebar-icon-box">🌐</div>
+              <div class="net-sidebar-title-group">
+                <h3>Espace Réseau</h3>
+                <small>ChomiamOS Security & Net</small>
+              </div>
+            </div>
+            <nav class="net-subnav">
+              <button type="button" class="net-subnav-btn active" data-subtab="net-subtab-firewall" onclick="switchNetworkSubtab('net-subtab-firewall')">
+                <span class="net-subnav-icon">🛡️</span>
+                <div class="net-subnav-text">
+                  <strong>Pare-feu</strong>
+                  <small>Filtrage & Ports</small>
+                </div>
+              </button>
+              <button type="button" class="net-subnav-btn" data-subtab="net-subtab-dns" onclick="switchNetworkSubtab('net-subtab-dns')">
+                <span class="net-subnav-icon">⚡</span>
+                <div class="net-subnav-text">
+                  <strong>Serveurs DNS</strong>
+                  <small>Résolution & Ping</small>
+                </div>
+              </button>
+              <button type="button" class="net-subnav-btn" data-subtab="net-subtab-podman" onclick="switchNetworkSubtab('net-subtab-podman')">
+                <span class="net-subnav-icon">🦭</span>
+                <div class="net-subnav-text">
+                  <strong>Conteneurs Podman</strong>
+                  <small>Activité, Ports & Logs</small>
+                </div>
+                <span id="podman-badge-count" class="net-subnav-pill">2</span>
+              </button>
+            </nav>
+            <div class="net-sidebar-footer">
+              <div class="net-sidebar-status">
+                <span class="net-status-dot online"></span>
+                <span>Services opérationnels</span>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Zone principale droite -->
+          <div class="net-content-area">
+            <!-- SOUS-ONGLET 1 : PARE-FEU -->
+            <div id="net-subtab-firewall" class="net-subtab-pane active">
+<!-- Master Firewall Card -->
         <div class="card firewall-hero-card">
           <div class="fw-hero-header">
             <div class="fw-hero-title-wrap">
@@ -1766,7 +1812,240 @@
             </button>
           </div>
         </div>
-      </section>
+            </div>
+
+            <!-- SOUS-ONGLET 2 : DNS -->
+            <div id="net-subtab-dns" class="net-subtab-pane">
+
+            <!-- Master DNS Card -->
+            <div class="card dns-hero-card">
+              <div class="dns-hero-header">
+                <div class="dns-hero-title-wrap">
+                  <div class="dns-globe-icon-box">⚡</div>
+                  <div>
+                    <div class="dns-title-row">
+                      <h2>Résolveurs & Serveurs DNS</h2>
+                      <span id="dns-status-pill" class="dns-status-pill active">Actif</span>
+                      <span class="dns-protocol-tag">UDP & TCP 53</span>
+                    </div>
+                    <p class="dns-hero-desc">Optimisez votre débit de navigation, préservez votre anonymat ou bloquez les publicités et menaces web en sélectionnant un résolveur DNS.</p>
+                  </div>
+                </div>
+
+                <!-- Test All Ping Button -->
+                <div class="dns-hero-actions">
+                  <button type="button" class="btn btn-secondary btn-test-all-dns" id="btn-ping-all-dns" onclick="pingAllDnsServers()">
+                    <span id="dns-ping-spin" class="dns-spin-icon">⚡</span> Tester la latence de tous les DNS
+                  </button>
+                </div>
+              </div>
+
+              <!-- Active DNS Banner -->
+              <div class="dns-active-banner">
+                <div class="dns-active-info">
+                  <span class="dns-banner-icon">📡</span>
+                  <div>
+                    <span class="dns-banner-label">SERVEUR DNS ACTUEL DU SYSTÈME</span>
+                    <strong id="dns-current-display">Détection en cours...</strong>
+                  </div>
+                </div>
+                <div class="dns-active-badge-group">
+                  <span id="dns-current-provider-tag" class="dns-active-provider-pill">Automatique (DHCP)</span>
+                  <button type="button" class="btn-dns-refresh-icon" onclick="loadDnsCatalog(true)" title="Rafraîchir le statut DNS">🔄</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- DNS Categories Filter Bar -->
+            <div class="card dns-toolbar-card">
+              <div class="dns-filter-pills" id="dns-filter-bar">
+                <button type="button" class="dns-filter-btn active" data-cat="all" onclick="filterDnsCategory('all')">Tous les résolveurs</button>
+                <button type="button" class="dns-filter-btn" data-cat="fast" onclick="filterDnsCategory('fast')">⚡ Ultra-rapides</button>
+                <button type="button" class="dns-filter-btn" data-cat="security" onclick="filterDnsCategory('security')">🛡️ Sécurité & Malwares</button>
+                <button type="button" class="dns-filter-btn" data-cat="privacy" onclick="filterDnsCategory('privacy')">🔒 Zéro-log & Vie privée</button>
+                <button type="button" class="dns-filter-btn" data-cat="family" onclick="filterDnsCategory('family')">👨‍👩‍👧 Familial & Parental</button>
+                <button type="button" class="dns-filter-btn" data-cat="neutral" onclick="filterDnsCategory('neutral')">🌐 Neutre & Souverain</button>
+              </div>
+            </div>
+
+            <!-- DNS Cards Grid -->
+            <div class="dns-cards-grid" id="dns-cards-container">
+              <!-- Rendered dynamically by app.js -->
+            </div>
+
+            <!-- Custom DNS Box (Visible when Custom is selected) -->
+            <div id="dns-custom-box" class="card dns-custom-card hidden">
+              <div class="dns-custom-header">
+                <span class="dns-custom-icon">⚙️</span>
+                <div>
+                  <h3>Configuration DNS Personnalisée</h3>
+                  <p>Spécifiez vos propres serveurs DNS IPv4 (résolveur local Pi-hole, AdGuard Home, serveur d'entreprise ou IP tierce)</p>
+                </div>
+              </div>
+              <div class="dns-custom-inputs-row">
+                <div class="dns-input-group">
+                  <label for="dns-input-primary">Serveur Primaire (IPv4)</label>
+                  <div class="dns-input-wrap">
+                    <span>🌐</span>
+                    <input type="text" id="dns-input-primary" class="fw-text-input" placeholder="ex: 1.1.1.1 ou 192.168.1.50" oninput="onCustomDnsChange()" />
+                  </div>
+                </div>
+                <div class="dns-input-group">
+                  <label for="dns-input-secondary">Serveur Secondaire (IPv4 - optionnel)</label>
+                  <div class="dns-input-wrap">
+                    <span>🛡️</span>
+                    <input type="text" id="dns-input-secondary" class="fw-text-input" placeholder="ex: 1.0.0.1 ou 8.8.4.4" oninput="onCustomDnsChange()" />
+                  </div>
+                </div>
+                <div class="dns-input-group dns-btn-cell">
+                  <button type="button" class="btn btn-secondary" onclick="pingCustomDns()">
+                    <span>⚡</span> Tester la latence
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Floating Apply Anchor for DNS -->
+            <div id="dns-apply-bar" class="pkg-floating-anchor">
+              <div class="pkg-anchor-card dns-anchor-card">
+                <div class="pkg-anchor-info">
+                  <span class="pkg-anchor-icon">⚡</span>
+                  <div class="pkg-anchor-text">
+                    <strong id="dns-anchor-selected-title">Fournisseur sélectionné : Cloudflare Standard</strong>
+                    <small id="dns-anchor-selected-sub">Prêt pour application immédiate ou permanente</small>
+                  </div>
+                </div>
+                <div class="dns-anchor-buttons">
+                  <button type="button" class="btn btn-secondary btn-apply-runtime" onclick="applySelectedDns(true, false)">
+                    <span>⚡</span> Appliquer à chaud (Immédiat)
+                  </button>
+                  <button type="button" class="btn btn-primary btn-apply-permanent" onclick="applySelectedDns(true, true)">
+                    <span>💾</span> Enregistrer dans NixOS (Permanent)
+                  </button>
+                </div>
+              </div>
+            </div>
+            </div>
+
+            <!-- SOUS-ONGLET 3 : PODMAN -->
+            <div id="net-subtab-podman" class="net-subtab-pane">
+
+            <!-- Podman Overview Hero Card -->
+            <div class="card podman-hero-card">
+              <div class="podman-hero-header">
+                <div class="podman-hero-title-wrap">
+                  <div class="podman-seal-icon-box">🦭</div>
+                  <div>
+                    <div class="podman-title-row">
+                      <h2>Moteur de Conteneurs Podman & OCI</h2>
+                      <span id="podman-engine-pill" class="podman-status-pill active">Actif (Root & OCI)</span>
+                      <span class="podman-compat-tag">Docker Socket /run/podman/podman.sock</span>
+                    </div>
+                    <p class="podman-hero-desc">Surveillance en direct de l'activité, des ports d'écoute, des volumes persistants et des journaux d'exécution des conteneurs NixOS.</p>
+                  </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="podman-hero-actions">
+                  <button type="button" class="btn btn-secondary" onclick="loadPodmanOverview(true)">
+                    <span>🔄</span> Actualiser l'Activité
+                  </button>
+                </div>
+              </div>
+
+              <!-- Podman Stats Bar -->
+              <div class="podman-stats-bar">
+                <div class="podman-stat-pill">
+                  <span class="podman-stat-icon">📦</span>
+                  <div>
+                    <strong id="podman-stat-running">0</strong>
+                    <small>Conteneurs Actifs</small>
+                  </div>
+                </div>
+                <div class="podman-stat-pill">
+                  <span class="podman-stat-icon">💾</span>
+                  <div>
+                    <strong id="podman-stat-memory">0 Mo</strong>
+                    <small>RAM Totale Conteneurs</small>
+                  </div>
+                </div>
+                <div class="podman-stat-pill">
+                  <span class="podman-stat-icon">🚪</span>
+                  <div>
+                    <strong id="podman-stat-ports">0</strong>
+                    <small>Ports d'Écoute Détectés</small>
+                  </div>
+                </div>
+                <div class="podman-stat-pill podman-stat-engine">
+                  <span class="podman-stat-icon">⚙️</span>
+                  <div>
+                    <strong id="podman-stat-version">Podman</strong>
+                    <small>DNS OCI Actif (dns_enabled = true)</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Containers Activity Grid -->
+            <div class="podman-containers-section">
+              <div class="podman-section-header">
+                <div class="podman-section-title-group">
+                  <h3>Conteneurs & Services OCI Détectés</h3>
+                  <span id="podman-containers-badge" class="podman-count-badge">0 conteneur(s)</span>
+                </div>
+                <small class="podman-section-sub">Les conteneurs système s'exécutent via <code>virtualisation.oci-containers</code></small>
+              </div>
+              <div id="podman-containers-grid" class="podman-containers-grid">
+                <!-- Rendered dynamically by app.js -->
+              </div>
+            </div>
+
+            <!-- Integrated Terminal Logs Viewer -->
+            <div class="card podman-logs-card" id="podman-logs-section">
+              <div class="podman-logs-header">
+                <div class="podman-logs-title-wrap">
+                  <span class="podman-terminal-icon">📜</span>
+                  <div>
+                    <h3>Journaux d'Exécution (Logs en Direct)</h3>
+                    <small>Flux <code>journalctl</code> temps réel du conteneur sélectionné</small>
+                  </div>
+                </div>
+
+                <!-- Controls Toolbar -->
+                <div class="podman-logs-controls">
+                  <div class="podman-control-group">
+                    <label for="podman-logs-container-select">Conteneur :</label>
+                    <select id="podman-logs-container-select" class="fw-select" onchange="onPodmanLogContainerChange()">
+                      <!-- Populated dynamically -->
+                    </select>
+                  </div>
+                  <div class="podman-control-group">
+                    <label for="podman-logs-lines-select">Lignes :</label>
+                    <select id="podman-logs-lines-select" class="fw-select" onchange="fetchPodmanLogs()">
+                      <option value="50">50 lignes</option>
+                      <option value="100" selected>100 lignes</option>
+                      <option value="200">200 lignes</option>
+                      <option value="500">500 lignes</option>
+                    </select>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="fetchPodmanLogs()" title="Rafraîchir les logs">
+                    <span>🔄</span> Actualiser
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyPodmanLogs()" title="Copier les logs">
+                    <span id="podman-copy-icon">📋</span> Copier
+                  </button>
+                </div>
+              </div>
+
+              <!-- Terminal Log Output Container -->
+              <div class="podman-terminal-container">
+                <pre id="podman-terminal-output" class="podman-terminal-pre">Sélectionnez un conteneur pour afficher ses journaux d'exécution...</pre>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+</section>
 
     </main>
 

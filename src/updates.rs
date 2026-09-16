@@ -119,7 +119,7 @@ pub fn check_system_updates() -> UpdateCheckResult {
     let mut dashboard_has_updates = false;
     let mut dashboard_locked_commit = None;
     let mut dashboard_remote_commit = None;
-    let mut dashboard_remote_version = None;
+    let dashboard_remote_version = None;
 
     if let Some(rev) = installed_commit {
         dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());

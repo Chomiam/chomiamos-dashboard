@@ -3846,3 +3846,1117 @@ body {
   color: var(--subtext0, #a6adc8);
   line-height: 1.45;
 }
+
+
+/* ==========================================================================
+   NETWORK CENTER, DNS MANAGER & PODMAN CONTAINER VIEWER
+   ========================================================================== */
+
+/* 1. Two-Column Network Layout */
+.network-layout {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.net-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 88px;
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-lg);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.net-sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--surface0);
+}
+
+.net-sidebar-icon-box {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.2), rgba(137, 180, 250, 0.2));
+  border: 1px solid rgba(203, 166, 247, 0.3);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.net-sidebar-title-group h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.net-sidebar-title-group small {
+  font-size: 0.75rem;
+  color: var(--overlay1);
+}
+
+.net-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.net-subnav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--subtext0);
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+  text-align: left;
+  position: relative;
+}
+
+.net-subnav-btn:hover {
+  background: var(--surface0);
+  color: var(--text);
+  transform: translateX(3px);
+}
+
+.net-subnav-btn.active {
+  background: rgba(203, 166, 247, 0.12);
+  border-color: rgba(203, 166, 247, 0.35);
+  color: var(--mauve);
+  box-shadow: 0 2px 12px rgba(203, 166, 247, 0.15);
+}
+
+.net-subnav-icon {
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+.net-subnav-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.net-subnav-text strong {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.net-subnav-text small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--overlay1);
+  margin-top: 2px;
+}
+
+.net-subnav-pill {
+  background: var(--surface1);
+  color: var(--text);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.net-subnav-btn.active .net-subnav-pill {
+  background: var(--mauve);
+  color: var(--crust);
+}
+
+.net-sidebar-footer {
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface0);
+}
+
+.net-sidebar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--subtext0);
+}
+
+.net-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(166, 227, 161, 0.5);
+}
+
+.net-content-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.net-subtab-pane {
+  display: none;
+  animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.net-subtab-pane.active {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 2. DNS Subtab Styles */
+.dns-hero-card {
+  border: 1px solid rgba(116, 199, 236, 0.25);
+  background: linear-gradient(135deg, rgba(116, 199, 236, 0.05), var(--surface0) 40%, var(--mantle));
+  padding: 24px;
+}
+
+.dns-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.dns-hero-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dns-globe-icon-box {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, rgba(116, 199, 236, 0.2), rgba(137, 180, 250, 0.3));
+  border: 1px solid rgba(116, 199, 236, 0.4);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 4px 15px rgba(116, 199, 236, 0.2);
+}
+
+.dns-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dns-title-row h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dns-status-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.dns-protocol-tag {
+  font-size: 0.72rem;
+  color: var(--sapphire);
+  background: rgba(116, 199, 236, 0.1);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.dns-hero-desc {
+  font-size: 0.88rem;
+  color: var(--subtext0);
+  margin-top: 6px;
+  max-width: 750px;
+  line-height: 1.4;
+}
+
+.dns-active-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  margin-top: 18px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dns-active-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dns-banner-icon {
+  font-size: 1.6rem;
+}
+
+.dns-banner-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--overlay1);
+}
+
+#dns-current-display {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--sapphire);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: 2px;
+}
+
+.dns-active-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dns-active-provider-pill {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--blue);
+  border: 1px solid rgba(137, 180, 250, 0.3);
+  border-radius: var(--radius-full);
+}
+
+.btn-dns-refresh-icon {
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-dns-refresh-icon:hover {
+  background: var(--surface1);
+  transform: rotate(45deg);
+}
+
+.btn-test-all-dns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.dns-spin-icon.spinning {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+/* DNS Toolbar & Filter Pills */
+.dns-toolbar-card {
+  padding: 12px 16px;
+}
+
+.dns-filter-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dns-filter-btn {
+  background: var(--surface0);
+  border: 1px solid transparent;
+  color: var(--subtext0);
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dns-filter-btn:hover {
+  background: var(--surface1);
+  color: var(--text);
+}
+
+.dns-filter-btn.active {
+  background: var(--sapphire);
+  color: var(--crust);
+  box-shadow: 0 2px 10px rgba(116, 199, 236, 0.25);
+}
+
+/* DNS Cards Grid */
+.dns-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.dns-card {
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
+  position: relative;
+  overflow: hidden;
+}
+
+.dns-card:hover {
+  border-color: var(--surface2);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.dns-card.selected {
+  border-color: var(--sapphire);
+  background: rgba(116, 199, 236, 0.05);
+  box-shadow: 0 0 20px rgba(116, 199, 236, 0.15);
+}
+
+.dns-card.active-system {
+  border-color: var(--green);
+  background: rgba(166, 227, 161, 0.05);
+  box-shadow: 0 0 20px rgba(166, 227, 161, 0.15);
+}
+
+.dns-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dns-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dns-card-icon {
+  font-size: 1.5rem;
+}
+
+.dns-card-title-group h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.dns-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dns-ping-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-family: 'JetBrains Mono', monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dns-ping-badge.fast {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.dns-ping-badge.good {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--blue);
+  border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+.dns-ping-badge.medium {
+  background: rgba(249, 226, 175, 0.15);
+  color: var(--yellow);
+  border: 1px solid rgba(249, 226, 175, 0.3);
+}
+
+.dns-ping-badge.slow {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.dns-ping-badge.testing {
+  background: var(--surface1);
+  color: var(--subtext0);
+  animation: pulse 1s infinite alternate;
+}
+
+.dns-card-active-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--green);
+  color: var(--crust);
+}
+
+.dns-card-desc {
+  font-size: 0.82rem;
+  color: var(--subtext0);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.dns-ips-box {
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.dns-ips-box small {
+  color: var(--overlay1);
+  font-size: 0.7rem;
+}
+
+.dns-tags-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dns-tag-pill {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  background: var(--surface0);
+  color: var(--subtext1);
+  border-radius: var(--radius-full);
+}
+
+.dns-card-radio-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.dns-select-btn {
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  color: var(--subtext0);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dns-card:hover .dns-select-btn {
+  background: var(--surface1);
+  color: var(--text);
+}
+
+.dns-card.selected .dns-select-btn {
+  background: var(--sapphire);
+  color: var(--crust);
+  border-color: var(--sapphire);
+}
+
+.dns-custom-card {
+  padding: 20px;
+  border: 1px dashed var(--sapphire);
+}
+
+.dns-custom-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dns-custom-icon {
+  font-size: 1.8rem;
+}
+
+.dns-custom-inputs-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.dns-input-group {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dns-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+}
+
+.dns-input-wrap span {
+  font-size: 1rem;
+  margin-right: 8px;
+}
+
+.dns-input-wrap input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 10px 0;
+  width: 100%;
+  outline: none;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dns-btn-cell {
+  flex: 0 0 auto;
+}
+
+.dns-anchor-card {
+  border-color: var(--sapphire) !important;
+}
+
+.dns-anchor-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+/* 3. Podman Subtab Styles */
+.podman-hero-card {
+  border: 1px solid rgba(166, 227, 161, 0.25);
+  background: linear-gradient(135deg, rgba(166, 227, 161, 0.05), var(--surface0) 40%, var(--mantle));
+  padding: 24px;
+}
+
+.podman-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.podman-hero-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.podman-seal-icon-box {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, rgba(166, 227, 161, 0.2), rgba(148, 226, 213, 0.3));
+  border: 1px solid rgba(166, 227, 161, 0.4);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  box-shadow: 0 4px 15px rgba(166, 227, 161, 0.2);
+}
+
+.podman-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.podman-title-row h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.podman-status-pill {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.podman-compat-tag {
+  font-size: 0.72rem;
+  color: var(--teal);
+  background: rgba(148, 226, 213, 0.1);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+
+.podman-hero-desc {
+  font-size: 0.88rem;
+  color: var(--subtext0);
+  margin-top: 6px;
+  max-width: 750px;
+  line-height: 1.4;
+}
+
+.podman-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.podman-stat-pill {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.podman-stat-icon {
+  font-size: 1.5rem;
+}
+
+.podman-stat-pill strong {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.podman-stat-pill small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--overlay1);
+}
+
+.podman-containers-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.podman-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.podman-section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.podman-section-title-group h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.podman-count-badge {
+  background: var(--surface0);
+  color: var(--subtext1);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.podman-section-sub {
+  font-size: 0.75rem;
+  color: var(--overlay1);
+}
+
+.podman-containers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 18px;
+}
+
+.podman-card {
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-smooth);
+}
+
+.podman-card:hover {
+  border-color: var(--surface2);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.podman-card.running {
+  border-left: 4px solid var(--green);
+}
+
+.podman-card.stopped {
+  border-left: 4px solid var(--red);
+  opacity: 0.75;
+}
+
+.podman-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.podman-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.podman-card-icon {
+  font-size: 1.6rem;
+}
+
+.podman-card-identity h4 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.podman-card-identity small {
+  font-size: 0.75rem;
+  color: var(--overlay1);
+}
+
+.podman-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.podman-status-badge.active {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.podman-status-badge.stopped {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.podman-card-image {
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.72rem;
+  color: var(--subtext0);
+  font-family: 'JetBrains Mono', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podman-metrics-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.podman-metric-item {
+  flex: 1;
+  min-width: 90px;
+  background: var(--surface0);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.podman-metric-item span {
+  font-size: 1.1rem;
+}
+
+.podman-metric-item strong {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.podman-metric-item small {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--overlay1);
+}
+
+.podman-ports-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.podman-ports-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--subtext1);
+}
+
+.podman-ports-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.podman-port-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(137, 180, 250, 0.12);
+  border: 1px solid rgba(137, 180, 250, 0.3);
+  color: var(--blue);
+  border-radius: var(--radius-md);
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.podman-port-chip:hover {
+  background: rgba(137, 180, 250, 0.25);
+  transform: translateY(-1px);
+  color: #fff;
+}
+
+.podman-port-chip-plain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface0);
+  border: 1px solid var(--surface1);
+  color: var(--subtext1);
+  border-radius: var(--radius-md);
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.podman-config-box {
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.podman-config-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--overlay1);
+}
+
+.podman-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.podman-config-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.podman-config-key {
+  color: var(--subtext0);
+}
+
+.podman-config-val {
+  color: var(--text);
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.podman-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Logs Section */
+.podman-logs-card {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.podman-logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.podman-logs-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.podman-terminal-icon {
+  font-size: 1.8rem;
+}
+
+.podman-logs-title-wrap h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.podman-logs-title-wrap small {
+  font-size: 0.75rem;
+  color: var(--overlay1);
+}
+
+.podman-logs-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.podman-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--subtext0);
+}
+
+.fw-select {
+  background: var(--crust);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.fw-select:focus {
+  border-color: var(--mauve);
+}
+
+.podman-terminal-container {
+  background: #0d0e15;
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  max-height: 440px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.podman-terminal-pre {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #cdd6f4;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 980px) {
+  .network-layout {
+    flex-direction: column;
+  }
+  .net-sidebar {
+    width: 100%;
+    position: static;
+  }
+  .net-subnav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .net-subnav-btn {
+    flex: 1;
+    min-width: 160px;
+  }
+}

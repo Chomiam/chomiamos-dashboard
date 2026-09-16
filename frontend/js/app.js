@@ -5668,3 +5668,17 @@ window.submitSaveSftpUser = submitSaveSftpUser;
 window.deleteSftpUserUI = deleteSftpUserUI;
 window.toggleSftpPasswordVisibility = toggleSftpPasswordVisibility;
 window.generateSftpRandomPassword = generateSftpRandomPassword;
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (btn) {
+      const old = btn.textContent;
+      btn.textContent = "✅";
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    }
+    showToast("Copié dans le presse-papier !", "info");
+  }).catch(e => {
+    showToast("Erreur copie : " + e, "error");
+  });
+}
+window.copyToClipboard = copyToClipboard;

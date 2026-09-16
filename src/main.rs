@@ -907,6 +907,12 @@ async fn repair_network_dns() -> Result<String, String> {
 }
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    {
+        // Évite les conflits de fermeture TLS / EGL avec Mesa sur Linux (SIGABRT dans WebKitWebProcess)
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
 

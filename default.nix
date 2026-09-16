@@ -2,7 +2,7 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "chomiamos-dashboard";
-  version = "0.3.8";
+  version = "0.3.9";
 
   src = ./.;
 
@@ -33,6 +33,12 @@ pkgs.rustPlatform.buildRustPackage rec {
     install -Dm644 chomiamos-dashboard.desktop $out/share/applications/chomiamos-dashboard.desktop
     install -Dm644 frontend/assets/logo.png $out/share/icons/hicolor/scalable/apps/chomiamos-dashboard.png
     install -Dm644 frontend/assets/logo.png $out/share/pixmaps/chomiamos-dashboard.png
+  '';
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --set WEBKIT_DISABLE_DMABUF_RENDERER "1"
+    )
   '';
 
   meta = with pkgs.lib; {

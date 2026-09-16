@@ -9,6 +9,8 @@ mod system;
 mod updates;
 mod network;
 use network::*;
+mod sftp;
+use sftp::*;
 mod systemd;
 use systemd::{list_systemd_services, control_systemd_service as do_control_systemd_service, get_systemd_logs, SystemdOverview};
 
@@ -997,7 +999,16 @@ fn main() {
             set_user_shell,
             get_systemd_services,
             control_systemd_service,
-            get_systemd_service_logs
+            get_systemd_service_logs,
+            get_sftp_overview,
+            toggle_sftp_service,
+            control_sftp_service,
+            open_sftp_firewall_port,
+            save_sftp_share,
+            delete_sftp_share,
+            save_sftp_user,
+            delete_sftp_user,
+            open_folder_in_dolphin
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

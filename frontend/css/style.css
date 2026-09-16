@@ -5968,3 +5968,504 @@ body {
     width: auto;
   }
 }
+
+
+/* ==========================================================================
+   SFTP SHARING & USER MANAGEMENT STYLES (CATPPUCCIN MOCHA)
+   ========================================================================== */
+
+.sftp-pill-ok {
+  background: rgba(166, 227, 161, 0.15) !important;
+  color: #a6e3a1 !important;
+  border: 1px solid rgba(166, 227, 161, 0.3) !important;
+}
+
+.sftp-hero-card {
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(30, 30, 46, 0.8) 0%, rgba(24, 24, 37, 0.95) 100%);
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  margin-bottom: 24px;
+}
+
+.sftp-hero-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sftp-hero-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sftp-hero-icon-box {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.2), rgba(203, 166, 247, 0.2));
+  border: 1px solid rgba(137, 180, 250, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 4px 16px rgba(137, 180, 250, 0.15);
+}
+
+.sftp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sftp-title-row h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #cdd6f4;
+}
+
+.sftp-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.88rem;
+  color: #a6adc8;
+}
+
+.sftp-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.sftp-status-pill.inactive {
+  background: rgba(243, 139, 168, 0.15);
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.3);
+}
+
+.sftp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.sftp-switch-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(17, 17, 27, 0.6);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sftp-switch-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #cdd6f4;
+  margin: 0;
+}
+
+/* Metrics bar */
+.sftp-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.sftp-metric-pill {
+  background: rgba(17, 17, 27, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.sftp-metric-pill:hover {
+  transform: translateY(-2px);
+  border-color: rgba(137, 180, 250, 0.3);
+}
+
+.sftp-metric-icon {
+  font-size: 22px;
+}
+
+.sftp-metric-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.sftp-metric-label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9399b2;
+}
+
+.sftp-metric-details strong {
+  font-size: 0.95rem;
+  color: #cdd6f4;
+  word-break: break-all;
+}
+
+.sftp-metric-uri {
+  border-left: 3px solid #89b4fa;
+}
+
+/* Actions bar */
+.sftp-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sftp-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Sections */
+.sftp-section-card {
+  padding: 24px;
+  border-radius: 16px;
+  margin-bottom: 24px;
+  background: var(--bg-card, #1e1e2e);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sftp-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sftp-section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sftp-section-icon {
+  font-size: 24px;
+}
+
+.sftp-section-title-wrap h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #cdd6f4;
+}
+
+.sftp-section-title-wrap p {
+  margin: 2px 0 0 0;
+  font-size: 0.85rem;
+}
+
+/* Shares Grid */
+.sftp-shares-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.sftp-share-card {
+  background: rgba(17, 17, 27, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  transition: all 0.2s ease;
+}
+
+.sftp-share-card:hover {
+  border-color: rgba(137, 180, 250, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.sftp-share-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sftp-share-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sftp-share-folder-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(137, 180, 250, 0.15);
+  border: 1px solid rgba(137, 180, 250, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.sftp-share-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #cdd6f4;
+  margin: 0;
+}
+
+.sftp-share-desc {
+  font-size: 0.82rem;
+  color: #a6adc8;
+  margin: 2px 0 0 0;
+}
+
+.sftp-share-path-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(30, 30, 46, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #89b4fa;
+}
+
+.sftp-share-stats-row {
+  display: flex;
+  gap: 16px;
+  font-size: 0.82rem;
+  color: #a6adc8;
+}
+
+.sftp-share-stats-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sftp-share-stats-item strong {
+  color: #cdd6f4;
+}
+
+.sftp-share-users-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.sftp-user-tag {
+  background: rgba(203, 166, 247, 0.15);
+  color: #cba6f7;
+  border: 1px solid rgba(203, 166, 247, 0.25);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.sftp-share-bottom {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Users table */
+.sftp-users-table-wrap {
+  overflow-x: auto;
+}
+
+.sftp-users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.sftp-users-table th {
+  text-align: left;
+  padding: 12px 16px;
+  color: #9399b2;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sftp-users-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #cdd6f4;
+  vertical-align: middle;
+}
+
+.sftp-users-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sftp-user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sftp-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #89b4fa, #cba6f7);
+  color: #11111b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.sftp-user-info-wrap strong {
+  display: block;
+  font-size: 0.95rem;
+  color: #cdd6f4;
+}
+
+.sftp-user-info-wrap small {
+  color: #6c7086;
+  font-size: 0.76rem;
+}
+
+/* Permissions Badges */
+.sftp-perm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.sftp-perm-ro {
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.sftp-perm-rw {
+  background: rgba(137, 180, 250, 0.15);
+  color: #89b4fa;
+  border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+.sftp-perm-full {
+  background: rgba(203, 166, 247, 0.15);
+  color: #cba6f7;
+  border: 1px solid rgba(203, 166, 247, 0.3);
+}
+
+/* Radio permission cards in modal */
+.sftp-permission-selector {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.sftp-perm-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(17, 17, 27, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sftp-perm-card:hover {
+  border-color: rgba(137, 180, 250, 0.4);
+  background: rgba(30, 30, 46, 0.6);
+}
+
+.sftp-perm-card input[type="radio"]:checked + .sftp-perm-card-body {
+  color: #cdd6f4;
+}
+
+.sftp-perm-card:has(input[type="radio"]:checked) {
+  border-color: #89b4fa;
+  background: rgba(137, 180, 250, 0.1);
+  box-shadow: 0 0 12px rgba(137, 180, 250, 0.15);
+}
+
+.sftp-perm-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sftp-perm-card-body strong {
+  font-size: 0.92rem;
+  color: #cdd6f4;
+}
+
+.sftp-perm-card-body small {
+  font-size: 0.8rem;
+  color: #a6adc8;
+}
+
+.input-password-wrap {
+  display: flex;
+  gap: 6px;
+}
+
+.input-password-wrap input {
+  flex: 1;
+}
+
+.sftp-empty-placeholder {
+  text-align: center;
+  padding: 32px 16px;
+  color: #a6adc8;
+  font-size: 0.95rem;
+  background: rgba(17, 17, 27, 0.4);
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.btn-xs {
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}

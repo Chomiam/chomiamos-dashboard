@@ -3951,6 +3951,7 @@ let currentPodmanLogUnit = null;
 function initNetworkCenter() {
   loadDnsCatalog(false);
   loadPodmanOverview(false);
+  loadSftpOverview(false);
 }
 
 function switchNetworkSubtab(subtabId) {
@@ -3979,6 +3980,8 @@ function switchNetworkSubtab(subtabId) {
     }
   } else if (subtabId === "net-subtab-podman") {
     loadPodmanOverview(false);
+  } else if (subtabId === "net-subtab-sftp") {
+    loadSftpOverview(false);
   }
 }
 
@@ -5049,3 +5052,619 @@ window.fetchSystemdLogs = fetchSystemdLogs;
 window.refreshSystemdLogs = refreshSystemdLogs;
 window.copySystemdLogs = copySystemdLogs;
 window.closeSystemdLogsModal = closeSystemdLogsModal;
+
+
+// =========================================================================
+// 📁 GESTIONNAIRE SFTP & ACCÈS SSH PAR MOT DE PASSE
+// =========================================================================
+
+let currentSftpOverview = null;
+
+async function loadSftpOverview(showFeedback = false) {
+  try {
+    const overview = await invoke("get_sftp_overview");
+    if (!overview) return;
+
+    currentSftpOverview = overview;
+
+    // 1. Mise à jour de l'interrupteur OpenSSH
+    const toggle = document.getElementById("sftp-toggle-enable");
+    if (toggle) {
+      toggle.checked = overview.status.openssh_configured;
+    }
+
+    // 2. Mise à jour de la pastille d'état du service sshd
+    const servicePill = document.getElementById("sftp-service-pill");
+    const serviceStatusText = document.getElementById("sftp-service-status-text");
+    const navBadge = document.getElementById("sftp-nav-badge");
+    const btnStopStart = document.getElementById("btn-sftp-stop-start");
+
+    if (overview.status.sshd_active) {
+      if (servicePill) {
+        servicePill.className = "sftp-status-pill active";
+        servicePill.innerHTML = `<span class="sftp-dot online"></span><span id="sftp-service-status-text">Service sshd Actif</span>`;
+      }
+      if (navBadge) {
+        navBadge.className = "net-subnav-pill sftp-pill-ok";
+        navBadge.textContent = "Actif";
+      }
+      if (btnStopStart) {
+        btnStopStart.innerHTML = "<span>⏹️</span> Arrêter sshd";
+        btnStopStart.title = "Arrêter le service OpenSSH";
+      }
+    } else {
+      if (servicePill) {
+        servicePill.className = "sftp-status-pill inactive";
+        servicePill.innerHTML = `<span class="sftp-dot offline"></span><span id="sftp-service-status-text">Service sshd Arrêté</span>`;
+      }
+      if (navBadge) {
+        navBadge.className = "net-subnav-pill sftp-pill-warn";
+        navBadge.textContent = "Arrêté";
+      }
+      if (btnStopStart) {
+        btnStopStart.innerHTML = "<span>▶️</span> Démarrer sshd";
+        btnStopStart.title = "Démarrer le service OpenSSH";
+      }
+    }
+
+    // 3. Port 22 & Pare-feu
+    const statusPort22 = document.getElementById("sftp-status-port22");
+    const btnFixFirewall = document.getElementById("btn-fix-firewall-22");
+
+    if (overview.status.port_22_firewall_open && overview.status.port_22_accessible) {
+      if (statusPort22) {
+        statusPort22.className = "text-success";
+        statusPort22.textContent = "Ouvert & Accessible (TCP)";
+      }
+      if (btnFixFirewall) btnFixFirewall.classList.add("d-none");
+    } else if (overview.status.port_22_firewall_open) {
+      if (statusPort22) {
+        statusPort22.className = "text-warning";
+        statusPort22.textContent = "Ouvert (sshd non démarré)";
+      }
+      if (btnFixFirewall) btnFixFirewall.classList.add("d-none");
+    } else {
+      if (statusPort22) {
+        statusPort22.className = "text-danger";
+        statusPort22.textContent = "Fermé / Non détecté";
+      }
+      if (btnFixFirewall) btnFixFirewall.classList.remove("d-none");
+    }
+
+    // 4. URL de connexion
+    const uriEl = document.getElementById("sftp-connection-uri");
+    if (uriEl) {
+      const defaultUser = overview.users && overview.users.length > 0 ? overview.users[0].username : "utilisateur";
+      uriEl.textContent = `sftp://${defaultUser}@${overview.status.local_ip}:22`;
+    }
+
+    // 5. Rendu des dossiers partagés
+    renderSftpShares(overview.shares, overview.users);
+
+    // 6. Rendu des utilisateurs sFTP
+    renderSftpUsers(overview.users, overview.shares);
+
+    if (showFeedback) {
+      showToast("État du partage sFTP actualisé !", "info");
+    }
+  } catch (err) {
+    console.error("Erreur chargement sFTP:", err);
+    if (showFeedback) {
+      showToast("Impossible d'actualiser l'espace sFTP: " + err, "error");
+    }
+  }
+}
+
+function renderSftpShares(shares, users) {
+  const container = document.getElementById("sftp-shares-grid");
+  if (!container) return;
+
+  if (!shares || shares.length === 0) {
+    container.innerHTML = `
+      <div class="sftp-empty-placeholder">
+        <p>📁 Aucun dossier de partage sFTP n'a encore été configuré.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAddShareModal()">
+          <span>➕</span> Créer le premier partage
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  let html = "";
+  for (const s of shares) {
+    const assignedUsers = (users || []).filter(u => u.share_id === s.id);
+    let usersHtml = "";
+    if (assignedUsers.length > 0) {
+      usersHtml = assignedUsers.map(u => `<span class="sftp-user-tag">👤 ${escapeHtml(u.username)}</span>`).join(" ");
+    } else {
+      usersHtml = `<span class="text-muted" style="font-size:0.75rem;">Aucun utilisateur rattaché</span>`;
+    }
+
+    html += `
+      <div class="sftp-share-card">
+        <div class="sftp-share-top">
+          <div class="sftp-share-meta">
+            <div class="sftp-share-folder-icon">📂</div>
+            <div>
+              <h4 class="sftp-share-name">${escapeHtml(s.name)}</h4>
+              <p class="sftp-share-desc">${escapeHtml(s.description || "Partage de dossier sFTP")}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sftp-share-path-box">
+          <span>${escapeHtml(s.path)}</span>
+          <button type="button" class="btn btn-xs btn-secondary" onclick="copyToClipboard('${escapeHtml(s.path)}', this)" title="Copier le chemin">📋</button>
+        </div>
+
+        <div class="sftp-share-stats-row">
+          <div class="sftp-share-stats-item">
+            <span>📊 Espace :</span>
+            <strong>${escapeHtml(s.size_human || "0 B")}</strong>
+          </div>
+          <div class="sftp-share-stats-item">
+            <span>📄 Fichiers :</span>
+            <strong>${s.item_count || 0}</strong>
+          </div>
+        </div>
+
+        <div class="sftp-share-users-row">
+          <span style="font-size:0.76rem; color:#9399b2; margin-right:4px;">Accès :</span>
+          ${usersHtml}
+        </div>
+
+        <div class="sftp-share-bottom">
+          <button type="button" class="btn btn-xs btn-secondary" onclick="openFolderInDolphinUI('${escapeHtml(s.path)}')" title="Ouvrir dans le gestionnaire de fichiers">
+            <span>📂</span> Ouvrir dans Dolphin
+          </button>
+          <button type="button" class="btn btn-xs btn-secondary" onclick="editSftpShare('${escapeHtml(s.id)}')" title="Modifier les paramètres">
+            <span>✏️</span> Modifier
+          </button>
+          <button type="button" class="btn btn-xs btn-danger" onclick="deleteSftpShareUI('${escapeHtml(s.id)}')" title="Supprimer ce partage">
+            <span>🗑️</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+}
+
+function renderSftpUsers(users, shares) {
+  const container = document.getElementById("sftp-users-table-wrap");
+  if (!container) return;
+
+  if (!users || users.length === 0) {
+    container.innerHTML = `
+      <div class="sftp-empty-placeholder">
+        <p>👤 Aucun utilisateur sFTP configuré pour le moment.</p>
+        <button type="button" class="btn btn-primary btn-sm" onclick="openAddUserModal()">
+          <span>➕</span> Créer un accès utilisateur
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  const sharesMap = {};
+  if (shares) {
+    for (const s of shares) {
+      sharesMap[s.id] = s.name;
+    }
+  }
+
+  let rows = "";
+  for (const u of users) {
+    const shareName = sharesMap[u.share_id] || u.share_id || "Dossier par défaut";
+    
+    let permBadge = "";
+    if (u.permission === "ro") {
+      permBadge = `<span class="sftp-perm-badge sftp-perm-ro">👁️ Lecture Seule (-R)</span>`;
+    } else if (u.permission === "rw") {
+      permBadge = `<span class="sftp-perm-badge sftp-perm-rw">✍️ Écriture sans Suppression</span>`;
+    } else {
+      permBadge = `<span class="sftp-perm-badge sftp-perm-full">⚡ Contrôle Total</span>`;
+    }
+
+    const statusBadge = u.enabled 
+      ? `<span class="badge badge-success" style="font-size:0.75rem;">Actif</span>`
+      : `<span class="badge badge-warning" style="font-size:0.75rem;">Suspendu</span>`;
+
+    const initial = u.username.charAt(0).toUpperCase();
+
+    rows += `
+      <tr>
+        <td>
+          <div class="sftp-user-profile">
+            <div class="sftp-user-avatar">${initial}</div>
+            <div class="sftp-user-info-wrap">
+              <strong>${escapeHtml(u.username)}</strong>
+              <small>Créé le ${escapeHtml(u.created_at || "Récemment")}</small>
+            </div>
+          </div>
+        </td>
+        <td>
+          <span style="font-weight:600; color:#cdd6f4;">📂 ${escapeHtml(shareName)}</span>
+        </td>
+        <td>
+          ${permBadge}
+        </td>
+        <td>
+          ${statusBadge}
+        </td>
+        <td>
+          <div style="display:flex; gap:6px; justify-content:flex-end;">
+            <button type="button" class="btn btn-xs btn-secondary" onclick="editSftpUser('${escapeHtml(u.username)}')" title="Modifier les permissions ou le mot de passe">
+              <span>✏️</span> Modifier
+            </button>
+            <button type="button" class="btn btn-xs btn-danger" onclick="deleteSftpUserUI('${escapeHtml(u.username)}')" title="Supprimer cet utilisateur">
+              <span>🗑️</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  container.innerHTML = `
+    <table class="sftp-users-table">
+      <thead>
+        <tr>
+          <th>Utilisateur</th>
+          <th>Dossier Partagé</th>
+          <th>Permissions d'Accès</th>
+          <th>Statut</th>
+          <th style="text-align:right;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
+
+// -------------------------------------------------------------------------
+// ACTIONS SERVICES & PARE-FEU
+// -------------------------------------------------------------------------
+
+async function toggleSftpServiceFromUI(enable) {
+  try {
+    showToast(enable ? "Activation du service OpenSSH..." : "Désactivation du service OpenSSH...", "info");
+    const res = await invoke("toggle_sftp_service", { enable });
+    showToast(res, "success");
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur bascule OpenSSH : " + err, "error");
+    await loadSftpOverview(false);
+  }
+}
+
+async function controlSftpServiceUI(action) {
+  try {
+    showToast(`Exécution de ${action} sur sshd...`, "info");
+    const res = await invoke("control_sftp_service", { action });
+    showToast(res, "success");
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur action sshd : " + err, "error");
+  }
+}
+
+async function toggleSftpRunningState() {
+  if (!currentSftpOverview) return;
+  const isRunning = currentSftpOverview.status.sshd_active;
+  await controlSftpServiceUI(isRunning ? "stop" : "start");
+}
+
+async function openSftpFirewallUI() {
+  try {
+    showToast("Autorisation du port 22 dans le pare-feu...", "info");
+    const res = await invoke("open_sftp_firewall_port");
+    showToast(res, "success");
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur pare-feu : " + err, "error");
+  }
+}
+
+function copySftpConnectionUri() {
+  const uriEl = document.getElementById("sftp-connection-uri");
+  const icon = document.getElementById("sftp-copy-icon");
+  if (!uriEl) return;
+
+  navigator.clipboard.writeText(uriEl.textContent).then(() => {
+    if (icon) icon.textContent = "✅";
+    showToast("URL sFTP copiée dans le presse-papier !", "success");
+    setTimeout(() => {
+      if (icon) icon.textContent = "📋";
+    }, 2000);
+  }).catch(err => {
+    showToast("Erreur copie : " + err, "error");
+  });
+}
+
+function openFolderInDolphinUI(path) {
+  invoke("open_folder_in_dolphin", { path }).then(() => {
+    showToast("Dossier ouvert dans Dolphin", "info");
+  }).catch(err => {
+    showToast("Erreur ouverture dossier : " + err, "error");
+  });
+}
+
+// -------------------------------------------------------------------------
+// MODALES & GESTION DES PARTAGES
+// -------------------------------------------------------------------------
+
+function closeSftpModals() {
+  const m1 = document.getElementById("modal-sftp-share");
+  const m2 = document.getElementById("modal-sftp-user");
+  if (m1) m1.classList.remove("active");
+  if (m2) m2.classList.remove("active");
+}
+
+function openAddShareModal() {
+  const modal = document.getElementById("modal-sftp-share");
+  const title = document.getElementById("modal-sftp-share-title");
+  const idInput = document.getElementById("sftp-share-edit-id");
+  const nameInput = document.getElementById("sftp-share-name");
+  const pathInput = document.getElementById("sftp-share-path");
+  const descInput = document.getElementById("sftp-share-desc");
+
+  if (title) title.textContent = "📁 Nouveau Dossier Partagé sFTP";
+  if (idInput) idInput.value = "";
+  if (nameInput) nameInput.value = "";
+  if (pathInput) pathInput.value = "/home/chomiam/Partages/nouveau_partage";
+  if (descInput) descInput.value = "";
+
+  if (modal) modal.classList.add("active");
+}
+
+function editSftpShare(id) {
+  if (!currentSftpOverview) return;
+  const share = currentSftpOverview.shares.find(s => s.id === id);
+  if (!share) return;
+
+  const modal = document.getElementById("modal-sftp-share");
+  const title = document.getElementById("modal-sftp-share-title");
+  const idInput = document.getElementById("sftp-share-edit-id");
+  const nameInput = document.getElementById("sftp-share-name");
+  const pathInput = document.getElementById("sftp-share-path");
+  const descInput = document.getElementById("sftp-share-desc");
+
+  if (title) title.textContent = "✏️ Modifier le Dossier Partagé";
+  if (idInput) idInput.value = share.id;
+  if (nameInput) nameInput.value = share.name;
+  if (pathInput) pathInput.value = share.path;
+  if (descInput) descInput.value = share.description || "";
+
+  if (modal) modal.classList.add("active");
+}
+
+async function submitSaveSftpShare() {
+  const idInput = document.getElementById("sftp-share-edit-id");
+  const nameInput = document.getElementById("sftp-share-name");
+  const pathInput = document.getElementById("sftp-share-path");
+  const descInput = document.getElementById("sftp-share-desc");
+
+  const name = nameInput ? nameInput.value.trim() : "";
+  const path = pathInput ? pathInput.value.trim() : "";
+  const desc = descInput ? descInput.value.trim() : "";
+  const id = idInput && idInput.value ? idInput.value : ("share_" + Date.now());
+
+  if (!name) {
+    showToast("Veuillez saisir un nom pour le partage.", "warning");
+    return;
+  }
+  if (!path) {
+    showToast("Veuillez spécifier le chemin du dossier sur la machine.", "warning");
+    return;
+  }
+
+  const shareObj = {
+    id: id,
+    name: name,
+    path: path,
+    description: desc,
+    created_at: new Date().toISOString().split("T")[0],
+    authorized_users: [],
+    item_count: 0,
+    size_human: "0 B"
+  };
+
+  try {
+    const res = await invoke("save_sftp_share", { share: shareObj });
+    showToast(res, "success");
+    closeSftpModals();
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur enregistrement partage : " + err, "error");
+  }
+}
+
+async function deleteSftpShareUI(id) {
+  if (!confirm("Voulez-vous vraiment supprimer ce dossier partagé sFTP ? Les fichiers physiques ne seront pas supprimés.")) {
+    return;
+  }
+
+  try {
+    const res = await invoke("delete_sftp_share", { shareId: id });
+    showToast(res, "success");
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur suppression partage : " + err, "error");
+  }
+}
+
+// -------------------------------------------------------------------------
+// MODALES & GESTION DES UTILISATEURS
+// -------------------------------------------------------------------------
+
+function openAddUserModal() {
+  const modal = document.getElementById("modal-sftp-user");
+  const title = document.getElementById("modal-sftp-user-title");
+  const nameInput = document.getElementById("sftp-user-name");
+  const pwdInput = document.getElementById("sftp-user-password");
+  const pwdHint = document.getElementById("sftp-user-password-hint");
+  const shareSelect = document.getElementById("sftp-user-share");
+  const enabledCheck = document.getElementById("sftp-user-enabled");
+
+  if (title) title.textContent = "👤 Nouvel Utilisateur sFTP";
+  if (nameInput) {
+    nameInput.value = "";
+    nameInput.disabled = false;
+  }
+  if (pwdInput) pwdInput.value = "";
+  if (pwdHint) pwdHint.textContent = "La connexion sFTP se fera avec ce mot de passe sans nécessiter de clé SSH.";
+  if (enabledCheck) enabledCheck.checked = true;
+
+  // Options de dossiers partagés
+  if (shareSelect && currentSftpOverview && currentSftpOverview.shares) {
+    shareSelect.innerHTML = currentSftpOverview.shares.map(s => 
+      `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)} (${escapeHtml(s.path)})</option>`
+    ).join("");
+  }
+
+  // Permission par défaut : Lecture seule
+  const roRadio = document.querySelector('input[name="sftp-user-perm"][value="ro"]');
+  if (roRadio) roRadio.checked = true;
+
+  if (modal) modal.classList.add("active");
+}
+
+function editSftpUser(username) {
+  if (!currentSftpOverview) return;
+  const user = currentSftpOverview.users.find(u => u.username === username);
+  if (!user) return;
+
+  const modal = document.getElementById("modal-sftp-user");
+  const title = document.getElementById("modal-sftp-user-title");
+  const nameInput = document.getElementById("sftp-user-name");
+  const pwdInput = document.getElementById("sftp-user-password");
+  const pwdHint = document.getElementById("sftp-user-password-hint");
+  const shareSelect = document.getElementById("sftp-user-share");
+  const enabledCheck = document.getElementById("sftp-user-enabled");
+
+  if (title) title.textContent = `✏️ Modifier l'Utilisateur sFTP : ${username}`;
+  if (nameInput) {
+    nameInput.value = user.username;
+    nameInput.disabled = true; // Pas de renommage d'identifiant système direct
+  }
+  if (pwdInput) pwdInput.value = "";
+  if (pwdHint) pwdHint.textContent = "Laissez vide pour conserver le mot de passe actuel inchangé.";
+  if (enabledCheck) enabledCheck.checked = user.enabled;
+
+  if (shareSelect && currentSftpOverview && currentSftpOverview.shares) {
+    shareSelect.innerHTML = currentSftpOverview.shares.map(s => 
+      `<option value="${escapeHtml(s.id)}" ${s.id === user.share_id ? "selected" : ""}>${escapeHtml(s.name)} (${escapeHtml(s.path)})</option>`
+    ).join("");
+  }
+
+  const permRadio = document.querySelector(`input[name="sftp-user-perm"][value="${user.permission}"]`);
+  if (permRadio) permRadio.checked = true;
+
+  if (modal) modal.classList.add("active");
+}
+
+async function submitSaveSftpUser() {
+  const nameInput = document.getElementById("sftp-user-name");
+  const pwdInput = document.getElementById("sftp-user-password");
+  const shareSelect = document.getElementById("sftp-user-share");
+  const enabledCheck = document.getElementById("sftp-user-enabled");
+  const permRadio = document.querySelector('input[name="sftp-user-perm"]:checked');
+
+  const username = nameInput ? nameInput.value.trim().toLowerCase() : "";
+  const password = pwdInput ? pwdInput.value : "";
+  const shareId = shareSelect ? shareSelect.value : "";
+  const enabled = enabledCheck ? enabledCheck.checked : true;
+  const permission = permRadio ? permRadio.value : "ro";
+
+  if (!username) {
+    showToast("Veuillez indiquer un nom d'utilisateur.", "warning");
+    return;
+  }
+
+  // Si c'est une création (input non désactivé), le mot de passe est obligatoire
+  const isNew = nameInput && !nameInput.disabled;
+  if (isNew && !password) {
+    showToast("Un mot de passe est requis pour la création de l'accès sFTP.", "warning");
+    return;
+  }
+
+  const userObj = {
+    username: username,
+    share_id: shareId,
+    permission: permission,
+    enabled: enabled,
+    created_at: new Date().toISOString().split("T")[0]
+  };
+
+  try {
+    showToast("Configuration du compte sFTP en cours...", "info");
+    const res = await invoke("save_sftp_user", { 
+      user: userObj, 
+      password: password || null 
+    });
+    showToast(res, "success");
+    closeSftpModals();
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur configuration utilisateur : " + err, "error");
+  }
+}
+
+async function deleteSftpUserUI(username) {
+  if (!confirm(`Voulez-vous vraiment supprimer définitivement l'utilisateur sFTP "${username}" ?`)) {
+    return;
+  }
+
+  try {
+    showToast(`Suppression de ${username}...`, "info");
+    const res = await invoke("delete_sftp_user", { username });
+    showToast(res, "success");
+    await loadSftpOverview(false);
+  } catch (err) {
+    showToast("Erreur suppression utilisateur : " + err, "error");
+  }
+}
+
+function toggleSftpPasswordVisibility() {
+  const pwdInput = document.getElementById("sftp-user-password");
+  if (!pwdInput) return;
+  pwdInput.type = pwdInput.type === "password" ? "text" : "password";
+}
+
+function generateSftpRandomPassword() {
+  const pwdInput = document.getElementById("sftp-user-password");
+  if (!pwdInput) return;
+
+  const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%&*";
+  let pwd = "";
+  for (let i = 0; i < 12; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  pwdInput.value = pwd;
+  pwdInput.type = "text";
+  showToast("Mot de passe sécurisé généré !", "info");
+}
+
+window.loadSftpOverview = loadSftpOverview;
+window.toggleSftpServiceFromUI = toggleSftpServiceFromUI;
+window.controlSftpServiceUI = controlSftpServiceUI;
+window.toggleSftpRunningState = toggleSftpRunningState;
+window.openSftpFirewallUI = openSftpFirewallUI;
+window.copySftpConnectionUri = copySftpConnectionUri;
+window.openFolderInDolphinUI = openFolderInDolphinUI;
+window.closeSftpModals = closeSftpModals;
+window.openAddShareModal = openAddShareModal;
+window.editSftpShare = editSftpShare;
+window.submitSaveSftpShare = submitSaveSftpShare;
+window.deleteSftpShareUI = deleteSftpShareUI;
+window.openAddUserModal = openAddUserModal;
+window.editSftpUser = editSftpUser;
+window.submitSaveSftpUser = submitSaveSftpUser;
+window.deleteSftpUserUI = deleteSftpUserUI;
+window.toggleSftpPasswordVisibility = toggleSftpPasswordVisibility;
+window.generateSftpRandomPassword = generateSftpRandomPassword;

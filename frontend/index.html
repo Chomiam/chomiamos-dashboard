@@ -1932,6 +1932,14 @@
                 </div>
                 <span id="podman-badge-count" class="net-subnav-pill">2</span>
               </button>
+              <button type="button" class="net-subnav-btn" data-subtab="net-subtab-sftp" onclick="switchNetworkSubtab('net-subtab-sftp')">
+                <span class="net-subnav-icon">📁</span>
+                <div class="net-subnav-text">
+                  <strong>Partage sFTP</strong>
+                  <small>Dossiers, Accès & Port 22</small>
+                </div>
+                <span id="sftp-nav-badge" class="net-subnav-pill sftp-pill-ok">Actif</span>
+              </button>
             </nav>
             <div class="net-sidebar-footer">
               <div class="net-sidebar-status">
@@ -2367,6 +2375,138 @@
                 <pre id="podman-terminal-output" class="podman-terminal-pre">Sélectionnez un conteneur pour afficher ses journaux d'exécution...</pre>
               </div>
             </div>
+            <!-- SOUS-ONGLET 4 : PARTAGE sFTP -->
+            <div id="net-subtab-sftp" class="net-subtab-pane">
+
+              <!-- Hero Card : Service OpenSSH, Port 22 & Pare-feu -->
+              <div class="card sftp-hero-card">
+                <div class="sftp-hero-header">
+                  <div class="sftp-hero-title-wrap">
+                    <div class="sftp-hero-icon-box">📁</div>
+                    <div>
+                      <div class="sftp-title-row">
+                        <h2>Serveur & Partage de Fichiers sFTP</h2>
+                        <span id="sftp-service-pill" class="sftp-status-pill active">
+                          <span class="sftp-dot online"></span>
+                          <span id="sftp-service-status-text">Service sshd Actif</span>
+                        </span>
+                      </div>
+                      <p class="sftp-subtitle">Transferts de fichiers sécurisés SSH • Authentification par mot de passe • Chroot & Permissions</p>
+                    </div>
+                  </div>
+
+                  <!-- Contrôle d'activation global OpenSSH -->
+                  <div class="sftp-switch-box">
+                    <label class="sftp-switch-label" for="sftp-toggle-enable">
+                      <span>Bloc OpenSSH :</span>
+                    </label>
+                    <label class="switch">
+                      <input type="checkbox" id="sftp-toggle-enable" checked onchange="toggleSftpServiceFromUI(this.checked)">
+                      <span class="slider round"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Barre d'indicateurs Sécurité & Réseau -->
+                <div class="sftp-metrics-bar">
+                  <div class="sftp-metric-pill" id="sftp-pill-port22" title="État du port 22 dans le pare-feu et socket TCP">
+                    <span class="sftp-metric-icon">🛡️</span>
+                    <div class="sftp-metric-details">
+                      <span class="sftp-metric-label">Port 22 & Pare-feu</span>
+                      <strong id="sftp-status-port22" class="text-success">Vérification...</strong>
+                    </div>
+                    <button type="button" id="btn-fix-firewall-22" class="btn btn-xs btn-primary d-none" onclick="openSftpFirewallUI()">
+                      Ouvrir Port 22
+                    </button>
+                  </div>
+
+                  <div class="sftp-metric-pill" title="Connexion configurée par mot de passe sans clé obligatoire">
+                    <span class="sftp-metric-icon">🔑</span>
+                    <div class="sftp-metric-details">
+                      <span class="sftp-metric-label">Authentification</span>
+                      <strong class="text-info">Mot de passe actif (sans clé)</strong>
+                    </div>
+                  </div>
+
+                  <div class="sftp-metric-pill sftp-metric-uri" title="Adresse de connexion pour vos clients sFTP (FileZilla, Cyberduck, etc.)">
+                    <span class="sftp-metric-icon">🌐</span>
+                    <div class="sftp-metric-details">
+                      <span class="sftp-metric-label">URL de Connexion sFTP</span>
+                      <strong id="sftp-connection-uri">sftp://utilisateur@127.0.0.1:22</strong>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-secondary" onclick="copySftpConnectionUri()" title="Copier l'URL sFTP">
+                      <span id="sftp-copy-icon">📋</span> Copier
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Barre d'actions rapides sur le service sshd -->
+                <div class="sftp-actions-bar">
+                  <div class="sftp-action-group">
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="controlSftpServiceUI('restart')" title="Redémarrer le démon OpenSSH (sshd)">
+                      <span>🔄</span> Redémarrer sshd
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="controlSftpServiceUI('reload')" title="Recharger la configuration sans couper les sessions">
+                      <span>⚡</span> Recharger la configuration
+                    </button>
+                    <button type="button" id="btn-sftp-stop-start" class="btn btn-sm btn-secondary" onclick="toggleSftpRunningState()" title="Démarrer ou arrêter le service">
+                      <span>⏹️</span> Arrêter sshd
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="loadSftpOverview(true)" title="Actualiser l'état">
+                      <span>🔃</span> Actualiser
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ================= SECTION 1 : GESTIONNAIRE DE DOSSIERS PARTAGÉS ================= -->
+              <div class="sftp-section-card card">
+                <div class="sftp-section-header">
+                  <div class="sftp-section-title-wrap">
+                    <div class="sftp-section-icon">📂</div>
+                    <div>
+                      <h3>Gestionnaire de Dossiers Partagés</h3>
+                      <p class="text-muted">Répertoires système mis à disposition pour les transferts sFTP</p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openAddShareModal()">
+                    <span>➕</span> Nouveau Dossier Partagé
+                  </button>
+                </div>
+
+                <div id="sftp-shares-grid" class="sftp-shares-grid">
+                  <!-- Chargement dynamique des partages -->
+                  <div class="sftp-empty-placeholder">
+                    <span>⏳</span> Chargement des partages sFTP en cours...
+                  </div>
+                </div>
+              </div>
+
+              <!-- ================= SECTION 2 : GESTION DES UTILISATEURS & PERMISSIONS ================= -->
+              <div class="sftp-section-card card">
+                <div class="sftp-section-header">
+                  <div class="sftp-section-title-wrap">
+                    <div class="sftp-section-icon">👥</div>
+                    <div>
+                      <h3>Gestion des Utilisateurs sFTP & Permissions</h3>
+                      <p class="text-muted">Créez des accès sécurisés isolés avec permissions fines (Lecture, Écriture, Suppression)</p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" onclick="openAddUserModal()">
+                    <span>➕</span> Créer un Utilisateur sFTP
+                  </button>
+                </div>
+
+                <div id="sftp-users-table-wrap" class="sftp-users-table-wrap">
+                  <!-- Liste des utilisateurs générée dynamiquement -->
+                  <div class="sftp-empty-placeholder">
+                    <span>⏳</span> Chargement des utilisateurs sFTP en cours...
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
             </div>
           </div>
         </div>
@@ -2816,5 +2956,114 @@
   <script src="js/xterm.js"></script>
   <script src="js/addon-fit.js"></script>
   <script src="js/app.js"></script>
+
+  <!-- MODAL : AJOUTER / ÉDITER UN DOSSIER PARTAGÉ sFTP -->
+  <div id="modal-sftp-share" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeSftpModals()"></div>
+    <div class="custom-modal-content">
+      <div class="custom-modal-header">
+        <h3 id="modal-sftp-share-title">📁 Nouveau Dossier Partagé sFTP</h3>
+        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">×</button>
+      </div>
+      <div class="custom-modal-body">
+        <input type="hidden" id="sftp-share-edit-id" value="">
+        <div class="form-group">
+          <label for="sftp-share-name">Nom du Partage <span class="text-danger">*</span></label>
+          <input type="text" id="sftp-share-name" class="form-control" placeholder="ex: Public, Documents, Sauvegardes">
+        </div>
+        <div class="form-group">
+          <label for="sftp-share-path">Chemin du Dossier sur la machine <span class="text-danger">*</span></label>
+          <div class="input-group">
+            <input type="text" id="sftp-share-path" class="form-control" placeholder="/home/chomiam/Partages/mon_dossier">
+          </div>
+          <small class="text-muted">Le dossier sera créé automatiquement s'il n'existe pas encore.</small>
+        </div>
+        <div class="form-group">
+          <label for="sftp-share-desc">Description (facultative)</label>
+          <input type="text" id="sftp-share-desc" class="form-control" placeholder="ex: Partage pour les échanges de fichiers volumineux">
+        </div>
+      </div>
+      <div class="custom-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeSftpModals()">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitSaveSftpShare()">Enregistrer le Partage</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL : CRÉER / ÉDITER UN UTILISATEUR sFTP -->
+  <div id="modal-sftp-user" class="custom-modal">
+    <div class="custom-modal-backdrop" onclick="closeSftpModals()"></div>
+    <div class="custom-modal-content">
+      <div class="custom-modal-header">
+        <h3 id="modal-sftp-user-title">👤 Nouvel Utilisateur sFTP</h3>
+        <button type="button" class="modal-close-btn" onclick="closeSftpModals()">×</button>
+      </div>
+      <div class="custom-modal-body">
+        <div class="form-group">
+          <label for="sftp-user-name">Identifiant de Connexion (Username) <span class="text-danger">*</span></label>
+          <input type="text" id="sftp-user-name" class="form-control" placeholder="ex: invité, client, partenaire">
+          <small class="text-muted">Lettres, chiffres, tirets et underscores uniquement.</small>
+        </div>
+        <div class="form-group">
+          <label for="sftp-user-password" id="lbl-sftp-user-password">Mot de Passe <span class="text-danger">*</span></label>
+          <div class="input-password-wrap">
+            <input type="password" id="sftp-user-password" class="form-control" placeholder="Définir un mot de passe sécurisé">
+            <button type="button" class="btn btn-xs btn-secondary" onclick="toggleSftpPasswordVisibility()">👁️</button>
+            <button type="button" class="btn btn-xs btn-secondary" onclick="generateSftpRandomPassword()">🎲 Générer</button>
+          </div>
+          <small id="sftp-user-password-hint" class="text-muted">La connexion sFTP se fera avec ce mot de passe sans nécessiter de clé SSH.</small>
+        </div>
+        <div class="form-group">
+          <label for="sftp-user-share">Dossier Racine Assigné <span class="text-danger">*</span></label>
+          <select id="sftp-user-share" class="form-control">
+            <!-- Rempli dynamiquement avec les partages -->
+          </select>
+          <small class="text-muted">L'utilisateur sera confiné dans ce dossier (environnement sFTP isolé).</small>
+        </div>
+        
+        <div class="form-group">
+          <label>Niveau de Permissions <span class="text-danger">*</span></label>
+          <div class="sftp-permission-selector">
+            <label class="sftp-perm-card">
+              <input type="radio" name="sftp-user-perm" value="ro" checked>
+              <div class="sftp-perm-card-body">
+                <span class="sftp-perm-icon">👁️</span>
+                <strong>Lecture Seule</strong>
+                <small>Consultation & téléchargement uniquement. Écriture et suppression impossibles (-R).</small>
+              </div>
+            </label>
+            <label class="sftp-perm-card">
+              <input type="radio" name="sftp-user-perm" value="rw">
+              <div class="sftp-perm-card-body">
+                <span class="sftp-perm-icon">✍️</span>
+                <strong>Écriture sans Suppression</strong>
+                <small>Téléversement et consultation autorisés. Suppression de fichiers interdite (-P remove,rmdir).</small>
+              </div>
+            </label>
+            <label class="sftp-perm-card">
+              <input type="radio" name="sftp-user-perm" value="full">
+              <div class="sftp-perm-card-body">
+                <span class="sftp-perm-icon">⚡</span>
+                <strong>Contrôle Total</strong>
+                <small>Lecture, téléversement, renommage et suppression sans restriction.</small>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group form-check">
+          <label class="checkbox-label">
+            <input type="checkbox" id="sftp-user-enabled" checked>
+            <span>Compte actif et autorisé à se connecter</span>
+          </label>
+        </div>
+      </div>
+      <div class="custom-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeSftpModals()">Annuler</button>
+        <button type="button" class="btn btn-primary" onclick="submitSaveSftpUser()">Enregistrer l'Utilisateur</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

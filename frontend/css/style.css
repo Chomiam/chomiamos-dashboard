@@ -3770,8 +3770,8 @@ body {
 /* Modal Channel Grid */
 .dash-channel-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .dash-channel-card {
@@ -3784,6 +3784,8 @@ body {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .dash-channel-card input[type="radio"] {
@@ -3791,6 +3793,7 @@ body {
   margin-right: 10px;
   accent-color: var(--accent, #89b4fa);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .dash-channel-card:hover {
@@ -3806,28 +3809,38 @@ body {
 
 .dash-channel-body {
   flex: 1;
+  min-width: 0;
 }
 
 .dash-channel-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 6px;
   font-size: 13.5px;
 }
 
+.dash-channel-title-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .dash-channel-icon {
   font-size: 16px;
+  flex-shrink: 0;
 }
 
 .dash-channel-tag {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .dash-channel-tag.tag-stable {
@@ -3840,15 +3853,22 @@ body {
   color: var(--yellow, #f9e2af);
 }
 
+.dash-channel-ver-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .dash-channel-ver-pill {
   font-size: 11px;
   font-family: monospace;
   font-weight: 600;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--subtext0, #a6adc8);
-  margin-left: 6px;
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .dash-channel-desc {
@@ -3856,6 +3876,13 @@ body {
   font-size: 12px;
   color: var(--subtext0, #a6adc8);
   line-height: 1.45;
+  word-break: break-word;
+}
+
+@media (max-width: 620px) {
+  .dash-channel-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 

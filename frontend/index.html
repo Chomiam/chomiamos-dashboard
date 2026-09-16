@@ -2383,7 +2383,7 @@
 
     <!-- Modal Mise à Jour du Dashboard & Gestion des Canaux -->
     <div id="dashboard-update-modal" class="modal-overlay hidden">
-      <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-card" style="max-width: 640px; width: 92vw;">
         <div class="modal-header">
           <div class="modal-title-box">
             <span class="modal-icon">🚀</span>
@@ -2427,9 +2427,13 @@
                 <input type="radio" name="dash-channel-radio" value="stable" id="radio-channel-stable" onchange="onDashboardChannelChange('stable')">
                 <div class="dash-channel-body">
                   <div class="dash-channel-header">
-                    <span class="dash-channel-icon">🛡️</span>
-                    <strong>Stable</strong>
+                    <div class="dash-channel-title-box">
+                      <span class="dash-channel-icon">🛡️</span>
+                      <strong>Stable</strong>
+                    </div>
                     <span class="dash-channel-tag tag-stable">Recommandé</span>
+                  </div>
+                  <div class="dash-channel-ver-row">
                     <span id="card-channel-stable-ver" class="dash-channel-ver-pill">--</span>
                   </div>
                   <p class="dash-channel-desc">Branche <code>main</code> — Versions éprouvées et stables pour une utilisation quotidienne.</p>
@@ -2440,9 +2444,13 @@
                 <input type="radio" name="dash-channel-radio" value="testing" id="radio-channel-testing" onchange="onDashboardChannelChange('testing')">
                 <div class="dash-channel-body">
                   <div class="dash-channel-header">
-                    <span class="dash-channel-icon">🧪</span>
-                    <strong>Testing</strong>
+                    <div class="dash-channel-title-box">
+                      <span class="dash-channel-icon">🧪</span>
+                      <strong>Testing</strong>
+                    </div>
                     <span class="dash-channel-tag tag-testing">Avant-première</span>
+                  </div>
+                  <div class="dash-channel-ver-row">
                     <span id="card-channel-testing-ver" class="dash-channel-ver-pill">--</span>
                   </div>
                   <p class="dash-channel-desc">Branche <code>testing</code> — Accès anticipé aux fonctionnalités expérimentales et corrections rapides.</p>

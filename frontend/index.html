@@ -2375,14 +2375,21 @@
           <div class="dash-version-box">
             <div class="dash-version-row">
               <span class="dash-ver-label">Version actuelle installée :</span>
-              <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.3.3</span>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.3.5</span>
+                <span id="modal-dash-current-channel-tag" class="dash-channel-tag tag-testing">Testing</span>
+              </div>
             </div>
             <div class="dash-version-row">
-              <span class="dash-ver-label">Version disponible sur GitHub :</span>
-              <span id="modal-dash-remote-ver" class="dash-ver-badge remote">Recherche...</span>
+              <span class="dash-ver-label">Version disponible en Stable :</span>
+              <span id="modal-dash-stable-ver" class="dash-ver-badge remote">Recherche...</span>
             </div>
             <div class="dash-version-row">
-              <span class="dash-ver-label">Statut :</span>
+              <span class="dash-ver-label">Version disponible en Testing :</span>
+              <span id="modal-dash-testing-ver" class="dash-ver-badge remote" style="background: rgba(249, 226, 175, 0.15); color: #f9e2af; border-color: rgba(249, 226, 175, 0.3);">Recherche...</span>
+            </div>
+            <div class="dash-version-row">
+              <span class="dash-ver-label">Statut pour votre canal :</span>
               <span id="modal-dash-status-badge" class="dash-status-badge up-to-date">À jour</span>
             </div>
           </div>
@@ -2399,6 +2406,7 @@
                     <span class="dash-channel-icon">🛡️</span>
                     <strong>Stable</strong>
                     <span class="dash-channel-tag tag-stable">Recommandé</span>
+                    <span id="card-channel-stable-ver" class="dash-channel-ver-pill">--</span>
                   </div>
                   <p class="dash-channel-desc">Branche <code>main</code> — Versions éprouvées et stables pour une utilisation quotidienne.</p>
                 </div>
@@ -2411,6 +2419,7 @@
                     <span class="dash-channel-icon">🧪</span>
                     <strong>Testing</strong>
                     <span class="dash-channel-tag tag-testing">Avant-première</span>
+                    <span id="card-channel-testing-ver" class="dash-channel-ver-pill">--</span>
                   </div>
                   <p class="dash-channel-desc">Branche <code>testing</code> — Accès anticipé aux fonctionnalités expérimentales et corrections rapides.</p>
                 </div>

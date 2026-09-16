@@ -2,7 +2,7 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "chomiamos-dashboard";
-  version = "0.3.5";
+  version = "0.3.6";
 
   src = ./.;
 

@@ -173,7 +173,7 @@ pub fn get_default_providers() -> Vec<DnsProvider> {
             name: "DNS.SB (Anycast No-Log)".to_string(),
             category: "privacy".to_string(),
             description: "Réseau DNS indépendant présent mondialement avec support DNSSEC natif et engagement strict de non-conservation des journaux.".to_string(),
-            primary_ip: "185.222.222.222".to_string(),
+            primary_ip: "80.67.169.12".to_string(),
             secondary_ip: Some("45.11.45.11".to_string()),
             tags: vec!["DNSSEC".to_string(), "No-log".to_string(), "Rapide".to_string()],
             icon: "🚀".to_string(),
@@ -358,50 +358,73 @@ async fn measure_single_dns_ping(ip: &str) -> Option<f64> {
         return None;
     }
 
-    let target = format!("{}:53", ip);
-    let socket = match UdpSocket::bind("0.0.0.0:0").await {
-        Ok(s) => s,
-        Err(_) => return None,
+    // 1. Priorité au ping ICMP système (/run/wrappers/bin/ping ou ping dans le PATH)
+    let ping_cmd = if Path::new("/run/wrappers/bin/ping").exists() {
+        "/run/wrappers/bin/ping"
+    } else {
+        "ping"
     };
 
-    // Paquet de requête DNS A minimal pour google.com
-    let query: [u8; 28] = [
-        0x12, 0x34, // ID
-        0x01, 0x00, // Flags standard query recursion desired
-        0x00, 0x01, // 1 question
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RRs
-        0x06, b'g', b'o', b'o', b'g', b'l', b'e',
-        0x03, b'c', b'o', b'm',
-        0x00,       // End
-        0x00, 0x01, // Type A
-        0x00, 0x01, // Class IN
-    ];
+    let ping_out = tokio::process::Command::new(ping_cmd)
+        .env("LANG", "C")
+        .args(["-c", "1", "-W", "1", ip])
+        .output()
+        .await;
 
-    let t0 = Instant::now();
-    let send_res = tokio::time::timeout(Duration::from_millis(1500), socket.send_to(&query, &target)).await;
-    if send_res.is_err() || send_res.unwrap().is_err() {
-        return None;
-    }
-
-    let mut buf = [0u8; 512];
-    let recv_res = tokio::time::timeout(Duration::from_millis(1500), socket.recv_from(&mut buf)).await;
-    match recv_res {
-        Ok(Ok((bytes_read, _))) if bytes_read > 0 => {
-            let elapsed = t0.elapsed().as_secs_f64() * 1000.0;
-            Some((elapsed * 10.0).round() / 10.0)
-        }
-        _ => {
-            // Fallback: tentative TCP connect sur port 53
-            let t0_tcp = Instant::now();
-            let tcp_res = tokio::time::timeout(Duration::from_millis(1200), tokio::net::TcpStream::connect(&target)).await;
-            if let Ok(Ok(_)) = tcp_res {
-                let elapsed = t0_tcp.elapsed().as_secs_f64() * 1000.0;
-                Some((elapsed * 10.0).round() / 10.0)
-            } else {
-                None
+    if let Ok(out) = ping_out {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(pos) = text.find("time=") {
+                let after = &text[pos + 5..];
+                if let Some(end) = after.find(" ms") {
+                    if let Ok(val) = after[..end].trim().parse::<f64>() {
+                        return Some((val * 10.0).round() / 10.0);
+                    }
+                }
+            } else if let Some(pos) = text.find("rtt min/avg/max/mdev = ") {
+                let after = &text[pos + 23..];
+                let parts: Vec<&str> = after.split('/').collect();
+                if parts.len() > 1 {
+                    if let Ok(val) = parts[1].trim().parse::<f64>() {
+                        return Some((val * 10.0).round() / 10.0);
+                    }
+                }
             }
         }
     }
+
+    // 2. Fallback: socket UDP port 53
+    let target = format!("{}:53", ip);
+    if let Ok(socket) = UdpSocket::bind("0.0.0.0:0").await {
+        if socket.connect(&target).await.is_ok() {
+            let query: [u8; 28] = [
+                0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x06, b'g', b'o', b'o',
+                b'g', b'l', b'e', 0x03, b'c', b'o', b'm', 0x00,
+                0x00, 0x01, 0x00, 0x01,
+            ];
+
+            let t0 = Instant::now();
+            if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_millis(800), socket.send(&query)).await {
+                let mut buf = [0u8; 512];
+                if let Ok(Ok(bytes_read)) = tokio::time::timeout(Duration::from_millis(800), socket.recv(&mut buf)).await {
+                    if bytes_read > 0 {
+                        let elapsed = t0.elapsed().as_secs_f64() * 1000.0;
+                        return Some((elapsed * 10.0).round() / 10.0);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback: connexion TCP port 53
+    let t0_tcp = Instant::now();
+    if let Ok(Ok(_)) = tokio::time::timeout(Duration::from_millis(600), tokio::net::TcpStream::connect(&target)).await {
+        let elapsed = t0_tcp.elapsed().as_secs_f64() * 1000.0;
+        return Some((elapsed * 10.0).round() / 10.0);
+    }
+
+    None
 }
 
 #[tauri::command]
@@ -841,5 +864,19 @@ pub async fn restart_podman_container(unit_name: String) -> Result<String, Strin
     } else {
         let err = String::from_utf8_lossy(&res.stderr).to_string();
         Err(format!("Erreur lors du redémarrage: {}", err))
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires network"]
+    async fn test_dns_ping() {
+        let res = ping_dns_servers(vec!["1.1.1.1".to_string(), "8.8.8.8".to_string(), "9.9.9.9".to_string(), "80.67.169.12".to_string()]).await;
+        println!("DNS ping result: {:?}", res);
+        assert!(res.is_ok());
     }
 }

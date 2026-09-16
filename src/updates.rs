@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::process::Command;
@@ -13,9 +12,40 @@ pub struct UpdateCheckResult {
     pub dashboard_locked_commit: Option<String>,
     pub dashboard_channel: String,
     pub dashboard_remote_version: Option<String>,
+    pub dashboard_stable_version: Option<String>,
+    pub dashboard_stable_commit: Option<String>,
+    pub dashboard_testing_version: Option<String>,
+    pub dashboard_testing_commit: Option<String>,
     pub system_needs_switch: bool,
     pub current_version: String,
     pub message: String,
+}
+
+fn fetch_remote_cargo_version(branch: &str) -> Option<String> {
+    let url = format!(
+        "https://raw.githubusercontent.com/Chomiam/chomiamos-dashboard/{}/Cargo.toml",
+        branch
+    );
+    let output = Command::new("curl")
+        .args(["-s", "--connect-timeout", "3", "--max-time", "5", &url])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let content = String::from_utf8_lossy(&output.stdout);
+        for line in content.lines() {
+            let l = line.trim();
+            if l.starts_with("version =") {
+                if let Some((_, v)) = l.split_once('=') {
+                    let ver = v.trim().trim_matches('"').trim_matches('\'').trim();
+                    if !ver.is_empty() {
+                        return Some(ver.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 pub fn check_system_updates() -> UpdateCheckResult {
@@ -115,41 +145,73 @@ pub fn check_system_updates() -> UpdateCheckResult {
         }
     }
 
-    // 4. Vérification de la disponibilité d'une mise à jour sur GitHub
-    let mut dashboard_has_updates = false;
-    let mut dashboard_locked_commit = None;
-    let mut dashboard_remote_commit = None;
-    let dashboard_remote_version = None;
+    // 4. Récupération des versions distantes pour Stable (main) ET Testing (testing)
+    let ls_remote_out = Command::new("git")
+        .args([
+            "ls-remote",
+            "https://github.com/Chomiam/chomiamos-dashboard.git",
+            "refs/heads/main",
+            "refs/heads/testing",
+        ])
+        .output();
 
-    if let Some(rev) = installed_commit {
-        dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
+    let mut dashboard_stable_commit = None;
+    let mut dashboard_testing_commit = None;
+    let mut full_stable_commit = String::new();
+    let mut full_testing_commit = String::new();
 
-        let target_ref = if dashboard_channel == "Testing" {
-            "refs/heads/testing"
-        } else {
-            "refs/heads/main"
-        };
-
-        let remote_dash = Command::new("git")
-            .args([
-                "ls-remote",
-                "https://github.com/Chomiam/chomiamos-dashboard.git",
-                target_ref,
-            ])
-            .output();
-
-        if let Ok(out) = remote_dash {
-            if out.status.success() {
-                let text = String::from_utf8_lossy(&out.stdout);
-                if let Some(token) = text.split_whitespace().next() {
-                    dashboard_remote_commit = Some(token[..7.min(token.len())].to_string());
-                    if token != rev {
-                        dashboard_has_updates = true;
+    if let Ok(out) = ls_remote_out {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let sha = parts[0];
+                    let r = parts[1];
+                    let short_sha = sha[..7.min(sha.len())].to_string();
+                    if r == "refs/heads/main" {
+                        dashboard_stable_commit = Some(short_sha);
+                        full_stable_commit = sha.to_string();
+                    } else if r == "refs/heads/testing" {
+                        dashboard_testing_commit = Some(short_sha);
+                        full_testing_commit = sha.to_string();
                     }
                 }
             }
         }
     }
+
+    let dashboard_stable_version = fetch_remote_cargo_version("main");
+    let dashboard_testing_version = fetch_remote_cargo_version("testing");
+
+    let mut dashboard_has_updates = false;
+    let mut dashboard_locked_commit = None;
+
+    if let Some(ref rev) = installed_commit {
+        dashboard_locked_commit = Some(rev[..7.min(rev.len())].to_string());
+
+        let target_full_commit = if dashboard_channel == "Testing" {
+            &full_testing_commit
+        } else {
+            &full_stable_commit
+        };
+
+        if !target_full_commit.is_empty() && rev != target_full_commit {
+            dashboard_has_updates = true;
+        }
+    }
+
+    let dashboard_remote_commit = if dashboard_channel == "Testing" {
+        dashboard_testing_commit.clone()
+    } else {
+        dashboard_stable_commit.clone()
+    };
+
+    let dashboard_remote_version = if dashboard_channel == "Testing" {
+        dashboard_testing_version.clone()
+    } else {
+        dashboard_stable_version.clone()
+    };
 
     // 5. Vérification si la configuration locale a des modifications non déployées
     let mut system_needs_switch = false;
@@ -202,8 +264,25 @@ pub fn check_system_updates() -> UpdateCheckResult {
         dashboard_locked_commit,
         dashboard_channel,
         dashboard_remote_version,
+        dashboard_stable_version,
+        dashboard_stable_commit,
+        dashboard_testing_version,
+        dashboard_testing_commit,
         system_needs_switch,
         current_version,
         message,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "requires network"]
+    fn test_updates() {
+        let res = check_system_updates();
+        println!("Updates result: {:#?}", res);
+        assert!(!res.current_version.is_empty());
     }
 }

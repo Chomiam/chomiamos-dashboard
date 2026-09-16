@@ -1816,27 +1816,45 @@ function openDashboardUpdateModal() {
   if (!modal) return;
 
   const currentVerEl = document.getElementById("modal-dash-current-ver");
-  const remoteVerEl = document.getElementById("modal-dash-remote-ver");
+  const channelTagEl = document.getElementById("modal-dash-current-channel-tag");
+  const stableVerEl = document.getElementById("modal-dash-stable-ver");
+  const testingVerEl = document.getElementById("modal-dash-testing-ver");
   const statusBadgeEl = document.getElementById("modal-dash-status-badge");
+  const cardStableVer = document.getElementById("card-channel-stable-ver");
+  const cardTestingVer = document.getElementById("card-channel-testing-ver");
 
   const status = currentDashboardStatus || {};
-  const currentVer = status.current_version || "0.3.3";
+  const currentVer = status.current_version || "0.3.5";
   const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
-  const remoteSha = status.dashboard_remote_commit ? ` (commit ${status.dashboard_remote_commit})` : "";
   const channel = (status.dashboard_channel || "Stable").toLowerCase();
 
   selectedDashboardChannel = channel;
 
   if (currentVerEl) currentVerEl.textContent = `v${currentVer}${lockedSha}`;
-  if (remoteVerEl) remoteVerEl.textContent = status.dashboard_remote_commit ? `v${currentVer}${remoteSha}` : `v${currentVer} (à jour)`;
+  if (channelTagEl) {
+    channelTagEl.textContent = channel === "testing" ? "Testing" : "Stable";
+    channelTagEl.className = `dash-channel-tag tag-${channel}`;
+  }
+
+  // Version Stable disponible
+  const stableVer = status.dashboard_stable_version ? `v${status.dashboard_stable_version}` : "v0.3.3";
+  const stableSha = status.dashboard_stable_commit ? ` (${status.dashboard_stable_commit})` : "";
+  if (stableVerEl) stableVerEl.textContent = `${stableVer}${stableSha}`;
+  if (cardStableVer) cardStableVer.textContent = `${stableVer}${stableSha}`;
+
+  // Version Testing disponible
+  const testingVer = status.dashboard_testing_version ? `v${status.dashboard_testing_version}` : `v${currentVer}`;
+  const testingSha = status.dashboard_testing_commit ? ` (${status.dashboard_testing_commit})` : "";
+  if (testingVerEl) testingVerEl.textContent = `${testingVer}${testingSha}`;
+  if (cardTestingVer) cardTestingVer.textContent = `${testingVer}${testingSha}`;
 
   if (statusBadgeEl) {
     if (status.dashboard_has_updates) {
       statusBadgeEl.className = "dash-status-badge update-available";
-      statusBadgeEl.textContent = "Mise à jour disponible";
+      statusBadgeEl.textContent = `Mise à jour disponible (${channel === "testing" ? testingVer : stableVer})`;
     } else {
       statusBadgeEl.className = "dash-status-badge up-to-date";
-      statusBadgeEl.textContent = "À jour";
+      statusBadgeEl.textContent = `À jour (${channel === "testing" ? "Canal Testing" : "Canal Stable"})`;
     }
   }
 
@@ -3933,6 +3951,8 @@ function switchNetworkSubtab(subtabId) {
   if (subtabId === "net-subtab-dns") {
     if (!currentDnsCatalog) {
       loadDnsCatalog(true);
+    } else if (Object.keys(dnsPingCache).length === 0) {
+      pingAllDnsServers();
     }
   } else if (subtabId === "net-subtab-podman") {
     loadPodmanOverview(false);
@@ -4003,7 +4023,8 @@ function renderDnsCards() {
     // Ping badge
     let pingText = "-- ms";
     let pingClass = "testing";
-    const cachedPing = dnsPingCache[p.primary_ip];
+    const lookupKey = p.id === "custom" ? (p.primary_ip || "custom") : p.primary_ip;
+    const cachedPing = dnsPingCache[lookupKey] !== undefined ? dnsPingCache[lookupKey] : (p.id === "custom" ? dnsPingCache["custom"] : undefined);
     if (cachedPing !== undefined) {
       if (cachedPing === null) {
         pingText = "Injoignable";
@@ -4015,9 +4036,12 @@ function renderDnsCards() {
         else if (cachedPing < 150) pingClass = "medium";
         else pingClass = "slow";
       }
-    } else if (p.primary_ip === "" || p.primary_ip === "Automatique") {
-      pingText = "Système";
+    } else if (p.id === "default") {
+      pingText = "Système (DHCP)";
       pingClass = "good";
+    } else if (p.id === "custom") {
+      pingText = "Manuel";
+      pingClass = "testing";
     }
 
     const tagsHtml = (p.tags || []).map(t => `<span class="dns-tag-pill">${escapeHtml(t)}</span>`).join("");
@@ -4166,10 +4190,15 @@ async function pingCustomDns() {
   try {
     const results = await invoke("ping_dns_servers", { ips });
     if (results) {
+      Object.assign(dnsPingCache, results);
+      if (prim && results[prim] !== undefined) {
+        dnsPingCache["custom"] = results[prim];
+      }
+      renderDnsCards();
       let msg = "";
       ips.forEach(ip => {
         const ms = results[ip];
-        msg += `${ip} : ${ms !== null ? ms + " ms" : "Injoignable"} | `;
+        msg += `${ip} : ${ms !== null && ms !== undefined ? ms + " ms" : "Injoignable"} | `;
       });
       showToast(msg.slice(0, -3), "info");
     }

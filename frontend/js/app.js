@@ -412,6 +412,7 @@ function populateConfigUI(c) {
   setCheck("cfg-melonds", c.emulation.melonds);
   setCheck("cfg-mgba", c.emulation.mgba);
   setCheck("cfg-rpcs3", c.emulation.rpcs3);
+  setCheck("cfg-xemu", c.emulation.xemu);
 
   // Media
   setCheck("cfg-stremio", c.media.stremio);
@@ -507,6 +508,7 @@ function readConfigFromUI() {
   currentConfig.emulation.melonds = isChecked("cfg-melonds");
   currentConfig.emulation.mgba = isChecked("cfg-mgba");
   currentConfig.emulation.rpcs3 = isChecked("cfg-rpcs3");
+  currentConfig.emulation.xemu = isChecked("cfg-xemu");
 
   currentConfig.media.stremio = isChecked("cfg-stremio");
   currentConfig.media.vlc = isChecked("cfg-vlc");

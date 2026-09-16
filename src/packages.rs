@@ -315,6 +315,9 @@ pub fn get_system_conflicts() -> HashMap<String, String> {
         if config.emulation.rpcs3 {
             conflicts.insert("rpcs3".into(), "Émulateur RPCS3 configuré dans vars.nix".into());
         }
+        if config.emulation.xemu {
+            conflicts.insert("xemu".into(), "Émulateur xemu (Xbox) configuré dans vars.nix".into());
+        }
         if config.emulation.eden {
             conflicts.insert("eden".into(), "Émulateur Switch Eden configuré dans vars.nix".into());
         }

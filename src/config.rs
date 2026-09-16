@@ -43,6 +43,7 @@ pub struct EmulationConfig {
     pub azahar: bool,
     pub mgba: bool,
     pub rpcs3: bool,
+    pub xemu: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +176,7 @@ impl Default for ChomiamConfig {
                 azahar: true,
                 mgba: true,
                 rpcs3: false,
+                xemu: false,
             },
             media: MediaConfig {
                 stremio: true,
@@ -327,6 +329,7 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.emulation.azahar = get_bool("azahar", true);
     cfg.emulation.mgba = get_bool("mgba", true);
     cfg.emulation.rpcs3 = get_bool("rpcs3", false);
+    cfg.emulation.xemu = get_bool("xemu", false);
 
     // Media & Network
     cfg.media.stremio = get_bool("stremio", true);
@@ -479,6 +482,7 @@ r#"{{
       mgba = {mgba};
       azahar = {azahar};
       rpcs3 = {rpcs3};
+      xemu = {xemu};
     }};
   }};
 
@@ -570,6 +574,7 @@ r#"{{
         mgba = c.emulation.mgba,
         azahar = c.emulation.azahar,
         rpcs3 = c.emulation.rpcs3,
+        xemu = c.emulation.xemu,
         steering_wheels = c.gaming.steering_wheels,
         davinci = c.creation.davinci_resolve,
         blender = c.creation.blender,

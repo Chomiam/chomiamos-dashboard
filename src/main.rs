@@ -47,6 +47,16 @@ fn switch_nix_generation(id: u32) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn get_user_shell() -> Result<String, String> {
+    Ok(config::get_configured_shell())
+}
+
+#[tauri::command]
+fn set_user_shell(shell: String) -> Result<String, String> {
+    config::set_configured_shell(&shell)
+}
+
+#[tauri::command]
 fn get_chomiamos_config() -> Result<ChomiamConfig, String> {
     let path = get_vars_path();
     read_vars_nix(&path)
@@ -959,7 +969,9 @@ fn main() {
             get_podman_logs,
             restart_podman_container,
             stop_podman_container,
-            start_podman_container
+            start_podman_container,
+            get_user_shell,
+            set_user_shell
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

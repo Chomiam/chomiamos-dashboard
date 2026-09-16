@@ -662,3 +662,92 @@ fn extract_string_var_in_block(text: &str, block: &str, var_name: &str) -> Optio
     }
     None
 }
+
+
+pub fn get_configured_shell() -> String {
+    let path = get_vars_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        if let Some(user_block) = extract_user_block(&content) {
+            if let Some(shell) = extract_string_var(&user_block, "shell") {
+                return shell;
+            }
+        }
+        if let Some(shell) = extract_string_var(&content, "shell") {
+            return shell;
+        }
+    }
+    "fish".to_string()
+}
+
+pub fn set_configured_shell(new_shell: &str) -> Result<String, String> {
+    let new_shell = new_shell.trim().to_lowercase();
+    if !["fish", "zsh", "bash"].contains(&new_shell.as_str()) {
+        return Err(format!("Shell non supporté: '{}'. Les options valides sont fish, zsh ou bash.", new_shell));
+    }
+
+    let path = get_vars_path();
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Impossible de lire {}: {}", path.display(), e))?;
+
+    let updated_content = if let Some(old_user_block) = extract_user_block(&content) {
+        let shell_re = regex::Regex::new(r#"shell\s*=\s*"[^"]+";"#)
+            .map_err(|e| e.to_string())?;
+        let new_user_block = if shell_re.is_match(&old_user_block) {
+            shell_re.replace(&old_user_block, format!(r#"shell = "{}";"#, new_shell)).to_string()
+        } else {
+            if let Some(last_brace) = old_user_block.rfind("}") {
+                let mut s = old_user_block[..last_brace].to_string();
+                s.push_str(&format!("    shell = \"{}\";\n  }};", new_shell));
+                s
+            } else {
+                format!("{}\n    shell = \"{}\";", old_user_block, new_shell)
+            }
+        };
+        content.replace(&old_user_block, &new_user_block)
+    } else {
+        let shell_re = regex::Regex::new(r#"shell\s*=\s*"[^"]+";"#)
+            .map_err(|e| e.to_string())?;
+        if shell_re.is_match(&content) {
+            shell_re.replace(&content, format!(r#"shell = "{}";"#, new_shell)).to_string()
+        } else {
+            return Err("Impossible de localiser le bloc 'user' dans vars.nix".to_string());
+        }
+    };
+
+    let tmp_path = path.with_extension("nix.tmp");
+    fs::write(&tmp_path, &updated_content)
+        .map_err(|e| format!("Impossible d'écrire dans {}: {}", tmp_path.display(), e))?;
+
+    fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("Impossible de remplacer {}: {}", path.display(), e))?;
+
+    let _ = fs::write("/etc/nixos/.vars.nix.backup", &updated_content);
+
+    Ok(new_shell)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_user_block_and_shell() {
+        let sample = r#"{
+  hostName = "chomiamos";
+  user = {
+    username = "chomiam";
+    shell = "fish";
+    extraGroups = [ "wheel" ];
+  };
+  tailscale = false;
+}"#;
+        let u = extract_user_block(sample).expect("extract user block");
+        assert!(u.contains(r#"shell = "fish";"#));
+        let shell = extract_string_var(&u, "shell").expect("shell var");
+        assert_eq!(shell, "fish");
+
+        let re = regex::Regex::new(r#"shell\s*=\s*"[^"]+";"#).unwrap();
+        let replaced = re.replace(&u, r#"shell = "zsh";"#);
+        assert!(replaced.contains(r#"shell = "zsh";"#));
+    }
+}

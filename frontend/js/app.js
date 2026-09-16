@@ -60,6 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadFirewallState();
   initNetworkCenter();
   loadCommitSecurityInfo();
+  loadUserShell();
   checkForUpdates();
   setInterval(checkForUpdates, 30000);
 });
@@ -90,7 +91,10 @@ function initTabs() {
           }, 50);
         } else if (targetId === "tab-firewall") {
           loadFirewallState();
-  initNetworkCenter();
+          initNetworkCenter();
+        } else if (targetId === "tab-generations") {
+          loadGenerations();
+          loadUserShell();
         }
       }
     });
@@ -4547,3 +4551,145 @@ function openExternalBrowserUrl(url) {
     window.open(url, "_blank");
   });
 }
+
+
+// =========================================================================
+// ❄️ NIX & SHELL : SOUS-NAVIGATION & GESTION DU SHELL UTILISATEUR
+// =========================================================================
+
+let currentConfiguredShell = "fish";
+let selectedShellChoice = "fish";
+
+function switchNixShellSubtab(subtabId) {
+  const subnavBtns = document.querySelectorAll(".nix-shell-subnav-btn");
+  subnavBtns.forEach(btn => {
+    if (btn.getAttribute("data-subtab") === subtabId) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+
+  const panes = document.querySelectorAll(".nix-shell-subtab-pane");
+  panes.forEach(pane => pane.classList.remove("active"));
+
+  const targetPane = document.getElementById(subtabId);
+  if (targetPane) {
+    targetPane.classList.add("active");
+  }
+
+  if (subtabId === "nix-subtab-images") {
+    loadGenerations();
+  } else if (subtabId === "nix-subtab-shell") {
+    loadUserShell();
+  }
+}
+
+async function loadUserShell() {
+  try {
+    const shell = await invoke("get_user_shell");
+    currentConfiguredShell = (shell || "fish").trim().toLowerCase();
+    selectedShellChoice = currentConfiguredShell;
+    updateShellUI(currentConfiguredShell);
+  } catch (err) {
+    console.error("Erreur lors de la récupération du shell utilisateur:", err);
+  }
+}
+
+function selectShell(shellName) {
+  selectedShellChoice = shellName.toLowerCase();
+  updateShellUI(selectedShellChoice);
+}
+
+function updateShellUI(activeShell) {
+  const shells = ["fish", "zsh", "bash"];
+  shells.forEach(s => {
+    const card = document.getElementById(`shell-card-${s}`);
+    const badge = document.getElementById(`shell-badge-${s}`);
+    const btn = document.getElementById(`btn-select-${s}`);
+
+    const isSelected = s === activeShell;
+    const isSaved = s === currentConfiguredShell;
+
+    if (card) {
+      if (isSelected) {
+        card.classList.add("active");
+      } else {
+        card.classList.remove("active");
+      }
+    }
+
+    if (badge) {
+      if (isSaved && isSelected) {
+        badge.textContent = "Actif (vars.nix)";
+        badge.style.color = "var(--green)";
+        badge.style.borderColor = "rgba(166, 227, 161, 0.4)";
+      } else if (isSelected) {
+        badge.textContent = "Sélectionné";
+        badge.style.color = "var(--peach)";
+        badge.style.borderColor = "rgba(250, 179, 135, 0.4)";
+      } else {
+        badge.textContent = "Disponible";
+        badge.style.color = "var(--subtext0)";
+        badge.style.borderColor = "transparent";
+      }
+    }
+
+    if (btn) {
+      if (isSaved && isSelected) {
+        btn.textContent = "✓ Shell Actif";
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-outline");
+      } else if (isSelected) {
+        btn.textContent = "Enregistrer ce shell";
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-outline");
+      } else {
+        btn.textContent = `Choisir ${s.toUpperCase()}`;
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-outline");
+      }
+    }
+  });
+
+  const display = document.getElementById("current-shell-display");
+  if (display) {
+    const capitalized = activeShell.charAt(0).toUpperCase() + activeShell.slice(1);
+    const isUnsaved = activeShell !== currentConfiguredShell;
+    display.innerHTML = `${capitalized} ${isUnsaved ? "<span style=\"color: var(--peach); font-size: 0.85rem;\">(non sauvegardé)</span>" : "<span style=\"color: var(--green); font-size: 0.85rem;\">(configuré)</span>"}`;
+  }
+
+  const sidebarBadge = document.getElementById("sidebar-active-shell-badge");
+  if (sidebarBadge) {
+    sidebarBadge.textContent = currentConfiguredShell.toUpperCase();
+  }
+}
+
+async function applySelectedShell() {
+  try {
+    const saved = await invoke("set_user_shell", { shell: selectedShellChoice });
+    currentConfiguredShell = saved;
+    updateShellUI(currentConfiguredShell);
+    showToast(`✓ Shell par défaut défini sur "${saved}" dans /etc/nixos/vars.nix !`, "success");
+  } catch (err) {
+    showToast(`Erreur lors de la configuration du shell : ${err}`, "error");
+  }
+}
+
+async function applyShellAndRebuild() {
+  try {
+    const saved = await invoke("set_user_shell", { shell: selectedShellChoice });
+    currentConfiguredShell = saved;
+    updateShellUI(currentConfiguredShell);
+    showToast(`✓ Shell configuré sur "${saved}". Démarrage du switch NixOS...`, "success");
+    runAction("switch");
+  } catch (err) {
+    showToast(`Erreur : ${err}`, "error");
+  }
+}
+
+window.switchNixShellSubtab = switchNixShellSubtab;
+window.selectShell = selectShell;
+window.applySelectedShell = applySelectedShell;
+window.applyShellAndRebuild = applyShellAndRebuild;
+window.loadUserShell = loadUserShell;

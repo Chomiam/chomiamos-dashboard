@@ -47,8 +47,8 @@
           <span class="tab-label">Gestion des Disques</span>
         </button>
         <button class="tab-btn" data-tab="tab-generations">
-          <span class="tab-icon">📜</span>
-          <span class="tab-label">Générations NixOS</span>
+          <span class="tab-icon">❄️</span>
+          <span class="tab-label">Nix & Shell</span>
         </button>
         <button class="tab-btn" data-tab="tab-config">
           <span class="tab-icon">⚙️</span>
@@ -443,73 +443,255 @@
         </div>
       </section>
 
-      <!-- ==================== TAB 3: GENERATIONS & CLEANUP ==================== -->
+      <!-- ==================== TAB 3: NIX & SHELL ==================== -->
       <section id="tab-generations" class="tab-content">
-        <div class="section-title">
-          <h2>Gestion des Images & Profils NixOS</h2>
-          <p>Chaque modification de configuration crée une génération bootable. Nettoyez les anciennes images pour récupérer de l'espace disque.</p>
-        </div>
-
-        <!-- Quick Maintenance Bar -->
-        <div class="card cleanup-card">
-          <div class="cleanup-info">
-            <div class="cleanup-stat">
-              <span class="stat-label">Taille totale du Store :</span>
-              <span id="store-size-val" class="stat-val">Calcul...</span>
+        <div class="nix-shell-layout">
+          <!-- Volet latéral gauche : Sous-navigation Nix & Shell -->
+          <aside class="nix-shell-sidebar">
+            <div class="nix-shell-sidebar-header">
+              <div class="nix-shell-sidebar-icon-box">❄️</div>
+              <div class="nix-shell-sidebar-title-group">
+                <h3>Nix & Shell</h3>
+                <small>Images & Environnement</small>
+              </div>
             </div>
-            <div class="cleanup-stat">
-              <span class="stat-label">Nombre de générations :</span>
-              <span id="generations-count-val" class="stat-val">--</span>
+
+            <nav class="nix-shell-subnav">
+              <button type="button" class="nix-shell-subnav-btn active" data-subtab="nix-subtab-images" onclick="switchNixShellSubtab('nix-subtab-images')">
+                <span class="nix-shell-subnav-icon">📜</span>
+                <div class="nix-shell-subnav-text">
+                  <strong>Images & Profils</strong>
+                  <small>Générations & Nettoyage</small>
+                </div>
+              </button>
+
+              <button type="button" class="nix-shell-subnav-btn" data-subtab="nix-subtab-shell" onclick="switchNixShellSubtab('nix-subtab-shell')">
+                <span class="nix-shell-subnav-icon">🐚</span>
+                <div class="nix-shell-subnav-text">
+                  <strong>Shell Utilisateur</strong>
+                  <small>Bash, Zsh & Fish</small>
+                </div>
+              </button>
+            </nav>
+
+            <div class="nix-shell-sidebar-footer">
+              <div class="sidebar-stat-chip">
+                <span class="chip-label">Shell configuré :</span>
+                <span id="sidebar-active-shell-badge" class="badge badge-accent">...</span>
+              </div>
+              <div class="sidebar-stat-chip">
+                <span class="chip-label">Bash garanti :</span>
+                <span class="badge badge-success">✓ Présent</span>
+              </div>
             </div>
-          </div>
-          <div class="cleanup-buttons">
-            <button class="btn btn-warning" onclick="runAction('clean-generations')">
-              <span class="btn-icon">🧹</span> Nettoyer (Garder 3 générations)
-            </button>
-            <button class="btn btn-danger" onclick="runAction('clean-all')">
-              <span class="btn-icon">🗑️</span> Garbage Collect complet
-            </button>
-            <button class="btn btn-outline" onclick="runAction('optimise')">
-              <span class="btn-icon">⚡</span> Optimiser le Store (Hardlinks)
-            </button>
-          </div>
-        </div>
+          </aside>
 
-        <!-- Barre d'actions contextuelle (masquée par défaut) -->
-        <div id="gen-action-bar" class="card gen-action-bar hidden">
-          <div class="gen-action-info">
-            <span id="gen-selected-count">0 sélectionnée(s)</span>
-          </div>
-          <div class="gen-action-buttons">
-            <button id="btn-gen-switch" class="btn btn-primary hidden" onclick="switchToSelectedGeneration()">
-              <span class="btn-icon">🔄</span> Rebooter sur cette image
-            </button>
-            <button class="btn btn-danger" onclick="deleteSelectedGenerations()">
-              <span class="btn-icon">🗑️</span> Supprimer la sélection
-            </button>
-            <button class="btn btn-outline" onclick="clearGenSelection()">
-              <span class="btn-icon">✕</span> Annuler
-            </button>
-          </div>
-        </div>
+          <!-- Zone de contenu principale -->
+          <div class="nix-shell-content-area">
 
-        <!-- Generations Table -->
-        <div class="card table-card">
-          <table class="generations-table">
-            <thead>
-              <tr>
-                <th class="gen-checkbox-col"><input type="checkbox" id="gen-select-all" onchange="toggleSelectAllGens()" title="Tout sélectionner"></th>
-                <th>Génération</th>
-                <th>Date de Création</th>
-                <th>Version NixOS</th>
-                <th>Kernel</th>
-                <th>Statut</th>
-              </tr>
-            </thead>
-            <tbody id="generations-tbody">
-              <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chargement des générations...</td></tr>
-            </tbody>
-          </table>
+            <!-- ================= SOUS-ONGLET 1 : Images & Profils NixOS ================= -->
+            <div id="nix-subtab-images" class="nix-shell-subtab-pane active">
+              <div class="section-title">
+                <h2>Gestion des Images & Profils NixOS</h2>
+                <p>Chaque modification de configuration crée une génération bootable. Nettoyez les anciennes images pour récupérer de l'espace disque.</p>
+              </div>
+
+              <!-- Quick Maintenance Bar -->
+              <div class="card cleanup-card">
+                <div class="cleanup-info">
+                  <div class="cleanup-stat">
+                    <span class="stat-label">Taille totale du Store :</span>
+                    <span id="store-size-val" class="stat-val">Calcul...</span>
+                  </div>
+                  <div class="cleanup-stat">
+                    <span class="stat-label">Nombre de générations :</span>
+                    <span id="generations-count-val" class="stat-val">--</span>
+                  </div>
+                </div>
+                <div class="cleanup-buttons">
+                  <button class="btn btn-warning" onclick="runAction('clean-generations')">
+                    <span class="btn-icon">🧹</span> Nettoyer (Garder 3 générations)
+                  </button>
+                  <button class="btn btn-danger" onclick="runAction('clean-all')">
+                    <span class="btn-icon">🗑️</span> Garbage Collect complet
+                  </button>
+                  <button class="btn btn-outline" onclick="runAction('optimise')">
+                    <span class="btn-icon">⚡</span> Optimiser le Store (Hardlinks)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Barre d'actions contextuelle (masquée par défaut) -->
+              <div id="gen-action-bar" class="card gen-action-bar hidden">
+                <div class="gen-action-info">
+                  <span id="gen-selected-count">0 sélectionnée(s)</span>
+                </div>
+                <div class="gen-action-buttons">
+                  <button id="btn-gen-switch" class="btn btn-primary hidden" onclick="switchToSelectedGeneration()">
+                    <span class="btn-icon">🔄</span> Rebooter sur cette image
+                  </button>
+                  <button class="btn btn-danger" onclick="deleteSelectedGenerations()">
+                    <span class="btn-icon">🗑️</span> Supprimer la sélection
+                  </button>
+                  <button class="btn btn-outline" onclick="clearGenSelection()">
+                    <span class="btn-icon">✕</span> Annuler
+                  </button>
+                </div>
+              </div>
+
+              <!-- Generations Table -->
+              <div class="card table-card">
+                <table class="generations-table">
+                  <thead>
+                    <tr>
+                      <th class="gen-checkbox-col"><input type="checkbox" id="gen-select-all" onchange="toggleSelectAllGens()" title="Tout sélectionner"></th>
+                      <th>Génération</th>
+                      <th>Date de Création</th>
+                      <th>Version NixOS</th>
+                      <th>Kernel</th>
+                      <th>Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody id="generations-tbody">
+                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Chargement des générations...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ================= SOUS-ONGLET 2 : Shell Utilisateur ================= -->
+            <div id="nix-subtab-shell" class="nix-shell-subtab-pane">
+              <div class="section-title">
+                <h2>Configuration du Shell Utilisateur</h2>
+                <p>Définissez l'interpréteur de commandes par défaut pour votre compte utilisateur (<code>/etc/nixos/vars.nix</code>).</p>
+              </div>
+
+              <!-- Important Bash Guarantee Notice Banner -->
+              <div class="card shell-notice-card">
+                <div class="shell-notice-icon">🛡️</div>
+                <div class="shell-notice-body">
+                  <h4>Bash est garanti et toujours installé au niveau système</h4>
+                  <p>
+                    Quel que soit votre choix de shell interactif par défaut (<strong>Fish</strong>, <strong>Zsh</strong> ou <strong>Bash</strong>),
+                    <strong>Bash reste obligatoirement installé</strong> et disponible dans <code>/run/current-system/sw/bin/bash</code> et <code>/bin/bash</code>.
+                    Vos scripts d'automatisation, crons et hooks continueront de fonctionner parfaitement sans aucun risque de régression.
+                  </p>
+                </div>
+              </div>
+
+              <!-- Shell Selection Grid -->
+              <div class="shell-options-grid">
+
+                <!-- Fish Shell Card -->
+                <div class="card shell-card" id="shell-card-fish" onclick="selectShell('fish')">
+                  <div class="shell-card-header">
+                    <div class="shell-card-icon-title">
+                      <span class="shell-icon">🐟</span>
+                      <div>
+                        <h3>Fish</h3>
+                        <span class="shell-sub">Friendly Interactive Shell</span>
+                      </div>
+                    </div>
+                    <span class="shell-status-badge" id="shell-badge-fish">Disponible</span>
+                  </div>
+                  <p class="shell-desc">
+                    Interpréteur ultra-moderne conçu pour une expérience interactive immédiate avec autocomplétion intelligente hors-boîte.
+                  </p>
+                  <ul class="shell-features-list">
+                    <li><span class="feat-bullet">✨</span> Autosuggestions intelligentes en temps réel</li>
+                    <li><span class="feat-bullet">🎨</span> Coloration syntaxique dynamique intégrée</li>
+                    <li><span class="feat-bullet">📖</span> Complétion riche avec manpages et options</li>
+                    <li><span class="feat-bullet">🚀</span> Prompt Starship & intégration NixOS</li>
+                  </ul>
+                  <div class="shell-card-action">
+                    <button type="button" class="btn btn-sm btn-outline shell-select-btn" id="btn-select-fish" onclick="event.stopPropagation(); selectShell('fish')">
+                      Choisir Fish
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Zsh Shell Card -->
+                <div class="card shell-card" id="shell-card-zsh" onclick="selectShell('zsh')">
+                  <div class="shell-card-header">
+                    <div class="shell-card-icon-title">
+                      <span class="shell-icon">⚡</span>
+                      <div>
+                        <h3>Zsh</h3>
+                        <span class="shell-sub">Z Shell</span>
+                      </div>
+                    </div>
+                    <span class="shell-status-badge" id="shell-badge-zsh">Disponible</span>
+                  </div>
+                  <p class="shell-desc">
+                    Interpréteur très puissant, hautement personnalisable et compatible avec la syntaxe standard POSIX/sh.
+                  </p>
+                  <ul class="shell-features-list">
+                    <li><span class="feat-bullet">⚙️</span> Compatibilité ascendante avec les scripts Bourne/sh</li>
+                    <li><span class="feat-bullet">🔌</span> Écosystème riche de plugins et d'extensions</li>
+                    <li><span class="feat-bullet">🔍</span> Complétion programmable ultra-performante</li>
+                    <li><span class="feat-bullet">🚀</span> Thèmes Starship & prompt interactif</li>
+                  </ul>
+                  <div class="shell-card-action">
+                    <button type="button" class="btn btn-sm btn-outline shell-select-btn" id="btn-select-zsh" onclick="event.stopPropagation(); selectShell('zsh')">
+                      Choisir Zsh
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Bash Shell Card -->
+                <div class="card shell-card" id="shell-card-bash" onclick="selectShell('bash')">
+                  <div class="shell-card-header">
+                    <div class="shell-card-icon-title">
+                      <span class="shell-icon">🐚</span>
+                      <div>
+                        <h3>Bash</h3>
+                        <span class="shell-sub">Bourne Again Shell</span>
+                      </div>
+                    </div>
+                    <span class="shell-status-badge" id="shell-badge-bash">Disponible</span>
+                  </div>
+                  <p class="shell-desc">
+                    Le standard universel Linux/UNIX. Fiabilité éprouvée, sobriété et compatibilité script absolue.
+                  </p>
+                  <ul class="shell-features-list">
+                    <li><span class="feat-bullet">🏛️</span> Standard universel des distributions GNU/Linux</li>
+                    <li><span class="feat-bullet">📜</span> Compatibilité maximale sans ajustement de syntaxe</li>
+                    <li><span class="feat-bullet">💡</span> Complétion programmable bash-completion</li>
+                    <li><span class="feat-bullet">🔒</span> Toujours installé sur le système quoi qu'il arrive</li>
+                  </ul>
+                  <div class="shell-card-action">
+                    <button type="button" class="btn btn-sm btn-outline shell-select-btn" id="btn-select-bash" onclick="event.stopPropagation(); selectShell('bash')">
+                      Choisir Bash
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Shell Action & Apply Bar -->
+              <div class="card shell-action-card">
+                <div class="shell-action-summary">
+                  <div class="shell-summary-indicator">
+                    <span class="indicator-icon">🎯</span>
+                    <div>
+                      <strong>Shell sélectionné : <span id="current-shell-display">Chargement...</span></strong>
+                      <p id="current-shell-meta">Modifie <code>user.shell</code> dans <code>/etc/nixos/vars.nix</code></p>
+                    </div>
+                  </div>
+                  <div class="shell-action-buttons">
+                    <button id="btn-save-shell" class="btn btn-primary" onclick="applySelectedShell()">
+                      <span class="btn-icon">💾</span> Sauvegarder dans vars.nix
+                    </button>
+                    <button id="btn-rebuild-shell" class="btn btn-success" onclick="applyShellAndRebuild()">
+                      <span class="btn-icon">🚀</span> Sauvegarder & Appliquer (nh os switch)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
         </div>
       </section>
 

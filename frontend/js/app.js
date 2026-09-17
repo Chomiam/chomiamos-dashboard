@@ -5750,7 +5750,7 @@ function initFastfetchTerminal() {
       brightCyan: "#94e2d5",
       brightWhite: "#a6adc8",
     },
-    fontFamily: ""JetBrains Mono", "Fira Code", monospace",
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     fontSize: 12.5,
     lineHeight: 1.25,
     cursorBlink: false,

@@ -1786,12 +1786,14 @@ async function checkForUpdates() {
     const metaUpdateBadge = document.getElementById("meta-update-badge");
     const metaUpdateText = document.getElementById("meta-update-text");
     if (metaUpdateBadge) {
-      if (status.github_has_updates && status.github_remote_commit) {
+      if (status.github_has_updates) {
         metaUpdateBadge.classList.remove("hidden");
         if (metaUpdateText) {
-          metaUpdateText.textContent = `Nouveau commit : ${status.github_remote_commit}`;
+          metaUpdateText.textContent = status.github_remote_commit
+            ? `Nouveau commit : ${status.github_remote_commit}`
+            : "Nouveau commit disponible";
         }
-        metaUpdateBadge.setAttribute("title", `Un nouveau commit (${status.github_remote_commit}) est disponible sur GitHub.\nCliquez pour synchroniser et appliquer la mise à jour.`);
+        metaUpdateBadge.setAttribute("title", `Un nouveau commit (${status.github_remote_commit || "distant"}) est disponible sur GitHub.\nCliquez pour synchroniser et appliquer la mise à jour.`);
       } else {
         metaUpdateBadge.classList.add("hidden");
       }
@@ -1817,7 +1819,10 @@ async function checkForUpdates() {
     // 2. Indicateur de synchronisation globale NixOS si changements distants
     const navIndicator = document.getElementById("nav-update-indicator");
     if (navIndicator) {
-      if (status.github_has_updates) {
+      if (channel.toLowerCase() === "stable") {
+        // Sur la branche stable, ne pas afficher le bouton "Déployer MAJ" en haut
+        navIndicator.classList.add("hidden");
+      } else if (status.github_has_updates) {
         navIndicator.classList.remove("hidden");
         navIndicator.innerHTML = "<span>🐙</span> <span>Sync GitHub</span>";
         navIndicator.onclick = () => runAction("sync-github");

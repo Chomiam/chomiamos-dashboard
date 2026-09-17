@@ -11,6 +11,7 @@ mod network;
 use network::*;
 mod sftp;
 use sftp::*;
+mod fastfetch;
 mod systemd;
 use systemd::{list_systemd_services, control_systemd_service as do_control_systemd_service, get_systemd_logs, SystemdOverview};
 
@@ -941,7 +942,36 @@ async fn repair_network_dns() -> Result<String, String> {
     }
 }
 
+
+#[tauri::command]
+fn validate_fastfetch_config(content: String) -> Result<fastfetch::FastfetchValidationReport, String> {
+    Ok(fastfetch::validate_fastfetch(&content))
+}
+
+#[tauri::command]
+async fn preview_fastfetch_config(content: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || fastfetch::preview_fastfetch(&content))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+fn get_fastfetch_state() -> Result<fastfetch::FastfetchConfigState, String> {
+    fastfetch::get_fastfetch_state()
+}
+
+#[tauri::command]
+fn apply_fastfetch_profile(content: String) -> Result<String, String> {
+    fastfetch::apply_fastfetch_profile(&content)
+}
+
+#[tauri::command]
+fn restore_fastfetch_default() -> Result<String, String> {
+    fastfetch::restore_fastfetch_default()
+}
+
 fn main() {
+
     #[cfg(target_os = "linux")]
     {
         // Évite les conflits de fermeture TLS / EGL avec Mesa sur Linux (SIGABRT dans WebKitWebProcess)
@@ -1008,7 +1038,12 @@ fn main() {
             delete_sftp_share,
             save_sftp_user,
             delete_sftp_user,
-            open_folder_in_dolphin
+            open_folder_in_dolphin,
+            validate_fastfetch_config,
+            preview_fastfetch_config,
+            get_fastfetch_state,
+            apply_fastfetch_profile,
+            restore_fastfetch_default
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

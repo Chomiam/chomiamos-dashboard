@@ -3957,6 +3957,7 @@ function initNetworkCenter() {
   loadDnsCatalog(false);
   loadPodmanOverview(false);
   loadSftpOverview(false);
+  initFastfetchView();
 }
 
 function switchNetworkSubtab(subtabId) {
@@ -3975,6 +3976,14 @@ function switchNetworkSubtab(subtabId) {
   const targetPane = document.getElementById(subtabId);
   if (targetPane) {
     targetPane.classList.add("active");
+  }
+
+  if (subtabId === "net-subtab-fastfetch") {
+    setTimeout(() => {
+      if (typeof fastfetchFitAddon !== "undefined" && fastfetchFitAddon) {
+        fastfetchFitAddon.fit();
+      }
+    }, 50);
   }
 
   if (subtabId === "net-subtab-dns") {
@@ -5687,3 +5696,603 @@ function copyToClipboard(text, btn) {
   });
 }
 window.copyToClipboard = copyToClipboard;
+
+
+// =========================================================================
+// 🚀 GESTIONNAIRE DE PROFILS FASTFETCH (VALIDATION JSONC & TERMINAL INTÉGRÉ)
+// =========================================================================
+
+let fastfetchTerm = null;
+let fastfetchFitAddon = null;
+let fastfetchTermInitialized = false;
+let fastfetchLastValidatedContent = null;
+let fastfetchLastValidationSuccess = false;
+let fastfetchLastPreviewSuccess = false;
+let fastfetchRawTerminalOutput = "";
+let currentFastfetchState = null;
+
+function initFastfetchView() {
+  initFastfetchTerminal();
+  setupFastfetchDropzone();
+  setupFastfetchEditor();
+  loadFastfetchState(false);
+}
+
+function initFastfetchTerminal() {
+  if (fastfetchTermInitialized) return;
+  const container = document.getElementById("fastfetch-terminal-output");
+  if (!container) return;
+
+  fastfetchTermInitialized = true;
+  container.innerHTML = "";
+
+  fastfetchTerm = new Terminal({
+    theme: {
+      background: "#11111b",
+      foreground: "#cdd6f4",
+      cursor: "#f5e0dc",
+      cursorAccent: "#11111b",
+      selectionBackground: "#585b7066",
+      black: "#45475a",
+      red: "#f38ba8",
+      green: "#a6e3a1",
+      yellow: "#f9e2af",
+      blue: "#89b4fa",
+      magenta: "#f5c2e7",
+      cyan: "#94e2d5",
+      white: "#bac2de",
+      brightBlack: "#585b70",
+      brightRed: "#f38ba8",
+      brightGreen: "#a6e3a1",
+      brightYellow: "#f9e2af",
+      brightBlue: "#89b4fa",
+      brightMagenta: "#f5c2e7",
+      brightCyan: "#94e2d5",
+      brightWhite: "#a6adc8",
+    },
+    fontFamily: ""JetBrains Mono", "Fira Code", monospace",
+    fontSize: 12.5,
+    lineHeight: 1.25,
+    cursorBlink: false,
+    convertEol: true,
+    disableStdin: true,
+  });
+
+  if (window.FitAddon && window.FitAddon.FitAddon) {
+    fastfetchFitAddon = new window.FitAddon.FitAddon();
+    fastfetchTerm.loadAddon(fastfetchFitAddon);
+  }
+
+  fastfetchTerm.open(container);
+
+  setTimeout(() => {
+    if (fastfetchFitAddon) fastfetchFitAddon.fit();
+  }, 100);
+
+  window.addEventListener("resize", () => {
+    if (fastfetchFitAddon && fastfetchTerm) {
+      fastfetchFitAddon.fit();
+    }
+  });
+
+  fastfetchTerm.writeln("\x1b[38;2;180;190;254m╔════════════════════════════════════════════════════════════════╗\x1b[0m");
+  fastfetchTerm.writeln("\x1b[38;2;180;190;254m║\x1b[0m   \x1b[1;38;2;203;166;247m🚀 Terminal de Prévisualisation Fastfetch (ChomiamOS)\x1b[0m       \x1b[38;2;180;190;254m║\x1b[0m");
+  fastfetchTerm.writeln("\x1b[38;2;180;190;254m╚════════════════════════════════════════════════════════════════╝\x1b[0m");
+  fastfetchTerm.writeln("\x1b[38;2;166;173;200mPrêt pour la prévisualisation. Importez un profil puis cliquez sur\x1b[0m");
+  fastfetchTerm.writeln("\x1b[38;2;137;180;250m« Prévisualiser »\x1b[0m \x1b[38;2;166;173;200mpour observer le rendu complet avec codes ANSI.\x1b[0m\n");
+}
+
+function setupFastfetchDropzone() {
+  const dropzone = document.getElementById("fastfetch-dropzone");
+  if (!dropzone) return;
+
+  ["dragenter", "dragover"].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add("drag-over");
+    }, false);
+  });
+
+  ["dragleave", "drop"].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove("drag-over");
+    }, false);
+  });
+
+  dropzone.addEventListener("drop", (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      loadFastfetchFile(files[0]);
+    }
+  }, false);
+}
+
+function setupFastfetchEditor() {
+  const editor = document.getElementById("fastfetch-editor");
+  if (!editor) return;
+
+  editor.addEventListener("input", () => {
+    updateFastfetchEditorLines();
+    fastfetchLastPreviewSuccess = false;
+    const btnApply = document.getElementById("btn-fastfetch-apply");
+    if (btnApply) btnApply.disabled = true;
+    debounceFastfetchValidation();
+  });
+}
+
+let fastfetchDebounceTimer = null;
+function debounceFastfetchValidation() {
+  clearTimeout(fastfetchDebounceTimer);
+  fastfetchDebounceTimer = setTimeout(() => {
+    triggerFastfetchValidation(false);
+  }, 400);
+}
+
+function updateFastfetchEditorLines() {
+  const editor = document.getElementById("fastfetch-editor");
+  const linesEl = document.getElementById("fastfetch-editor-lines");
+  if (!editor || !linesEl) return;
+  const lines = editor.value ? editor.value.split("\n").length : 0;
+  linesEl.textContent = `${lines} ligne${lines > 1 ? "s" : ""}`;
+}
+
+async function loadFastfetchState(showToastFeedback = false) {
+  try {
+    const state = await invoke("get_fastfetch_state");
+    currentFastfetchState = state;
+
+    const statusPill = document.getElementById("fastfetch-status-pill");
+    const navBadge = document.getElementById("fastfetch-nav-badge");
+
+    if (statusPill) {
+      statusPill.className = "fastfetch-status-pill";
+      if (state.is_nix_store) {
+        statusPill.textContent = "Géré par Nix (officiel)";
+        statusPill.classList.add("pill-nix");
+      } else if (state.is_custom_dashboard) {
+        statusPill.textContent = "Profil Personnalisé (Dashboard)";
+        statusPill.classList.add("pill-custom");
+      } else {
+        statusPill.textContent = "Profil Manuel";
+        statusPill.classList.add("pill-manual");
+      }
+    }
+
+    if (navBadge) {
+      navBadge.className = "net-subnav-pill";
+      if (state.is_custom_dashboard) {
+        navBadge.textContent = "Perso";
+        navBadge.classList.add("sftp-pill-ok");
+      } else {
+        navBadge.textContent = "Nix";
+        navBadge.classList.add("fastfetch-pill-ok");
+      }
+    }
+
+    if (showToastFeedback) {
+      showToast("État Fastfetch actualisé.", "info");
+    }
+  } catch (err) {
+    console.error("Erreur chargement état Fastfetch :", err);
+  }
+}
+
+async function loadActiveFastfetchConfig() {
+  try {
+    const state = await invoke("get_fastfetch_state");
+    currentFastfetchState = state;
+    const editor = document.getElementById("fastfetch-editor");
+
+    if (state.current_content && editor) {
+      editor.value = state.current_content;
+      updateFastfetchEditorLines();
+      showToast("Configuration Fastfetch active chargée dans l'éditeur !", "success");
+      triggerFastfetchValidation(false);
+    } else {
+      showToast("Aucune configuration active n'a pu être lue.", "warning");
+    }
+  } catch (err) {
+    showToast("Erreur lors du chargement : " + err, "error");
+  }
+}
+
+function loadSampleFastfetchConfig() {
+  const sample = `{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "type": "small",
+    "padding": {
+      "top": 1,
+      "left": 2,
+      "right": 2
+    }
+  },
+  "display": {
+    "separator": "  ",
+    "constants": [
+      "────────────────────────────────"
+    ],
+    "key": {
+      "type": "icon",
+      "paddingLeft": 2
+    }
+  },
+  "modules": [
+    "title",
+    {
+      "type": "custom",
+      "format": "{$1}"
+    },
+    {
+      "type": "os",
+      "keyColor": "blue"
+    },
+    {
+      "type": "host",
+      "keyColor": "blue"
+    },
+    {
+      "type": "kernel",
+      "keyColor": "blue"
+    },
+    {
+      "type": "uptime",
+      "keyColor": "blue"
+    },
+    {
+      "type": "packages",
+      "keyColor": "blue"
+    },
+    {
+      "type": "shell",
+      "keyColor": "blue"
+    },
+    {
+      "type": "de",
+      "keyColor": "magenta"
+    },
+    {
+      "type": "wm",
+      "keyColor": "magenta"
+    },
+    {
+      "type": "terminal",
+      "keyColor": "magenta"
+    },
+    {
+      "type": "cpu",
+      "keyColor": "green"
+    },
+    {
+      "type": "gpu",
+      "keyColor": "green"
+    },
+    {
+      "type": "memory",
+      "keyColor": "green"
+    },
+    {
+      "type": "disk",
+      "keyColor": "green"
+    },
+    "break",
+    {
+      "type": "colors",
+      "symbol": "circle"
+    }
+  ]
+}`;
+  const editor = document.getElementById("fastfetch-editor");
+  if (editor) {
+    editor.value = sample;
+    updateFastfetchEditorLines();
+    showToast("Modèle officiel Catppuccin chargé !", "info");
+    triggerFastfetchValidation(false);
+  }
+}
+
+function handleFastfetchFileSelected(event) {
+  const input = event.target;
+  if (input.files && input.files[0]) {
+    loadFastfetchFile(input.files[0]);
+  }
+  input.value = "";
+}
+
+function loadFastfetchFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const editor = document.getElementById("fastfetch-editor");
+    if (editor) {
+      editor.value = text;
+      updateFastfetchEditorLines();
+      showToast(`Fichier « ${file.name} » importé avec succès !`, "success");
+      triggerFastfetchValidation(true);
+    }
+  };
+  reader.onerror = () => {
+    showToast("Erreur lors de la lecture du fichier.", "error");
+  };
+  reader.readAsText(file);
+}
+
+async function triggerFastfetchValidation(showToastOnSuccess = false) {
+  const editor = document.getElementById("fastfetch-editor");
+  if (!editor) return;
+  const content = editor.value.trim();
+
+  const diagCard = document.getElementById("fastfetch-diag-card");
+  const diagIcon = document.getElementById("fastfetch-diag-icon");
+  const diagTitle = document.getElementById("fastfetch-diag-title");
+  const diagSub = document.getElementById("fastfetch-diag-subtitle");
+  const diagBadge = document.getElementById("fastfetch-diag-badge");
+  const errorsContainer = document.getElementById("fastfetch-errors-container");
+  const errorsList = document.getElementById("fastfetch-errors-list");
+  const btnPreview = document.getElementById("btn-fastfetch-preview");
+  const btnApply = document.getElementById("btn-fastfetch-apply");
+
+  if (!content) {
+    diagCard.className = "card fastfetch-diag-card diag-idle";
+    diagIcon.textContent = "⏳";
+    diagTitle.textContent = "Éditeur vide";
+    diagSub.textContent = "Collez ou importez une configuration Fastfetch pour l'analyser.";
+    diagBadge.className = "badge-diag badge-idle";
+    diagBadge.textContent = "Vide";
+    errorsContainer.classList.add("hidden");
+    if (btnPreview) btnPreview.disabled = true;
+    if (btnApply) btnApply.disabled = true;
+    fastfetchLastValidationSuccess = false;
+    return;
+  }
+
+  try {
+    const report = await invoke("validate_fastfetch_config", { content });
+    fastfetchLastValidatedContent = content;
+    fastfetchLastValidationSuccess = report.valid;
+
+    if (report.valid) {
+      diagCard.className = "card fastfetch-diag-card diag-valid";
+      diagIcon.textContent = "✅";
+      diagTitle.textContent = "Syntaxe et schéma 100% valides";
+      diagSub.textContent = "Prêt pour la prévisualisation dans le terminal intégré.";
+      diagBadge.className = "badge-diag badge-valid";
+      diagBadge.textContent = "Conforme";
+      errorsContainer.classList.add("hidden");
+
+      if (btnPreview) btnPreview.disabled = false;
+      if (btnApply) btnApply.disabled = !fastfetchLastPreviewSuccess;
+
+      if (showToastOnSuccess) {
+        showToast("Configuration Fastfetch analysée et validée avec succès !", "success");
+      }
+    } else {
+      diagCard.className = "card fastfetch-diag-card diag-invalid";
+      diagIcon.textContent = "❌";
+
+      if (!report.syntax_valid) {
+        diagTitle.textContent = "Erreur de syntaxe JSONC";
+        diagSub.textContent = "Le fichier contient des erreurs de structure ou de format.";
+        diagBadge.className = "badge-diag badge-error";
+        diagBadge.textContent = "Syntaxe invalide";
+      } else {
+        diagTitle.textContent = "Erreur de schéma Fastfetch";
+        diagSub.textContent = "Propriétés ou modules non conformes à la spécification officielle.";
+        diagBadge.className = "badge-diag badge-error";
+        diagBadge.textContent = "Schéma non respecté";
+      }
+
+      errorsContainer.classList.remove("hidden");
+      errorsList.innerHTML = "";
+
+      report.errors.forEach(err => {
+        const item = document.createElement("div");
+        item.className = "fastfetch-error-item" + (err.kind === "schema" ? " is-schema" : "");
+
+        const badge = document.createElement("span");
+        badge.className = "fastfetch-error-badge" + (err.kind === "schema" ? " badge-schema" : "");
+        badge.textContent = err.kind === "schema" ? "Schéma" : "Syntaxe";
+        item.appendChild(badge);
+
+        if (err.line !== null && err.line !== undefined) {
+          const loc = document.createElement("span");
+          loc.className = "fastfetch-error-loc";
+          loc.textContent = `Ligne ${err.line}:${err.column || 1}`;
+          item.appendChild(loc);
+        }
+
+        if (err.instance_path) {
+          const path = document.createElement("span");
+          path.className = "fastfetch-error-path";
+          path.textContent = err.instance_path;
+          item.appendChild(path);
+        }
+
+        const msg = document.createElement("span");
+        msg.className = "fastfetch-error-msg";
+        msg.textContent = err.message;
+        item.appendChild(msg);
+
+        errorsList.appendChild(item);
+      });
+
+      if (btnPreview) btnPreview.disabled = true;
+      if (btnApply) btnApply.disabled = true;
+      fastfetchLastPreviewSuccess = false;
+    }
+  } catch (err) {
+    console.error("Erreur validation :", err);
+    showToast("Erreur lors de la validation : " + err, "error");
+  }
+}
+
+async function triggerFastfetchPreview() {
+  const editor = document.getElementById("fastfetch-editor");
+  if (!editor) return;
+  const content = editor.value.trim();
+  if (!content) return;
+
+  const btnPreview = document.getElementById("btn-fastfetch-preview");
+  const btnApply = document.getElementById("btn-fastfetch-apply");
+  const statusEl = document.getElementById("fastfetch-term-status");
+  const durationEl = document.getElementById("fastfetch-exec-duration");
+
+  if (btnPreview) {
+    btnPreview.disabled = true;
+    btnPreview.innerHTML = "<span>⏳</span> Exécution...";
+  }
+  if (statusEl) {
+    statusEl.textContent = "Exécution...";
+    statusEl.className = "fastfetch-term-pill running";
+  }
+
+  const startTime = performance.now();
+
+  try {
+    const output = await invoke("preview_fastfetch_config", { content });
+    const elapsed = Math.round(performance.now() - startTime);
+
+    if (durationEl) durationEl.textContent = `${elapsed} ms`;
+    fastfetchRawTerminalOutput = output;
+
+    if (fastfetchTerm) {
+      fastfetchTerm.clear();
+      fastfetchTerm.write(output);
+    }
+
+    fastfetchLastPreviewSuccess = true;
+    if (btnApply) btnApply.disabled = false;
+
+    if (statusEl) {
+      statusEl.textContent = "Rendu OK";
+      statusEl.className = "fastfetch-term-pill";
+    }
+
+    showToast("Prévisualisation Fastfetch générée avec succès !", "success");
+  } catch (err) {
+    console.error("Erreur preview fastfetch :", err);
+    showToast("Erreur lors de la prévisualisation : " + err, "error");
+    if (statusEl) {
+      statusEl.textContent = "Erreur";
+      statusEl.className = "fastfetch-term-pill running";
+    }
+  } finally {
+    if (btnPreview) {
+      btnPreview.disabled = false;
+      btnPreview.innerHTML = "<span>▶️</span> Prévisualiser";
+    }
+  }
+}
+
+async function triggerFastfetchApply() {
+  const editor = document.getElementById("fastfetch-editor");
+  if (!editor) return;
+  const content = editor.value.trim();
+  if (!content) return;
+
+  if (!fastfetchLastValidationSuccess) {
+    showToast("Veuillez valider rigoureusement le profil avant de l'appliquer.", "warning");
+    return;
+  }
+
+  if (!confirm("Voulez-vous appliquer ce profil Fastfetch pour votre session utilisateur ?\n\n- Le profil sera enregistré dans ~/.config/fastfetch/profiles/dashboard.jsonc\n- Si un fichier manuel existe, une sauvegarde horodatée sera créée.\n- Vos déclarations NixOS restent intactes et protégées.")) {
+    return;
+  }
+
+  const btnApply = document.getElementById("btn-fastfetch-apply");
+  if (btnApply) {
+    btnApply.disabled = true;
+    btnApply.innerHTML = "<span>⏳</span> Application...";
+  }
+
+  try {
+    const res = await invoke("apply_fastfetch_profile", { content });
+    showToast(res, "success");
+    await loadFastfetchState(false);
+  } catch (err) {
+    console.error("Erreur application Fastfetch :", err);
+    showToast("Erreur lors de l'application : " + err, "error");
+  } finally {
+    if (btnApply) {
+      btnApply.disabled = false;
+      btnApply.innerHTML = "<span>💾</span> Appliquer le profil";
+    }
+  }
+}
+
+async function restoreDefaultFastfetchConfig() {
+  if (!confirm("Voulez-vous rétablir le profil Fastfetch officiel par défaut de ChomiamOS ?")) {
+    return;
+  }
+
+  try {
+    const res = await invoke("restore_fastfetch_default");
+    showToast(res, "success");
+    await loadFastfetchState(false);
+    await loadActiveFastfetchConfig();
+  } catch (err) {
+    showToast("Erreur lors du rétablissement : " + err, "error");
+  }
+}
+
+function clearFastfetchTerminal() {
+  if (fastfetchTerm) {
+    fastfetchTerm.clear();
+  }
+}
+
+function copyFastfetchTerminalOutput() {
+  if (!fastfetchRawTerminalOutput) {
+    showToast("Aucune sortie de terminal à copier.", "info");
+    return;
+  }
+  const plainText = fastfetchRawTerminalOutput.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+  navigator.clipboard.writeText(plainText).then(() => {
+    showToast("Rendu Fastfetch copié (texte brut) !", "success");
+  }).catch(err => {
+    showToast("Impossible de copier : " + err, "error");
+  });
+}
+
+function clearFastfetchEditor() {
+  const editor = document.getElementById("fastfetch-editor");
+  if (editor) {
+    editor.value = "";
+    updateFastfetchEditorLines();
+    triggerFastfetchValidation(false);
+  }
+}
+
+function formatFastfetchEditor() {
+  const editor = document.getElementById("fastfetch-editor");
+  if (!editor || !editor.value.trim()) return;
+
+  try {
+    const cleaned = editor.value.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/,(\s*[}\]])/g, "$1");
+    const obj = JSON.parse(cleaned);
+    editor.value = JSON.stringify(obj, null, 2);
+    updateFastfetchEditorLines();
+    showToast("Configuration formatée avec succès !", "info");
+    triggerFastfetchValidation(false);
+  } catch (err) {
+    showToast("Formatage impossible : la syntaxe doit être valide.", "warning");
+  }
+}
+
+window.initFastfetchView = initFastfetchView;
+window.loadActiveFastfetchConfig = loadActiveFastfetchConfig;
+window.loadSampleFastfetchConfig = loadSampleFastfetchConfig;
+window.handleFastfetchFileSelected = handleFastfetchFileSelected;
+window.triggerFastfetchValidation = triggerFastfetchValidation;
+window.triggerFastfetchPreview = triggerFastfetchPreview;
+window.triggerFastfetchApply = triggerFastfetchApply;
+window.restoreDefaultFastfetchConfig = restoreDefaultFastfetchConfig;
+window.clearFastfetchTerminal = clearFastfetchTerminal;
+window.copyFastfetchTerminalOutput = copyFastfetchTerminalOutput;
+window.clearFastfetchEditor = clearFastfetchEditor;
+window.formatFastfetchEditor = formatFastfetchEditor;

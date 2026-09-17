@@ -353,7 +353,7 @@ fn start_terminal_task(
                 fi
 
                 echo -e "📦 Recherche du binaire distant ($FLAKE_TARGET)..."
-                OUT_PATH=$(nix eval --raw "$FLAKE_TARGET#packages.x86_64-linux.default.outPath" 2>/dev/null || true)
+                OUT_PATH=$(nix eval --refresh --raw "$FLAKE_TARGET#packages.x86_64-linux.default.outPath" 2>/dev/null || true)
 
                 if [ -n "$OUT_PATH" ]; then
                     STORE_HASH=$(basename "$OUT_PATH" | cut -d"-" -f1)
@@ -546,13 +546,23 @@ fn get_current_user() -> String {
 }
 
 #[tauri::command]
-fn check_system_updates() -> Result<updates::UpdateCheckResult, String> {
-    Ok(updates::check_system_updates())
+async fn check_system_updates() -> Result<updates::UpdateCheckResult, String> {
+    tokio::task::spawn_blocking(updates::check_system_updates)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn get_package_update_count(force: Option<bool>) -> Result<updates::PackageUpdateSummary, String> {
-    Ok(updates::get_pending_package_updates(force.unwrap_or(false)))
+async fn get_package_update_count(force: Option<bool>) -> Result<updates::PackageUpdateSummary, String> {
+    let force_val = force.unwrap_or(false);
+    tokio::task::spawn_blocking(move || updates::get_pending_package_updates(force_val))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_dashboard_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
 }
 
 #[tauri::command]
@@ -1048,6 +1058,7 @@ fn main() {
             format_storage_device,
             open_in_file_manager,
             get_current_user,
+            get_dashboard_version,
             check_system_updates,
             get_package_update_count,
             restart_dashboard,

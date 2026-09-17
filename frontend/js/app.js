@@ -47,7 +47,22 @@ let fitAddon = null;
 let termInitialized = false;
 let lastExecutedTask = "";
 
+async function initDashboardVersionBadge() {
+  const navDashVer = document.getElementById("nav-dashboard-version-text");
+  if (navDashVer) {
+    try {
+      const ver = await invoke("get_dashboard_version");
+      if (ver) {
+        navDashVer.textContent = `v${ver} • Stable`;
+      }
+    } catch (_) {
+      navDashVer.textContent = "v0.4.2 • Stable";
+    }
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  initDashboardVersionBadge();
   initTabs();
   startMetricsPolling();
   loadGenerations();
@@ -61,8 +76,12 @@ document.addEventListener("DOMContentLoaded", () => {
   initNetworkCenter();
   loadCommitSecurityInfo();
   loadUserShell();
-  checkForUpdates();
-  setInterval(checkForUpdates, 30000);
+
+  // Évaluation des mises à jour en arrière-plan sans bloquer l'affichage
+  setTimeout(() => {
+    checkForUpdates();
+    setInterval(checkForUpdates, 45000);
+  }, 200);
 });
 
 // 1. Tab Navigation
@@ -1853,6 +1872,10 @@ async function updatePackageCountBadge(force = false) {
   const btn = document.getElementById("btn-pkg-switch-update");
   if (!subtext) return;
 
+  if (force || !subtext.textContent || subtext.textContent === "nh os switch -u") {
+    subtext.textContent = "⚡ Recherche des MAJ...";
+  }
+
   try {
     const res = await invoke("get_package_update_count", { force: Boolean(force) });
     if (!res) return;
@@ -1906,7 +1929,7 @@ function openDashboardUpdateModal() {
   const cardTestingVer = document.getElementById("card-channel-testing-ver");
 
   const status = currentDashboardStatus || {};
-  const currentVer = status.current_version || "0.3.5";
+  const currentVer = status.current_version || "0.4.2";
   const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
   const channel = (status.dashboard_channel || "Stable").toLowerCase();
 
@@ -1919,7 +1942,7 @@ function openDashboardUpdateModal() {
   }
 
   // Version Stable disponible
-  const stableVer = status.dashboard_stable_version ? `v${status.dashboard_stable_version}` : "v0.3.3";
+  const stableVer = status.dashboard_stable_version ? `v${status.dashboard_stable_version}` : `v${currentVer}`;
   const stableSha = status.dashboard_stable_commit ? ` (${status.dashboard_stable_commit})` : "";
   if (stableVerEl) stableVerEl.textContent = `${stableVer}${stableSha}`;
   if (cardStableVer) cardStableVer.textContent = `${stableVer}${stableSha}`;

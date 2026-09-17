@@ -501,6 +501,21 @@ body {
   font-weight: 400;
   opacity: 0.75;
   margin-left: 6px;
+  transition: all 0.3s ease;
+}
+
+#subtext-pkg-update.has-updates {
+  font-weight: 700;
+  opacity: 1;
+  background: rgba(17, 17, 27, 0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+#subtext-pkg-update.up-to-date {
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 .btn-primary {

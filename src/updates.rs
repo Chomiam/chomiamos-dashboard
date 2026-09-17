@@ -1,6 +1,9 @@
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::process::Command;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateCheckResult {
@@ -274,6 +277,308 @@ pub fn check_system_updates() -> UpdateCheckResult {
     }
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PackageUpdateSummary {
+    pub count: u32,
+    pub has_updates: bool,
+    pub status_text: String,
+    pub details: Vec<String>,
+    pub last_checked: String,
+}
+
+static CACHED_PACKAGE_UPDATES: Mutex<Option<(Instant, PackageUpdateSummary)>> = Mutex::new(None);
+
+fn current_time_str() -> String {
+    Command::new("date")
+        .args(["+%H:%M:%S"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| "maintenant".to_string())
+}
+
+fn fetch_atom_commits(owner: &str, repo: &str, branch: &str, locked_sha: &str) -> (u32, Vec<String>) {
+    let url = format!(
+        "https://github.com/{}/{}/commits/{}.atom",
+        owner, repo, branch
+    );
+    let output = Command::new("curl")
+        .args(["-s", "--connect-timeout", "4", "--max-time", "6", &url])
+        .output();
+
+    let mut count = 0;
+    let mut details = Vec::new();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            let body = String::from_utf8_lossy(&out.stdout);
+            if body.contains("<feed") {
+                if let Ok(re) = Regex::new(
+                    r"(?s)<entry>.*?<id>[^<]*/([0-9a-f]{40})</id>.*?<title>\s*(.*?)\s*</title>.*?</entry>",
+                ) {
+                    for cap in re.captures_iter(&body) {
+                        let sha = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                        let raw_title = cap.get(2).map(|m| m.as_str()).unwrap_or("");
+                        if sha == locked_sha {
+                            break;
+                        }
+                        count += 1;
+                        let clean_title = raw_title
+                            .replace("&gt;", ">")
+                            .replace("&lt;", "<")
+                            .replace("&amp;", "&")
+                            .replace("&quot;", "\"")
+                            .replace("&#39;", "'")
+                            .trim()
+                            .to_string();
+
+                        if !clean_title.is_empty() {
+                            details.push(format!("{}: {}", repo, clean_title));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    (count, details)
+}
+
+fn check_git_input_has_update(
+    owner: &str,
+    repo: &str,
+    branch: Option<&str>,
+    locked_sha: &str,
+) -> bool {
+    let url = format!("https://github.com/{}/{}.git", owner, repo);
+    let remote_ref = branch
+        .map(|b| format!("refs/heads/{}", b))
+        .unwrap_or_else(|| "HEAD".to_string());
+
+    let output = Command::new("git")
+        .args([
+            "-c",
+            "http.connectTimeout=4",
+            "-c",
+            "http.lowSpeedLimit=1000",
+            "-c",
+            "http.lowSpeedTime=5",
+            "ls-remote",
+            &url,
+            &remote_ref,
+        ])
+        .output();
+
+    if let Ok(out) = output {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(remote_sha) = text.split_whitespace().next() {
+                return remote_sha != locked_sha;
+            }
+        }
+    }
+    false
+}
+
+pub fn get_pending_package_updates(force_refresh: bool) -> PackageUpdateSummary {
+    if !force_refresh {
+        if let Ok(guard) = CACHED_PACKAGE_UPDATES.lock() {
+            if let Some((instant, ref cached)) = *guard {
+                if instant.elapsed() < Duration::from_secs(60) {
+                    return cached.clone();
+                }
+            }
+        }
+    }
+
+    let flake_lock_path = "/etc/nixos/flake.lock";
+    let lock_content = match fs::read_to_string(flake_lock_path) {
+        Ok(c) => c,
+        Err(_) => {
+            return PackageUpdateSummary {
+                count: 0,
+                has_updates: false,
+                status_text: "nh os switch -u".to_string(),
+                details: vec!["Impossible de lire /etc/nixos/flake.lock".to_string()],
+                last_checked: current_time_str(),
+            };
+        }
+    };
+
+    let lock_json: serde_json::Value = match serde_json::from_str(&lock_content) {
+        Ok(j) => j,
+        Err(_) => {
+            return PackageUpdateSummary {
+                count: 0,
+                has_updates: false,
+                status_text: "nh os switch -u".to_string(),
+                details: vec!["Format JSON invalide dans flake.lock".to_string()],
+                last_checked: current_time_str(),
+            };
+        }
+    };
+
+    let nodes = match lock_json.get("nodes").and_then(|n| n.as_object()) {
+        Some(n) => n,
+        None => {
+            return PackageUpdateSummary {
+                count: 0,
+                has_updates: false,
+                status_text: "nh os switch -u".to_string(),
+                details: vec![],
+                last_checked: current_time_str(),
+            };
+        }
+    };
+
+    struct InputToCheck {
+        name: String,
+        owner: String,
+        repo: String,
+        branch: Option<String>,
+        locked_rev: String,
+        is_nixpkgs: bool,
+    }
+
+    let mut inputs_to_check = Vec::new();
+    let root_inputs = lock_json
+        .get("nodes")
+        .and_then(|n| n.get("root"))
+        .and_then(|r| r.get("inputs"))
+        .and_then(|i| i.as_object());
+
+    if let Some(root_map) = root_inputs {
+        for (input_name, node_target) in root_map {
+            let target_key = node_target.as_str().unwrap_or(input_name.as_str());
+            if let Some(node) = nodes.get(target_key) {
+                let locked = node.get("locked");
+                let original = node.get("original");
+
+                let owner = locked
+                    .and_then(|l| l.get("owner"))
+                    .or_else(|| original.and_then(|o| o.get("owner")))
+                    .and_then(|v| v.as_str());
+
+                let repo = locked
+                    .and_then(|l| l.get("repo"))
+                    .or_else(|| original.and_then(|o| o.get("repo")))
+                    .and_then(|v| v.as_str());
+
+                let branch = original
+                    .and_then(|o| o.get("ref"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+
+                let locked_rev = locked
+                    .and_then(|l| l.get("rev"))
+                    .and_then(|v| v.as_str());
+
+                if let (Some(o), Some(r), Some(rev)) = (owner, repo, locked_rev) {
+                    let is_nixpkgs = r.to_lowercase() == "nixpkgs";
+                    inputs_to_check.push(InputToCheck {
+                        name: input_name.clone(),
+                        owner: o.to_string(),
+                        repo: r.to_string(),
+                        branch,
+                        locked_rev: rev.to_string(),
+                        is_nixpkgs,
+                    });
+                }
+            }
+        }
+    }
+
+    let results: Vec<(u32, Vec<String>)> = std::thread::scope(|s| {
+        let mut handles = Vec::new();
+        for input in &inputs_to_check {
+            let handle = s.spawn(move || {
+                if input.is_nixpkgs {
+                    let branch = input.branch.as_deref().unwrap_or("nixos-26.05");
+                    let (atom_count, atom_details) =
+                        fetch_atom_commits(&input.owner, &input.repo, branch, &input.locked_rev);
+                    if atom_count > 0 || !atom_details.is_empty() {
+                        (atom_count, atom_details)
+                    } else {
+                        let changed = check_git_input_has_update(
+                            &input.owner,
+                            &input.repo,
+                            input.branch.as_deref(),
+                            &input.locked_rev,
+                        );
+                        if changed {
+                            (1, vec![format!("{}: mises à jour disponibles", input.name)])
+                        } else {
+                            (0, vec![])
+                        }
+                    }
+                } else {
+                    let changed = check_git_input_has_update(
+                        &input.owner,
+                        &input.repo,
+                        input.branch.as_deref(),
+                        &input.locked_rev,
+                    );
+                    if changed {
+                        (1, vec![format!("{}: mise à jour disponible", input.name)])
+                    } else {
+                        (0, vec![])
+                    }
+                }
+            });
+            handles.push(handle);
+        }
+
+        handles.into_iter().map(|h| h.join().unwrap_or((0, vec![]))).collect()
+    });
+
+    let mut total_count: u32 = 0;
+    let mut all_details: Vec<String> = Vec::new();
+
+    for (count, mut details) in results {
+        total_count += count;
+        all_details.append(&mut details);
+    }
+
+    let mut system_needs_switch = false;
+    let sys_profile = std::path::Path::new("/nix/var/nix/profiles/system");
+    if let Ok(sys_meta) = std::fs::symlink_metadata(sys_profile) {
+        if let Ok(sys_time) = sys_meta.modified() {
+            if let Ok(lock_meta) = std::fs::metadata(flake_lock_path) {
+                if let Ok(lock_time) = lock_meta.modified() {
+                    if lock_time > sys_time {
+                        system_needs_switch = true;
+                    }
+                }
+            }
+        }
+    }
+
+    let (status_text, has_updates) = if total_count == 0 {
+        if system_needs_switch {
+            ("⚡ 1 configuration à déployer".to_string(), true)
+        } else {
+            ("✨ Système à jour".to_string(), false)
+        }
+    } else if total_count == 1 {
+        ("⚡ 1 paquet à mettre à jour".to_string(), true)
+    } else {
+        (format!("⚡ {} paquets à mettre à jour", total_count), true)
+    };
+
+    let summary = PackageUpdateSummary {
+        count: if total_count == 0 && system_needs_switch { 1 } else { total_count },
+        has_updates,
+        status_text,
+        details: all_details,
+        last_checked: current_time_str(),
+    };
+
+    if let Ok(mut guard) = CACHED_PACKAGE_UPDATES.lock() {
+        *guard = Some((Instant::now(), summary.clone()));
+    }
+
+    summary
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,4 +590,13 @@ mod tests {
         println!("Updates result: {:#?}", res);
         assert!(!res.current_version.is_empty());
     }
+
+    #[test]
+    #[ignore = "requires network"]
+    fn test_package_updates() {
+        let res = get_pending_package_updates(true);
+        println!("Package updates result: {:#?}", res);
+        assert!(!res.status_text.is_empty());
+    }
+
 }

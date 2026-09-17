@@ -225,9 +225,9 @@
             </div>
             <div class="banner-actions">
               <!-- Bouton 1 (Principal) : Mise à jour des paquets via nh os switch -u -->
-              <button class="btn btn-primary" onclick="runAction('switch-update')" title="Met à jour tous les paquets du système via nh os switch -u">
+              <button id="btn-pkg-switch-update" class="btn btn-primary" onclick="runAction('switch-update')" title="Met à jour tous les paquets du système via nh os switch -u">
                 <span class="btn-icon">📦</span> Mise à Jour des Paquets
-                <small>nh os switch -u</small>
+                <small id="subtext-pkg-update">Vérification des mises à jour...</small>
               </button>
               <!-- Bouton 2 : Synchronisation sécurisée Git & Déploiement -->
               <button class="btn btn-outline" onclick="runAction('sync-github')" title="Vérifie l'authenticité cryptographique de la mise à jour GitHub puis déploie">

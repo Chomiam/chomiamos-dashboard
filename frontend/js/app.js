@@ -813,6 +813,7 @@ function initTerminal() {
 
     loadGenerations();
     checkForUpdates();
+    updatePackageCountBadge(true);
   });
 }
 
@@ -1835,10 +1836,62 @@ async function checkForUpdates() {
         navIndicator.classList.add("hidden");
       }
     }
+
+    // 3. Calcul et affichage du nombre de paquets à mettre à jour
+    updatePackageCountBadge(false);
   } catch (err) {
     console.warn("Vérification des mises à jour ignorée:", err);
   }
 }
+
+// =========================================================================
+// 📦 Calcul dynamique du nombre de paquets à mettre à jour (nh os switch -u)
+// =========================================================================
+
+async function updatePackageCountBadge(force = false) {
+  const subtext = document.getElementById("subtext-pkg-update");
+  const btn = document.getElementById("btn-pkg-switch-update");
+  if (!subtext) return;
+
+  try {
+    const res = await invoke("get_package_update_count", { force: Boolean(force) });
+    if (!res) return;
+
+    subtext.textContent = res.status_text || "nh os switch -u";
+
+    if (res.has_updates && res.count > 0) {
+      subtext.classList.remove("up-to-date");
+      subtext.classList.add("has-updates");
+      if (btn) {
+        let title = `Mise à jour disponible (${res.count} paquet${res.count > 1 ? "s" : ""}) :\n`;
+        if (res.details && res.details.length > 0) {
+          title += res.details.slice(0, 12).map((d) => `• ${d}`).join("\n");
+          if (res.details.length > 12) {
+            title += `\n... et ${res.details.length - 12} autres`;
+          }
+        }
+        title += "\n\nCliquez pour appliquer les mises à jour via nh os switch -u";
+        btn.setAttribute("title", title);
+      }
+    } else {
+      subtext.classList.remove("has-updates");
+      subtext.classList.add("up-to-date");
+      if (btn) {
+        btn.setAttribute(
+          "title",
+          "Tous les paquets du système et sources Flake sont à jour.\nCliquez pour forcer une vérification (nh os switch -u)."
+        );
+      }
+    }
+  } catch (err) {
+    console.warn("Erreur lors de la récupération des paquets à mettre à jour:", err);
+    if (!subtext.textContent || subtext.textContent.includes("Vérification")) {
+      subtext.textContent = "nh os switch -u";
+    }
+  }
+}
+
+window.updatePackageCountBadge = updatePackageCountBadge;
 
 function openDashboardUpdateModal() {
   const modal = document.getElementById("dashboard-update-modal");

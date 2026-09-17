@@ -551,6 +551,11 @@ fn check_system_updates() -> Result<updates::UpdateCheckResult, String> {
 }
 
 #[tauri::command]
+fn get_package_update_count(force: Option<bool>) -> Result<updates::PackageUpdateSummary, String> {
+    Ok(updates::get_pending_package_updates(force.unwrap_or(false)))
+}
+
+#[tauri::command]
 fn open_in_file_manager(path: String) -> Result<(), String> {
     let _ = std::process::Command::new("xdg-open")
         .arg(&path)
@@ -1044,6 +1049,7 @@ fn main() {
             open_in_file_manager,
             get_current_user,
             check_system_updates,
+            get_package_update_count,
             restart_dashboard,
             get_github_token,
             save_github_token,

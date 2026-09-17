@@ -484,6 +484,15 @@
                   <small>Démons & Processus</small>
                 </div>
               </button>
+
+              <button type="button" class="nix-shell-subnav-btn" data-subtab="nix-subtab-fastfetch" onclick="switchNixShellSubtab('nix-subtab-fastfetch')">
+                <span class="nix-shell-subnav-icon">🚀</span>
+                <div class="nix-shell-subnav-text">
+                  <strong>Fastfetch</strong>
+                  <small>Profils & Rendu Terminal</small>
+                </div>
+                <span id="fastfetch-nav-badge" class="nix-shell-subnav-pill fastfetch-pill-ok">Nix</span>
+              </button>
             </nav>
 
             <div class="nix-shell-sidebar-footer">
@@ -798,6 +807,155 @@
               </div>
 
             </div>
+
+            <!-- ================= SOUS-ONGLET 4 : FASTFETCH (PROFILS & TERMINAL INTÉGRÉ) ================= -->
+            <div id="nix-subtab-fastfetch" class="nix-shell-subtab-pane">
+
+              <!-- Hero Card : Gestionnaire de Profils Fastfetch -->
+              <div class="card fastfetch-hero-card">
+                <div class="fastfetch-hero-header">
+                  <div class="fastfetch-hero-title-wrap">
+                    <div class="fastfetch-icon-box">🚀</div>
+                    <div>
+                      <div class="fastfetch-title-row">
+                        <h2>Gestionnaire de Profils Fastfetch</h2>
+                        <span id="fastfetch-status-pill" class="fastfetch-status-pill pill-nix">Géré par Nix</span>
+                        <span class="fastfetch-protected-tag" title="Les configurations utilisateur sont isolées et ne sont jamais écrasées par NixOS">🔒 Protection NixOS Active</span>
+                      </div>
+                      <p class="fastfetch-hero-desc">Importez, validez rigoureusement et prévisualisez vos profils Fastfetch (format JSONC) en temps réel avec un terminal interactif intégré.</p>
+                    </div>
+                  </div>
+
+                  <div class="fastfetch-quick-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="loadActiveFastfetchConfig()" title="Charger la configuration active actuelle">
+                      <span>📥</span> Config Active
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="loadSampleFastfetchConfig()" title="Charger un profil type Catppuccin valide">
+                      <span>✨</span> Modèle Type
+                    </button>
+                    <button type="button" class="btn btn-danger-soft btn-sm" onclick="restoreDefaultFastfetchConfig()" title="Rétablir le profil officiel ChomiamOS">
+                      <span>↺</span> Rétablir Défaut
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Main Fastfetch Grid (Éditeur/Validation à gauche, Terminal à droite) -->
+              <div class="fastfetch-main-grid">
+                
+                <!-- Colonne Gauche : Import, Éditeur & Diagnostics -->
+                <div class="fastfetch-left-col">
+                  
+                  <!-- Zone de Drop & Sélection de Fichier -->
+                  <div class="card fastfetch-drop-card" id="fastfetch-dropzone" onclick="document.getElementById('fastfetch-file-input').click()">
+                    <input type="file" id="fastfetch-file-input" accept=".json,.jsonc" style="display: none;" onchange="handleFastfetchFileSelected(event)">
+                    <div class="fastfetch-dropzone-body">
+                      <span class="fastfetch-dropzone-icon">📁</span>
+                      <div class="fastfetch-dropzone-text">
+                        <strong>Glissez-déposez un profil (.jsonc ou .json)</strong>
+                        <small>ou cliquez pour parcourir vos fichiers locaux</small>
+                      </div>
+                      <span class="fastfetch-dropzone-badge">JSONC / JSON</span>
+                    </div>
+                  </div>
+
+                  <!-- Éditeur de Code JSONC -->
+                  <div class="card fastfetch-editor-card">
+                    <div class="fastfetch-card-header">
+                      <div class="fastfetch-card-title">
+                        <span class="fastfetch-card-icon">📝</span>
+                        <span>Configuration Fastfetch</span>
+                      </div>
+                      <div class="fastfetch-editor-meta">
+                        <span id="fastfetch-editor-lines">0 lignes</span>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="formatFastfetchEditor()" title="Formater le JSON">📐 Formater</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchEditor()" title="Vider l'éditeur">🗑️ Vider</button>
+                      </div>
+                    </div>
+                    <textarea id="fastfetch-editor" class="fastfetch-textarea" spellcheck="false" placeholder="// Collez votre configuration Fastfetch au format JSONC ici...
+{
+  \"$schema\": \"https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json\",
+  \"display\": {
+    \"separator\": \"  \"
+  },
+  \"modules\": [
+    \"title\",
+    \"os\",
+    \"host\",
+    \"kernel\",
+    \"uptime\"
+  ]
+}"></textarea>
+                  </div>
+
+                  <!-- Panneau de Statut & Diagnostics de Validation -->
+                  <div class="card fastfetch-diag-card" id="fastfetch-diag-card">
+                    <div class="fastfetch-diag-header">
+                      <div class="fastfetch-diag-title-wrap">
+                        <span class="fastfetch-diag-icon" id="fastfetch-diag-icon">⏳</span>
+                        <div>
+                          <strong id="fastfetch-diag-title">En attente d'analyse</strong>
+                          <div id="fastfetch-diag-subtitle" class="fastfetch-diag-sub">Cliquez sur « Vérifier la syntaxe » ou modifiez le contenu</div>
+                        </div>
+                      </div>
+                      <span id="fastfetch-diag-badge" class="badge-diag badge-idle">Non analysé</span>
+                    </div>
+
+                    <div id="fastfetch-errors-container" class="fastfetch-errors-container hidden">
+                      <div class="fastfetch-errors-header">Rapport détaillé des erreurs :</div>
+                      <div id="fastfetch-errors-list" class="fastfetch-errors-list"></div>
+                    </div>
+                  </div>
+
+                  <!-- Barre d'actions Principale -->
+                  <div class="fastfetch-actions-bar">
+                    <button type="button" id="btn-fastfetch-validate" class="btn btn-secondary" onclick="triggerFastfetchValidation(true)">
+                      <span>🔍</span> Vérifier la syntaxe
+                    </button>
+                    <button type="button" id="btn-fastfetch-preview" class="btn btn-primary" onclick="triggerFastfetchPreview()" disabled>
+                      <span>▶️</span> Prévisualiser
+                    </button>
+                    <button type="button" id="btn-fastfetch-apply" class="btn btn-success" onclick="triggerFastfetchApply()" disabled>
+                      <span>💾</span> Appliquer le profil
+                    </button>
+                  </div>
+
+                </div>
+
+                <!-- Colonne Droite : Terminal Intégré (xterm.js) -->
+                <div class="fastfetch-right-col">
+                  <div class="card fastfetch-terminal-card">
+                    <div class="fastfetch-terminal-header">
+                      <div class="fastfetch-term-title-wrap">
+                        <div class="fastfetch-term-dots">
+                          <span class="dot red"></span>
+                          <span class="dot yellow"></span>
+                          <span class="dot green"></span>
+                        </div>
+                        <span class="fastfetch-term-title">Rendu Terminal Fastfetch (xterm.js)</span>
+                      </div>
+                      <div class="fastfetch-term-actions">
+                        <span id="fastfetch-term-status" class="fastfetch-term-pill">Prêt</span>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchTerminal()" title="Nettoyer le terminal">🧹 Effacer</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="copyFastfetchTerminalOutput()" title="Copier le rendu">📋 Copier</button>
+                      </div>
+                    </div>
+                    
+                    <div id="fastfetch-terminal-container" class="fastfetch-terminal-container">
+                      <div id="fastfetch-terminal-output" class="fastfetch-terminal-output"></div>
+                    </div>
+
+                    <div class="fastfetch-terminal-footer">
+                      <div class="fastfetch-term-footer-left">
+                        <span class="fastfetch-sandbox-indicator">🔒 Bac à sable isolé (/tmp)</span>
+                        <span class="fastfetch-term-pipe-indicator">Codes ANSI 24-bit / Catppuccin</span>
+                      </div>
+                      <small id="fastfetch-exec-duration">0 ms</small>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
 
           </div>
         </div>
@@ -1940,14 +2098,6 @@
                 </div>
                 <span id="sftp-nav-badge" class="net-subnav-pill sftp-pill-ok">Actif</span>
               </button>
-              <button type="button" class="net-subnav-btn" data-subtab="net-subtab-fastfetch" onclick="switchNetworkSubtab('net-subtab-fastfetch')">
-                <span class="net-subnav-icon">🚀</span>
-                <div class="net-subnav-text">
-                  <strong>Fastfetch</strong>
-                  <small>Profils & Rendu Terminal</small>
-                </div>
-                <span id="fastfetch-nav-badge" class="net-subnav-pill fastfetch-pill-ok">Nix</span>
-              </button>
             </nav>
             <div class="net-sidebar-footer">
               <div class="net-sidebar-status">
@@ -2516,155 +2666,6 @@
               </div>
 
             </div>
-
-            <!-- SOUS-ONGLET 5 : FASTFETCH (PROFILS & TERMINAL INTÉGRÉ) -->
-            <div id="net-subtab-fastfetch" class="net-subtab-pane">
-
-              <!-- Hero Card : Gestionnaire de Profils Fastfetch -->
-              <div class="card fastfetch-hero-card">
-                <div class="fastfetch-hero-header">
-                  <div class="fastfetch-hero-title-wrap">
-                    <div class="fastfetch-icon-box">🚀</div>
-                    <div>
-                      <div class="fastfetch-title-row">
-                        <h2>Gestionnaire de Profils Fastfetch</h2>
-                        <span id="fastfetch-status-pill" class="fastfetch-status-pill pill-nix">Géré par Nix</span>
-                        <span class="fastfetch-protected-tag" title="Les configurations utilisateur sont isolées et ne sont jamais écrasées par NixOS">🔒 Protection NixOS Active</span>
-                      </div>
-                      <p class="fastfetch-hero-desc">Importez, validez rigoureusement et prévisualisez vos profils Fastfetch (format JSONC) en temps réel avec un terminal interactif intégré.</p>
-                    </div>
-                  </div>
-
-                  <div class="fastfetch-quick-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="loadActiveFastfetchConfig()" title="Charger la configuration active actuelle">
-                      <span>📥</span> Config Active
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="loadSampleFastfetchConfig()" title="Charger un profil type Catppuccin valide">
-                      <span>✨</span> Modèle Type
-                    </button>
-                    <button type="button" class="btn btn-danger-soft btn-sm" onclick="restoreDefaultFastfetchConfig()" title="Rétablir le profil officiel ChomiamOS">
-                      <span>↺</span> Rétablir Défaut
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Main Fastfetch Grid (Éditeur/Validation à gauche, Terminal à droite) -->
-              <div class="fastfetch-main-grid">
-                
-                <!-- Colonne Gauche : Import, Éditeur & Diagnostics -->
-                <div class="fastfetch-left-col">
-                  
-                  <!-- Zone de Drop & Sélection de Fichier -->
-                  <div class="card fastfetch-drop-card" id="fastfetch-dropzone" onclick="document.getElementById('fastfetch-file-input').click()">
-                    <input type="file" id="fastfetch-file-input" accept=".json,.jsonc" style="display: none;" onchange="handleFastfetchFileSelected(event)">
-                    <div class="fastfetch-dropzone-body">
-                      <span class="fastfetch-dropzone-icon">📁</span>
-                      <div class="fastfetch-dropzone-text">
-                        <strong>Glissez-déposez un profil (.jsonc ou .json)</strong>
-                        <small>ou cliquez pour parcourir vos fichiers locaux</small>
-                      </div>
-                      <span class="fastfetch-dropzone-badge">JSONC / JSON</span>
-                    </div>
-                  </div>
-
-                  <!-- Éditeur de Code JSONC -->
-                  <div class="card fastfetch-editor-card">
-                    <div class="fastfetch-card-header">
-                      <div class="fastfetch-card-title">
-                        <span class="fastfetch-card-icon">📝</span>
-                        <span>Configuration Fastfetch</span>
-                      </div>
-                      <div class="fastfetch-editor-meta">
-                        <span id="fastfetch-editor-lines">0 lignes</span>
-                        <button type="button" class="btn btn-xs btn-outline" onclick="formatFastfetchEditor()" title="Formater le JSON">📐 Formater</button>
-                        <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchEditor()" title="Vider l'éditeur">🗑️ Vider</button>
-                      </div>
-                    </div>
-                    <textarea id="fastfetch-editor" class="fastfetch-textarea" spellcheck="false" placeholder="// Collez votre configuration Fastfetch au format JSONC ici...
-{
-  \"$schema\": \"https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json\",
-  \"display\": {
-    \"separator\": \"  \"
-  },
-  \"modules\": [
-    \"title\",
-    \"os\",
-    \"host\",
-    \"kernel\",
-    \"uptime\"
-  ]
-}"></textarea>
-                  </div>
-
-                  <!-- Panneau de Statut & Diagnostics de Validation -->
-                  <div class="card fastfetch-diag-card" id="fastfetch-diag-card">
-                    <div class="fastfetch-diag-header">
-                      <div class="fastfetch-diag-title-wrap">
-                        <span class="fastfetch-diag-icon" id="fastfetch-diag-icon">⏳</span>
-                        <div>
-                          <strong id="fastfetch-diag-title">En attente d'analyse</strong>
-                          <div id="fastfetch-diag-subtitle" class="fastfetch-diag-sub">Cliquez sur « Vérifier la syntaxe » ou modifiez le contenu</div>
-                        </div>
-                      </div>
-                      <span id="fastfetch-diag-badge" class="badge-diag badge-idle">Non analysé</span>
-                    </div>
-
-                    <div id="fastfetch-errors-container" class="fastfetch-errors-container hidden">
-                      <div class="fastfetch-errors-header">Rapport détaillé des erreurs :</div>
-                      <div id="fastfetch-errors-list" class="fastfetch-errors-list"></div>
-                    </div>
-                  </div>
-
-                  <!-- Barre d'actions Principale -->
-                  <div class="fastfetch-actions-bar">
-                    <button type="button" id="btn-fastfetch-validate" class="btn btn-secondary" onclick="triggerFastfetchValidation(true)">
-                      <span>🔍</span> Vérifier la syntaxe
-                    </button>
-                    <button type="button" id="btn-fastfetch-preview" class="btn btn-primary" onclick="triggerFastfetchPreview()" disabled>
-                      <span>▶️</span> Prévisualiser
-                    </button>
-                    <button type="button" id="btn-fastfetch-apply" class="btn btn-success" onclick="triggerFastfetchApply()" disabled>
-                      <span>💾</span> Appliquer le profil
-                    </button>
-                  </div>
-
-                </div>
-
-                <!-- Colonne Droite : Terminal Intégré (xterm.js) -->
-                <div class="fastfetch-right-col">
-                  <div class="card fastfetch-terminal-card">
-                    <div class="fastfetch-terminal-header">
-                      <div class="fastfetch-term-title-wrap">
-                        <div class="fastfetch-term-dots">
-                          <span class="dot red"></span>
-                          <span class="dot yellow"></span>
-                          <span class="dot green"></span>
-                        </div>
-                        <span class="fastfetch-term-title">Rendu Terminal Fastfetch (xterm.js)</span>
-                      </div>
-                      <div class="fastfetch-term-actions">
-                        <span id="fastfetch-term-status" class="fastfetch-term-pill">Prêt</span>
-                        <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchTerminal()" title="Nettoyer le terminal">🧹 Effacer</button>
-                        <button type="button" class="btn btn-xs btn-outline" onclick="copyFastfetchTerminalOutput()" title="Copier le rendu">📋 Copier</button>
-                      </div>
-                    </div>
-                    
-                    <div id="fastfetch-terminal-container" class="fastfetch-terminal-container">
-                      <div id="fastfetch-terminal-output" class="fastfetch-terminal-output"></div>
-                    </div>
-
-                    <div class="fastfetch-terminal-footer">
-                      <div class="fastfetch-term-footer-left">
-                        <span class="fastfetch-sandbox-indicator">🔒 Bac à sable isolé (/tmp)</span>
-                        <span class="fastfetch-term-pipe-indicator">Codes ANSI 24-bit / Catppuccin</span>
-                      </div>
-                      <small id="fastfetch-exec-duration">0 ms</small>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
 
             </div>
           </div>

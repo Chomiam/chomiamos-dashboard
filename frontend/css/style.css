@@ -5180,6 +5180,20 @@ body {
   color: var(--overlay1);
 }
 
+.nix-shell-subnav-pill {
+  margin-left: auto;
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.nix-shell-subnav-btn.active .nix-shell-subnav-pill {
+  background: var(--blue);
+  color: var(--crust);
+}
+
 .nix-shell-sidebar-footer {
   margin-top: auto;
   padding-top: 14px;

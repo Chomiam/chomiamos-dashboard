@@ -95,6 +95,7 @@ function initTabs() {
         } else if (targetId === "tab-generations") {
           loadGenerations();
           loadUserShell();
+          initFastfetchView();
         }
       }
     });
@@ -3957,7 +3958,6 @@ function initNetworkCenter() {
   loadDnsCatalog(false);
   loadPodmanOverview(false);
   loadSftpOverview(false);
-  initFastfetchView();
 }
 
 function switchNetworkSubtab(subtabId) {
@@ -3976,14 +3976,6 @@ function switchNetworkSubtab(subtabId) {
   const targetPane = document.getElementById(subtabId);
   if (targetPane) {
     targetPane.classList.add("active");
-  }
-
-  if (subtabId === "net-subtab-fastfetch") {
-    setTimeout(() => {
-      if (typeof fastfetchFitAddon !== "undefined" && fastfetchFitAddon) {
-        fastfetchFitAddon.fit();
-      }
-    }, 50);
   }
 
   if (subtabId === "net-subtab-dns") {
@@ -4616,6 +4608,14 @@ function switchNixShellSubtab(subtabId) {
     loadUserShell();
   } else if (subtabId === "nix-subtab-systemd") {
     loadSystemdServices(false);
+  } else if (subtabId === "nix-subtab-fastfetch") {
+    initFastfetchView();
+    loadFastfetchState(false);
+    setTimeout(() => {
+      if (typeof fastfetchFitAddon !== "undefined" && fastfetchFitAddon) {
+        try { fastfetchFitAddon.fit(); } catch (_) {}
+      }
+    }, 50);
   }
 }
 
@@ -5863,10 +5863,10 @@ async function loadFastfetchState(showToastFeedback = false) {
     }
 
     if (navBadge) {
-      navBadge.className = "net-subnav-pill";
+      navBadge.className = "nix-shell-subnav-pill";
       if (state.is_custom_dashboard) {
         navBadge.textContent = "Perso";
-        navBadge.classList.add("sftp-pill-ok");
+        navBadge.classList.add("fastfetch-pill-ok");
       } else {
         navBadge.textContent = "Nix";
         navBadge.classList.add("fastfetch-pill-ok");

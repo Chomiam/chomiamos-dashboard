@@ -320,34 +320,74 @@ fn start_terminal_task(
             let script = format!(
                 r#"
                 set -e
-                echo -e "[1;35m🚀 Mise à jour ciblée du Dashboard ChomiamOS ...[0m
-"
+                echo -e "🚀 Mise à jour ciblée du Dashboard ChomiamOS ...\n"
+
+                # 1. Vérification de la connectivité avec le cache binaire Cachix
+                echo -e "🔍 Vérification de l'infrastructure de cache Cachix..."
+                CACHIX_URL="https://chomiamos-dashboard.cachix.org"
+                CACHIX_CHOMIAM="https://chomiamos.cachix.org"
+
+                if curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_URL/nix-cache-info"; then
+                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix : $CACHIX_URL"
+                elif curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_CHOMIAM/nix-cache-info"; then
+                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix principal : $CACHIX_CHOMIAM"
+                else
+                    echo -e "  \033[31m[✗]\033[0m Attention : Impossible de joindre les serveurs Cachix (hors-ligne ou réseau instable)"
+                fi
+
+                if nix config show 2>/dev/null | grep -q "chomiamos-dashboard.cachix.org"; then
+                    echo -e "  \033[32m[✓]\033[0m Substituter chomiamos-dashboard actif dans la configuration Nix locale"
+                elif nix config show 2>/dev/null | grep -q "chomiamos.cachix.org"; then
+                    echo -e "  \033[32m[✓]\033[0m Substituter chomiamos actif dans la configuration Nix locale"
+                else
+                    echo -e "  \033[33m[!]\033[0m Aucun substituter Cachix Chomiam détecté dans nix.conf"
+                fi
+
+                # 2. Détermination de la cible et test de présence du paquet pré-compilé
+                if [ "{channel}" = "testing" ]; then
+                    echo -e "\n🧪 Canal sélectionné : \033[36mTesting (branche testing)\033[0m"
+                    FLAKE_TARGET="github:Chomiam/chomiamos-dashboard/testing"
+                else
+                    echo -e "\n🛡️ Canal sélectionné : \033[32mStable (branche main)\033[0m"
+                    FLAKE_TARGET="github:Chomiam/chomiamos-dashboard"
+                fi
+
+                echo -e "📦 Recherche du binaire distant ($FLAKE_TARGET)..."
+                OUT_PATH=$(nix eval --raw "$FLAKE_TARGET#packages.x86_64-linux.default.outPath" 2>/dev/null || true)
+
+                if [ -n "$OUT_PATH" ]; then
+                    STORE_HASH=$(basename "$OUT_PATH" | cut -d"-" -f1)
+                    HTTP_STATUS=$(curl -s --connect-timeout 4 -o /dev/null -w "%{{http_code}}" "$CACHIX_URL/${{STORE_HASH}}.narinfo")
+                    if [ "$HTTP_STATUS" = "200" ]; then
+                        echo -e "  \033[32m[✓]\033[0m Binaire pré-compilé disponible sur Cachix : \033[1m${{STORE_HASH}}\033[0m"
+                        echo -e "  \033[32m⚡ Téléchargement et activation instantanés (sans compilation locale)...\033[0m\n"
+                    else
+                        echo -e "  \033[33m[!]\033[0m Binaire non encore disponible sur Cachix (empreinte: ${{STORE_HASH}}, HTTP $HTTP_STATUS)"
+                        echo -e "  \033[33m⏳ Le build GitHub Actions est potentiellement en cours (~5-7 min après le push).\033[0m"
+                        echo -e "  \033[33m⚠️ Sans binaire Cachix, Nix devra compiler le Dashboard localement depuis les sources.\033[0m\n"
+                    fi
+                else
+                    echo -e "  \033[33m[!]\033[0m Évaluation de l'empreinte impossible, tentative de téléchargement direct...\n"
+                fi
+
+                # 3. Nettoyage préventif des paquets du dashboard pour éviter toute collision
                 nix profile remove --regex '^.*dashboard.*$' 2>/dev/null || true
                 nix profile remove chomiamos-dashboard 2>/dev/null || true
                 nix profile remove dashboard-chomiamos 2>/dev/null || true
-                if [ "{}" = "testing" ]; then
-                    echo -e "[1;36m🧪 Canal sélectionné : Testing (branche testing)[0m"
-                    echo -e "[1;34m⚡ Téléchargement et activation ultra-rapide depuis Cachix...[0m"
-                    nix profile add --refresh github:Chomiam/chomiamos-dashboard/testing
-                else
-                    echo -e "[1;32m🛡️ Canal sélectionné : Stable (branche main)[0m"
-                    echo -e "[1;34m⚡ Téléchargement et activation ultra-rapide depuis Cachix...[0m"
-                    nix profile add --refresh github:Chomiam/chomiamos-dashboard
-                fi
 
-                # Synchronisation optionnelle de flake.lock en arrière-plan sans reconstruire tout l'OS
+                # 4. Installation de la version sélectionnée
+                nix profile add --refresh "$FLAKE_TARGET"
+
+                # 5. Synchronisation optionnelle de flake.lock en arrière-plan sans reconstruire tout l'OS
                 if [ -w /etc/nixos/flake.lock ]; then
-                    echo -e "
-[1;30m📦 Synchronisation de flake.lock (/etc/nixos) en arrière-plan...[0m"
+                    echo -e "\n📦 Synchronisation de flake.lock (/etc/nixos) en arrière-plan..."
                     nix flake update chomiamos-dashboard --flake /etc/nixos 2>/dev/null || true
                 fi
 
-                echo -e "
-[1;32m✅ Dashboard mis à jour avec succès en quelques secondes (sans mot de passe root) ![0m"
-                echo -e "[1;36m💡 Cliquez sur le bouton 🔄 en haut à droite pour recharger l'interface.[0m
-"
+                echo -e "\n✅ Dashboard mis à jour avec succès !"
+                echo -e "💡 Cliquez sur le bouton 🔄 en haut à droite pour recharger l'interface.\n"
                 "#,
-                channel
+                channel = channel
             );
             ("bash".into(), vec!["-c".into(), script])
         },

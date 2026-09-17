@@ -56,7 +56,7 @@ async function initDashboardVersionBadge() {
         navDashVer.textContent = `v${ver} • Stable`;
       }
     } catch (_) {
-      navDashVer.textContent = "v0.4.3 • Stable";
+      navDashVer.textContent = "v0.4.4 • Stable";
     }
   }
 }
@@ -767,7 +767,7 @@ function initTerminal() {
       brightCyan: '#94e2d5',
       brightWhite: '#a6adc8',
     },
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', 'JetBrainsMono NFM', 'Symbols Nerd Font', 'JetBrains Mono', monospace",
     fontSize: 13,
     lineHeight: 1.2,
     cursorBlink: true,
@@ -1929,7 +1929,7 @@ function openDashboardUpdateModal() {
   const cardTestingVer = document.getElementById("card-channel-testing-ver");
 
   const status = currentDashboardStatus || {};
-  const currentVer = status.current_version || "0.4.3";
+  const currentVer = status.current_version || "0.4.4";
   const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
   const channel = (status.dashboard_channel || "Stable").toLowerCase();
 
@@ -5788,6 +5788,94 @@ let fastfetchLastValidationSuccess = false;
 let fastfetchLastPreviewSuccess = false;
 let fastfetchRawTerminalOutput = "";
 let currentFastfetchState = null;
+let currentFastfetchPreviewResult = null;
+let currentFastfetchRenderMode = "hd";
+
+function updateFastfetchPreviewRender(mode) {
+  currentFastfetchRenderMode = mode;
+  const res = currentFastfetchPreviewResult;
+  if (!res) return;
+
+  const logoPane = document.getElementById("fastfetch-logo-pane");
+  const logoImg = document.getElementById("fastfetch-logo-img");
+  const logoCaption = document.getElementById("fastfetch-logo-caption");
+  const modeBtn = document.getElementById("btn-fastfetch-render-mode");
+  const imgPill = document.getElementById("fastfetch-image-pill");
+
+  if (res.has_image && res.image_data_url) {
+    if (modeBtn) modeBtn.classList.remove("hidden");
+    if (imgPill) imgPill.classList.remove("hidden");
+
+    if (mode === "hd") {
+      if (modeBtn) {
+        modeBtn.innerHTML = "<span>🖼️</span> Mode : Image HD";
+        modeBtn.title = "Cliquez pour basculer vers le rendu terminal ANSI Chafa";
+      }
+      if (logoPane && logoImg) {
+        logoPane.classList.remove("hidden");
+        logoImg.src = res.image_data_url;
+        if (res.image_pad_top) {
+          logoPane.style.paddingTop = `${Math.max(10, res.image_pad_top * 10)}px`;
+        }
+        if (res.image_width) {
+          logoImg.style.maxWidth = `${Math.min(320, res.image_width * 8)}px`;
+        }
+        if (logoCaption) {
+          const filename = res.image_path ? res.image_path.split("/").pop() : "Logo";
+          logoCaption.textContent = `🖼️ ${filename}`;
+        }
+      }
+
+      const textToDisplay = res.modules_stdout || res.stdout;
+      fastfetchRawTerminalOutput = textToDisplay;
+      if (fastfetchTerm) {
+        fastfetchTerm.clear();
+        fastfetchTerm.write(textToDisplay);
+      }
+    } else {
+      // Mode Chafa ANSI
+      if (modeBtn) {
+        modeBtn.innerHTML = "<span>🎨</span> Mode : Chafa ANSI";
+        modeBtn.title = "Cliquez pour basculer vers le rendu Image réelle HD";
+      }
+      if (logoPane) {
+        logoPane.classList.add("hidden");
+      }
+
+      const textToDisplay = res.chafa_stdout || res.stdout;
+      fastfetchRawTerminalOutput = textToDisplay;
+      if (fastfetchTerm) {
+        fastfetchTerm.clear();
+        fastfetchTerm.write(textToDisplay);
+      }
+    }
+  } else {
+    // Pas d'image logo
+    if (modeBtn) modeBtn.classList.add("hidden");
+    if (imgPill) imgPill.classList.add("hidden");
+    if (logoPane) logoPane.classList.add("hidden");
+
+    fastfetchRawTerminalOutput = res.stdout;
+    if (fastfetchTerm) {
+      fastfetchTerm.clear();
+      fastfetchTerm.write(res.stdout);
+    }
+  }
+
+  requestAnimationFrame(() => {
+    if (fastfetchFitAddon) {
+      try { fastfetchFitAddon.fit(); } catch (_) {}
+    }
+  });
+}
+
+function toggleFastfetchRenderMode() {
+  if (!currentFastfetchPreviewResult || !currentFastfetchPreviewResult.has_image) return;
+  const newMode = currentFastfetchRenderMode === "hd" ? "chafa" : "hd";
+  updateFastfetchPreviewRender(newMode);
+  const modeLabel = newMode === "hd" ? "Image Haute Définition" : "Rendu ANSI Chafa (demi-blocs)";
+  showToast(`Affichage Fastfetch : ${modeLabel}`, "info");
+}
 
 function initFastfetchView() {
   initFastfetchTerminal();
@@ -5830,7 +5918,7 @@ function initFastfetchTerminal() {
       brightCyan: "#94e2d5",
       brightWhite: "#a6adc8",
     },
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontFamily: "'JetBrainsMono Nerd Font', 'JetBrainsMono NF', 'JetBrainsMono NFM', 'Symbols Nerd Font', 'JetBrains Mono', monospace",
     fontSize: 12,
     lineHeight: 1.25,
     cursorBlink: false,
@@ -6246,24 +6334,17 @@ async function triggerFastfetchPreview() {
   const startTime = performance.now();
 
   try {
-    const output = await invoke("preview_fastfetch_config", { content });
+    const res = await invoke("preview_fastfetch_config", { content });
+    currentFastfetchPreviewResult = res;
     const elapsed = Math.round(performance.now() - startTime);
 
     if (durationEl) durationEl.textContent = `${elapsed} ms`;
-    fastfetchRawTerminalOutput = output;
 
-    if (fastfetchTerm) {
-      if (fastfetchFitAddon) {
-        try { fastfetchFitAddon.fit(); } catch (_) {}
-      }
-      fastfetchTerm.clear();
-      fastfetchTerm.write(output);
-      requestAnimationFrame(() => {
-        if (fastfetchFitAddon) {
-          try { fastfetchFitAddon.fit(); } catch (_) {}
-        }
-      });
+    if (fastfetchFitAddon) {
+      try { fastfetchFitAddon.fit(); } catch (_) {}
     }
+
+    updateFastfetchPreviewRender(res.has_image ? "hd" : "standard");
 
     fastfetchLastPreviewSuccess = true;
     if (btnApply) btnApply.disabled = false;
@@ -6273,7 +6354,11 @@ async function triggerFastfetchPreview() {
       statusEl.className = "fastfetch-term-pill";
     }
 
-    showToast("Prévisualisation Fastfetch générée avec succès !", "success");
+    if (res.has_image) {
+      showToast("Prévisualisation Fastfetch avec Image HD générée avec succès !", "success");
+    } else {
+      showToast("Prévisualisation Fastfetch générée avec succès !", "success");
+    }
   } catch (err) {
     console.error("Erreur preview fastfetch :", err);
     showToast("Erreur lors de la prévisualisation : " + err, "error");
@@ -6344,6 +6429,13 @@ function clearFastfetchTerminal() {
   if (fastfetchTerm) {
     fastfetchTerm.clear();
   }
+  const logoPane = document.getElementById("fastfetch-logo-pane");
+  if (logoPane) logoPane.classList.add("hidden");
+  const modeBtn = document.getElementById("btn-fastfetch-render-mode");
+  if (modeBtn) modeBtn.classList.add("hidden");
+  const imgPill = document.getElementById("fastfetch-image-pill");
+  if (imgPill) imgPill.classList.add("hidden");
+  currentFastfetchPreviewResult = null;
 }
 
 function copyFastfetchTerminalOutput() {
@@ -6417,3 +6509,4 @@ window.copyFastfetchTerminalOutput = copyFastfetchTerminalOutput;
 window.clearFastfetchEditor = clearFastfetchEditor;
 window.formatFastfetchEditor = formatFastfetchEditor;
 window.toggleFastfetchTerminalExpand = toggleFastfetchTerminalExpand;
+window.toggleFastfetchRenderMode = toggleFastfetchRenderMode;

@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::process::Command;
 use std::time::SystemTime;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 
 const FASTFETCH_SCHEMA_RAW: &str = include_str!("fastfetch_schema.json");
 
@@ -23,6 +24,31 @@ pub struct FastfetchValidationReport {
     pub errors: Vec<FastfetchError>,
     pub warnings: Vec<String>,
     pub cleaned_json: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FastfetchPreviewResult {
+    pub stdout: String,
+    pub has_image: bool,
+    pub image_data_url: Option<String>,
+    pub image_path: Option<String>,
+    pub image_width: Option<u32>,
+    pub image_height: Option<u32>,
+    pub image_pad_left: Option<u32>,
+    pub image_pad_top: Option<u32>,
+    pub chafa_stdout: Option<String>,
+    pub modules_stdout: Option<String>,
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LogoImageInfo {
+    pub path: PathBuf,
+    pub data_url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub pad_left: Option<u32>,
+    pub pad_top: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -280,7 +306,124 @@ pub fn validate_fastfetch(raw_content: &str) -> FastfetchValidationReport {
 }
 
 /// Exécute une prévisualisation isolée de fastfetch dans /tmp
-pub fn preview_fastfetch(raw_content: &str) -> Result<String, String> {
+fn resolve_path(raw_path: &str) -> Option<PathBuf> {
+    let clean = raw_path.trim();
+    if clean.is_empty() {
+        return None;
+    }
+
+    let resolved_str = if clean.starts_with("~/") {
+        if let Ok(home) = std::env::var("HOME") {
+            format!("{}/{}", home, &clean[2..])
+        } else {
+            clean.to_string()
+        }
+    } else if clean.starts_with("$HOME/") {
+        if let Ok(home) = std::env::var("HOME") {
+            format!("{}/{}", home, &clean[6..])
+        } else {
+            clean.to_string()
+        }
+    } else {
+        clean.to_string()
+    };
+
+    let p = PathBuf::from(&resolved_str);
+    if p.exists() {
+        return Some(p);
+    }
+
+    // Tester les chemins relatifs dans ~/.config/fastfetch et ~/.config/fastfetch/logo
+    if let Ok(home) = std::env::var("HOME") {
+        let candidates = [
+            PathBuf::from(&home).join(".config").join("fastfetch").join(clean),
+            PathBuf::from(&home).join(".config").join("fastfetch").join("logo").join(clean),
+            PathBuf::from("/etc/nixos/assets").join(clean),
+        ];
+        for c in &candidates {
+            if c.exists() {
+                return Some(c.clone());
+            }
+        }
+    }
+
+    None
+}
+
+fn is_image_extension(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+        matches!(
+            ext.to_lowercase().as_str(),
+            "png" | "jpg" | "jpeg" | "webp" | "svg" | "gif" | "bmp" | "ico" | "avif"
+        )
+    } else {
+        false
+    }
+}
+
+fn mime_type_from_extension(path: &Path) -> &'static str {
+    match path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "gif" => "image/gif",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "avif" => "image/avif",
+        _ => "image/png",
+    }
+}
+
+pub fn extract_logo_image_info(raw_content: &str) -> Option<LogoImageInfo> {
+    let (cleaned, _) = clean_jsonc(raw_content);
+    let val: serde_json::Value = serde_json::from_str(&cleaned).ok()?;
+    let logo = val.get("logo")?;
+
+    let mut source_str: Option<String> = None;
+    let mut width: Option<u32> = None;
+    let mut height: Option<u32> = None;
+    let mut pad_left: Option<u32> = None;
+    let mut pad_top: Option<u32> = None;
+
+    if let Some(s) = logo.as_str() {
+        source_str = Some(s.to_string());
+    } else if let Some(obj) = logo.as_object() {
+        if let Some(src) = obj.get("source").and_then(|v| v.as_str()) {
+            source_str = Some(src.to_string());
+        }
+        width = obj.get("width").and_then(|v| v.as_u64()).map(|n| n as u32);
+        height = obj.get("height").and_then(|v| v.as_u64()).map(|n| n as u32);
+        if let Some(padding) = obj.get("padding").and_then(|v| v.as_object()) {
+            pad_left = padding.get("left").and_then(|v| v.as_u64()).map(|n| n as u32);
+            pad_top = padding.get("top").and_then(|v| v.as_u64()).map(|n| n as u32);
+        }
+    }
+
+    let source = source_str?;
+    let resolved_path = resolve_path(&source)?;
+
+    if !is_image_extension(&resolved_path) {
+        return None;
+    }
+
+    let bytes = fs::read(&resolved_path).ok()?;
+    let mime = mime_type_from_extension(&resolved_path);
+    let encoded = BASE64.encode(&bytes);
+    let data_url = format!("data:{};base64,{}", mime, encoded);
+
+    Some(LogoImageInfo {
+        path: resolved_path,
+        data_url,
+        width,
+        height,
+        pad_left,
+        pad_top,
+    })
+}
+
+/// Exécute une prévisualisation isolée de fastfetch dans /tmp avec support double mode (Image HD + Chafa ANSI)
+pub fn preview_fastfetch(raw_content: &str) -> Result<FastfetchPreviewResult, String> {
     let report = validate_fastfetch(raw_content);
     if !report.valid {
         let first_err = report.errors.first().map(|e| e.message.clone()).unwrap_or_else(|| "Erreur inconnue".into());
@@ -310,35 +453,94 @@ pub fn preview_fastfetch(raw_content: &str) -> Result<String, String> {
         .map(|s| s.as_str())
         .unwrap_or("fastfetch");
 
-    let output_res = Command::new(fastfetch_bin)
-        .args(["-c", temp_file.to_str().unwrap(), "--show-errors", "--pipe", "false"])
-        .envs([
-            ("COLUMNS", "120"),
-            ("LINES", "60"),
-            ("TERM", "xterm-256color"),
-        ])
-        .output();
+    let logo_info = extract_logo_image_info(raw_content);
 
-    // Nettoyage immédiat du fichier temporaire
-    let _ = fs::remove_file(&temp_file);
+    let res = if let Some(ref info) = logo_info {
+        // Un logo image est présent (ex: chomiamos_logo.png)
+        // 1. Exécuter fastfetch avec --logo none pour récupérer uniquement les modules (rendu propre sans échappements graphiques)
+        let modules_res = Command::new(fastfetch_bin)
+            .args(["-c", temp_file.to_str().unwrap(), "--logo", "none", "--show-errors", "--pipe", "false"])
+            .envs([
+                ("COLUMNS", "120"),
+                ("LINES", "60"),
+                ("TERM", "xterm-256color"),
+            ])
+            .output();
 
-    match output_res {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+        // 2. Exécuter fastfetch avec --logo-type chafa pour obtenir un rendu terminal complet avec blocs ANSI (compatible xterm.js)
+        let chafa_res = Command::new(fastfetch_bin)
+            .args(["-c", temp_file.to_str().unwrap(), "--logo-type", "chafa", "--show-errors", "--pipe", "false"])
+            .envs([
+                ("COLUMNS", "120"),
+                ("LINES", "60"),
+                ("TERM", "xterm-256color"),
+            ])
+            .output();
 
-            if !stderr.is_empty() {
-                if stdout.is_empty() {
-                    Ok(format!("\x1b[31mErreur fastfetch :\x1b[0m\n{}", stderr))
+        let modules_stdout = modules_res.ok().map(|o| String::from_utf8_lossy(&o.stdout).to_string());
+        let chafa_stdout = chafa_res.ok().map(|o| String::from_utf8_lossy(&o.stdout).to_string());
+
+        let default_stdout = modules_stdout.clone().or_else(|| chafa_stdout.clone()).unwrap_or_default();
+
+        Ok(FastfetchPreviewResult {
+            stdout: default_stdout,
+            has_image: true,
+            image_data_url: Some(info.data_url.clone()),
+            image_path: Some(info.path.to_string_lossy().to_string()),
+            image_width: info.width,
+            image_height: info.height,
+            image_pad_left: info.pad_left,
+            image_pad_top: info.pad_top,
+            chafa_stdout,
+            modules_stdout,
+            warning: None,
+        })
+    } else {
+        // Pas de logo image : exécution standard Fastfetch
+        let output_res = Command::new(fastfetch_bin)
+            .args(["-c", temp_file.to_str().unwrap(), "--show-errors", "--pipe", "false"])
+            .envs([
+                ("COLUMNS", "120"),
+                ("LINES", "60"),
+                ("TERM", "xterm-256color"),
+            ])
+            .output();
+
+        match output_res {
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+
+                let final_stdout = if !stderr.is_empty() {
+                    if stdout.is_empty() {
+                        format!("\x1b[31mErreur fastfetch :\x1b[0m\n{}", stderr)
+                    } else {
+                        format!("{}\n\x1b[33mAvertissements fastfetch :\x1b[0m\n{}", stdout, stderr)
+                    }
                 } else {
-                    Ok(format!("{}\n\x1b[33mAvertissements fastfetch :\x1b[0m\n{}", stdout, stderr))
-                }
-            } else {
-                Ok(stdout)
+                    stdout
+                };
+
+                Ok(FastfetchPreviewResult {
+                    stdout: final_stdout,
+                    has_image: false,
+                    image_data_url: None,
+                    image_path: None,
+                    image_width: None,
+                    image_height: None,
+                    image_pad_left: None,
+                    image_pad_top: None,
+                    chafa_stdout: None,
+                    modules_stdout: None,
+                    warning: None,
+                })
             }
+            Err(e) => Err(format!("Erreur lors de l'exécution de fastfetch : {}", e)),
         }
-        Err(e) => Err(format!("Erreur lors de l'exécution de fastfetch : {}", e)),
-    }
+    };
+
+    let _ = fs::remove_file(&temp_file);
+    res
 }
 
 /// Récupère l'état actuel de la configuration Fastfetch de l'utilisateur
@@ -472,6 +674,24 @@ pub fn restore_fastfetch_default() -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_extract_logo_image_info() {
+        let profile = r#"{
+            "logo": {
+                "type": "kitty-direct",
+                "source": "~/.config/fastfetch/logo/chomiamos_logo.png",
+                "width": 40,
+                "height": 20,
+                "padding": { "left": 2, "top": 1 }
+            }
+        }"#;
+        if let Some(info) = extract_logo_image_info(profile) {
+            assert!(info.data_url.starts_with("data:image/"));
+            assert_eq!(info.width, Some(40));
+            assert_eq!(info.height, Some(20));
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -525,7 +745,7 @@ mod tests {
         let res = preview_fastfetch(profile);
         assert!(res.is_ok(), "Prévisualisation doit réussir : {:?}", res.err());
         let output = res.unwrap();
-        assert!(!output.is_empty(), "La sortie ne doit pas être vide");
+        assert!(!output.stdout.is_empty(), "La sortie ne doit pas être vide");
     }
 
     #[test]

@@ -1006,7 +1006,7 @@ fn validate_fastfetch_config(content: String) -> Result<fastfetch::FastfetchVali
 }
 
 #[tauri::command]
-async fn preview_fastfetch_config(content: String) -> Result<String, String> {
+async fn preview_fastfetch_config(content: String) -> Result<fastfetch::FastfetchPreviewResult, String> {
     tokio::task::spawn_blocking(move || fastfetch::preview_fastfetch(&content))
         .await
         .map_err(|e| format!("Task join error: {}", e))?

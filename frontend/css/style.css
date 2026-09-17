@@ -1,4 +1,29 @@
 /* ==========================================================================
+   Nerd Fonts & Special Character Symbols Support (v0.4.4)
+   ========================================================================== */
+@font-face {
+  font-family: 'Symbols Nerd Font';
+  src: local('JetBrainsMono Nerd Font'),
+       local('JetBrainsMono NF'),
+       local('Symbols Nerd Font Mono'),
+       local('Symbols Nerd Font'),
+       url('../assets/fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: local('JetBrainsMono Nerd Font'),
+       local('JetBrainsMono NF'),
+       local('JetBrainsMono NFM'),
+       local('Symbols Nerd Font Mono'),
+       url('../assets/fonts/SymbolsNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* ==========================================================================
    Catppuccin Mocha Theme Palette & Global Styles
    ========================================================================== */
 
@@ -6954,7 +6979,7 @@ body {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--subtext1);
-  font-family: "JetBrains Mono", monospace;
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NF", "Symbols Nerd Font", "JetBrains Mono", monospace;
 }
 
 .fastfetch-term-actions {
@@ -7047,4 +7072,96 @@ body {
 .btn-danger-soft:hover {
   background: rgba(243, 139, 168, 0.25);
   border-color: var(--red);
+}
+
+/* Fastfetch Image & Split Preview Container (v0.4.4) */
+.fastfetch-preview-container {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16px;
+  overflow: hidden;
+  position: relative;
+}
+
+.fastfetch-logo-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 14px 12px;
+  background: rgba(17, 17, 27, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  min-width: 220px;
+  max-width: 320px;
+  flex-shrink: 0;
+  transition: var(--transition-smooth);
+}
+
+.fastfetch-logo-pane.hidden {
+  display: none !important;
+}
+
+.fastfetch-logo-img {
+  max-width: 100%;
+  max-height: 440px;
+  object-fit: contain;
+  border-radius: 6px;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5));
+  transition: transform 0.2s ease;
+}
+
+.fastfetch-logo-img:hover {
+  transform: scale(1.02);
+}
+
+.fastfetch-logo-caption {
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--subtext0);
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NF", "Symbols Nerd Font", "JetBrains Mono", monospace;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-render-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(180, 190, 254, 0.12);
+  color: var(--lavender);
+  border: 1px solid rgba(180, 190, 254, 0.3);
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-render-mode:hover {
+  background: rgba(180, 190, 254, 0.25);
+  border-color: var(--lavender);
+}
+
+.btn-render-mode.hidden {
+  display: none !important;
+}
+
+.fastfetch-img-badge {
+  background: rgba(148, 226, 213, 0.15);
+  color: var(--teal);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.fastfetch-img-badge.hidden {
+  display: none !important;
 }

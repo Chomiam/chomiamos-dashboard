@@ -76,7 +76,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.4.3 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.4.4 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -936,6 +936,7 @@
                       </div>
                       <div class="fastfetch-term-actions">
                         <span id="fastfetch-term-status" class="fastfetch-term-pill">Prêt</span>
+                        <button type="button" id="btn-fastfetch-render-mode" class="btn btn-xs btn-render-mode hidden" onclick="toggleFastfetchRenderMode()" title="Basculer entre le rendu Image HD et le rendu ANSI Chafa">🖼️ Image HD</button>
                         <button type="button" id="btn-fastfetch-toggle-expand" class="btn btn-xs btn-outline" onclick="toggleFastfetchTerminalExpand()" title="Agrandir / Réduire la prévisualisation">⛶ Pleine largeur</button>
                         <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchTerminal()" title="Nettoyer le terminal">🧹 Effacer</button>
                         <button type="button" class="btn btn-xs btn-outline" onclick="copyFastfetchTerminalOutput()" title="Copier le rendu">📋 Copier</button>
@@ -943,12 +944,19 @@
                     </div>
                     
                     <div id="fastfetch-terminal-container" class="fastfetch-terminal-container">
-                      <div id="fastfetch-terminal-output" class="fastfetch-terminal-output"></div>
+                      <div id="fastfetch-preview-container" class="fastfetch-preview-container">
+                        <div id="fastfetch-logo-pane" class="fastfetch-logo-pane hidden">
+                          <img id="fastfetch-logo-img" class="fastfetch-logo-img" alt="Logo Fastfetch" />
+                          <span id="fastfetch-logo-caption" class="fastfetch-logo-caption"></span>
+                        </div>
+                        <div id="fastfetch-terminal-output" class="fastfetch-terminal-output"></div>
+                      </div>
                     </div>
 
                     <div class="fastfetch-terminal-footer">
                       <div class="fastfetch-term-footer-left">
                         <span class="fastfetch-sandbox-indicator">🔒 Bac à sable isolé (/tmp)</span>
+                        <span id="fastfetch-image-pill" class="fastfetch-img-badge hidden">🖼️ Image HD</span>
                         <span class="fastfetch-term-pipe-indicator">Codes ANSI 24-bit / Catppuccin</span>
                       </div>
                       <small id="fastfetch-exec-duration">0 ms</small>
@@ -2991,7 +2999,7 @@
             <div class="dash-version-row">
               <span class="dash-ver-label">Version actuelle installée :</span>
               <div style="display: flex; gap: 8px; align-items: center;">
-                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.3</span>
+                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.4</span>
                 <span id="modal-dash-current-channel-tag" class="dash-channel-tag tag-testing">Testing</span>
               </div>
             </div>

@@ -76,7 +76,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.4.2 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.4.3 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -936,6 +936,7 @@
                       </div>
                       <div class="fastfetch-term-actions">
                         <span id="fastfetch-term-status" class="fastfetch-term-pill">Prêt</span>
+                        <button type="button" id="btn-fastfetch-toggle-expand" class="btn btn-xs btn-outline" onclick="toggleFastfetchTerminalExpand()" title="Agrandir / Réduire la prévisualisation">⛶ Pleine largeur</button>
                         <button type="button" class="btn btn-xs btn-outline" onclick="clearFastfetchTerminal()" title="Nettoyer le terminal">🧹 Effacer</button>
                         <button type="button" class="btn btn-xs btn-outline" onclick="copyFastfetchTerminalOutput()" title="Copier le rendu">📋 Copier</button>
                       </div>
@@ -2990,7 +2991,7 @@
             <div class="dash-version-row">
               <span class="dash-ver-label">Version actuelle installée :</span>
               <div style="display: flex; gap: 8px; align-items: center;">
-                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.2</span>
+                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.3</span>
                 <span id="modal-dash-current-channel-tag" class="dash-channel-tag tag-testing">Testing</span>
               </div>
             </div>

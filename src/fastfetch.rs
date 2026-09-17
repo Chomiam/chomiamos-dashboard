@@ -295,14 +295,28 @@ pub fn preview_fastfetch(raw_content: &str) -> Result<String, String> {
         return Err(format!("Impossible d'écrire le fichier temporaire de prévisualisation : {}", e));
     }
 
-    let fastfetch_bin = if Path::new("/run/current-system/sw/bin/fastfetch").exists() {
-        "/run/current-system/sw/bin/fastfetch"
-    } else {
-        "fastfetch"
-    };
+    let user_profile = std::env::var("USER").ok().map(|u| format!("/etc/profiles/per-user/{}/bin/fastfetch", u));
+    let mut candidates = vec![
+        "/run/current-system/sw/bin/fastfetch".to_string(),
+    ];
+    if let Some(up) = user_profile {
+        candidates.push(up);
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        candidates.push(format!("{}/.nix-profile/bin/fastfetch", home));
+    }
+    let fastfetch_bin = candidates.iter()
+        .find(|p| Path::new(p).exists())
+        .map(|s| s.as_str())
+        .unwrap_or("fastfetch");
 
     let output_res = Command::new(fastfetch_bin)
         .args(["-c", temp_file.to_str().unwrap(), "--show-errors", "--pipe", "false"])
+        .envs([
+            ("COLUMNS", "120"),
+            ("LINES", "60"),
+            ("TERM", "xterm-256color"),
+        ])
         .output();
 
     // Nettoyage immédiat du fichier temporaire

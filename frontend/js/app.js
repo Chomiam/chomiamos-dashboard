@@ -56,7 +56,7 @@ async function initDashboardVersionBadge() {
         navDashVer.textContent = `v${ver} • Stable`;
       }
     } catch (_) {
-      navDashVer.textContent = "v0.4.2 • Stable";
+      navDashVer.textContent = "v0.4.3 • Stable";
     }
   }
 }
@@ -1929,7 +1929,7 @@ function openDashboardUpdateModal() {
   const cardTestingVer = document.getElementById("card-channel-testing-ver");
 
   const status = currentDashboardStatus || {};
-  const currentVer = status.current_version || "0.4.2";
+  const currentVer = status.current_version || "0.4.3";
   const lockedSha = status.dashboard_locked_commit ? ` (${status.dashboard_locked_commit})` : "";
   const channel = (status.dashboard_channel || "Stable").toLowerCase();
 
@@ -4687,11 +4687,13 @@ function switchNixShellSubtab(subtabId) {
   } else if (subtabId === "nix-subtab-fastfetch") {
     initFastfetchView();
     loadFastfetchState(false);
-    setTimeout(() => {
-      if (typeof fastfetchFitAddon !== "undefined" && fastfetchFitAddon) {
-        try { fastfetchFitAddon.fit(); } catch (_) {}
-      }
-    }, 50);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (typeof fastfetchFitAddon !== "undefined" && fastfetchFitAddon) {
+          try { fastfetchFitAddon.fit(); } catch (_) {}
+        }
+      }, 80);
+    });
   }
 }
 
@@ -5803,6 +5805,8 @@ function initFastfetchTerminal() {
   container.innerHTML = "";
 
   fastfetchTerm = new Terminal({
+    rows: 34,
+    cols: 100,
     theme: {
       background: "#11111b",
       foreground: "#cdd6f4",
@@ -5827,11 +5831,12 @@ function initFastfetchTerminal() {
       brightWhite: "#a6adc8",
     },
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-    fontSize: 12.5,
+    fontSize: 12,
     lineHeight: 1.25,
     cursorBlink: false,
     convertEol: true,
     disableStdin: true,
+    scrollback: 2000,
   });
 
   if (window.FitAddon && window.FitAddon.FitAddon) {
@@ -5841,13 +5846,24 @@ function initFastfetchTerminal() {
 
   fastfetchTerm.open(container);
 
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(() => {
+      if (fastfetchFitAddon && fastfetchTerm && container.clientHeight > 100) {
+        try { fastfetchFitAddon.fit(); } catch (_) {}
+      }
+    });
+    ro.observe(container);
+  }
+
   setTimeout(() => {
-    if (fastfetchFitAddon) fastfetchFitAddon.fit();
+    if (fastfetchFitAddon) {
+      try { fastfetchFitAddon.fit(); } catch (_) {}
+    }
   }, 100);
 
   window.addEventListener("resize", () => {
     if (fastfetchFitAddon && fastfetchTerm) {
-      fastfetchFitAddon.fit();
+      try { fastfetchFitAddon.fit(); } catch (_) {}
     }
   });
 
@@ -6237,8 +6253,16 @@ async function triggerFastfetchPreview() {
     fastfetchRawTerminalOutput = output;
 
     if (fastfetchTerm) {
+      if (fastfetchFitAddon) {
+        try { fastfetchFitAddon.fit(); } catch (_) {}
+      }
       fastfetchTerm.clear();
       fastfetchTerm.write(output);
+      requestAnimationFrame(() => {
+        if (fastfetchFitAddon) {
+          try { fastfetchFitAddon.fit(); } catch (_) {}
+        }
+      });
     }
 
     fastfetchLastPreviewSuccess = true;
@@ -6360,6 +6384,26 @@ function formatFastfetchEditor() {
   }
 }
 
+let fastfetchTerminalExpanded = false;
+function toggleFastfetchTerminalExpand() {
+  const grid = document.querySelector(".fastfetch-main-grid");
+  const btn = document.getElementById("btn-fastfetch-toggle-expand");
+  if (!grid) return;
+  fastfetchTerminalExpanded = !fastfetchTerminalExpanded;
+  if (fastfetchTerminalExpanded) {
+    grid.classList.add("terminal-expanded");
+    if (btn) btn.innerHTML = "<span>🗗</span> Vue Normale";
+  } else {
+    grid.classList.remove("terminal-expanded");
+    if (btn) btn.innerHTML = "<span>⛶</span> Pleine largeur";
+  }
+  setTimeout(() => {
+    if (fastfetchFitAddon) {
+      try { fastfetchFitAddon.fit(); } catch (_) {}
+    }
+  }, 80);
+}
+
 window.initFastfetchView = initFastfetchView;
 window.loadActiveFastfetchConfig = loadActiveFastfetchConfig;
 window.loadSampleFastfetchConfig = loadSampleFastfetchConfig;
@@ -6372,3 +6416,4 @@ window.clearFastfetchTerminal = clearFastfetchTerminal;
 window.copyFastfetchTerminalOutput = copyFastfetchTerminalOutput;
 window.clearFastfetchEditor = clearFastfetchEditor;
 window.formatFastfetchEditor = formatFastfetchEditor;
+window.toggleFastfetchTerminalExpand = toggleFastfetchTerminalExpand;

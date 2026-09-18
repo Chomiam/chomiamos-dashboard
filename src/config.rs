@@ -657,22 +657,33 @@ fn extract_bool_var(text: &str, var_name: &str) -> Option<bool> {
     re.captures(text).map(|cap| &cap[1] == "true")
 }
 
-fn extract_bool_var_in_block(text: &str, block: &str, var_name: &str) -> Option<bool> {
-    let block_re = regex::Regex::new(&format!(r#"{}\s*=\s*\{{([^}}]+)\}}"#, block)).ok()?;
-    if let Some(cap) = block_re.captures(text) {
-        let inside = &cap[1];
-        return extract_bool_var(inside, var_name);
+fn extract_block_content(text: &str, block: &str) -> Option<String> {
+    let re = regex::Regex::new(&format!(r#"(?:^|\s){}\s*=\s*\{{"#, regex::escape(block))).ok()?;
+    let mat = re.find(text)?;
+    let brace_start = text[mat.start()..].find('{')? + mat.start();
+    let mut depth = 0;
+
+    for (i, c) in text[brace_start..].char_indices() {
+        if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+            if depth == 0 {
+                return Some(text[brace_start + 1..brace_start + i].to_string());
+            }
+        }
     }
     None
 }
 
+fn extract_bool_var_in_block(text: &str, block: &str, var_name: &str) -> Option<bool> {
+    let inside = extract_block_content(text, block)?;
+    extract_bool_var(&inside, var_name)
+}
+
 fn extract_string_var_in_block(text: &str, block: &str, var_name: &str) -> Option<String> {
-    let block_re = regex::Regex::new(&format!(r#"{}\\s*=\\s*\\{{([^}}]+)\\}}"#, block)).ok()?;
-    if let Some(cap) = block_re.captures(text) {
-        let inside = &cap[1];
-        return extract_string_var(inside, var_name);
-    }
-    None
+    let inside = extract_block_content(text, block)?;
+    extract_string_var(&inside, var_name)
 }
 
 
@@ -784,5 +795,27 @@ mod tests {
         let emu: EmulationConfig = serde_json::from_str(json_alias).expect("deserialize alias");
         assert!(emu.cemu);
         assert!(emu.xenia_canary);
+    }
+
+    #[test]
+    fn test_extract_in_block_with_nested_blocks() {
+        let sample = r#"{
+  gaming = {
+    enable = true;
+    launchers = {
+      steam = true;
+      lutris = false;
+    };
+    sunshine = false;
+    sober = true;
+  };
+  keyboard = {
+    layout = "fr";
+  };
+}"#;
+        assert_eq!(extract_bool_var_in_block(sample, "gaming", "sober"), Some(true));
+        assert_eq!(extract_bool_var_in_block(sample, "gaming", "sunshine"), Some(false));
+        assert_eq!(extract_bool_var_in_block(sample, "gaming", "enable"), Some(true));
+        assert_eq!(extract_string_var_in_block(sample, "keyboard", "layout"), Some("fr".to_string()));
     }
 }

@@ -44,6 +44,10 @@ pub struct EmulationConfig {
     pub mgba: bool,
     pub rpcs3: bool,
     pub xemu: bool,
+    #[serde(default)]
+    pub cemu: bool,
+    #[serde(default, alias = "xenia-canary", alias = "xenia")]
+    pub xenia_canary: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +183,8 @@ impl Default for ChomiamConfig {
                 mgba: true,
                 rpcs3: false,
                 xemu: false,
+                cemu: false,
+                xenia_canary: false,
             },
             media: MediaConfig {
                 stremio: true,
@@ -334,6 +340,8 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.emulation.mgba = get_bool("mgba", true);
     cfg.emulation.rpcs3 = get_bool("rpcs3", false);
     cfg.emulation.xemu = get_bool("xemu", false);
+    cfg.emulation.cemu = get_bool("cemu", false);
+    cfg.emulation.xenia_canary = get_bool("xenia-canary", false) || get_bool("xenia", false);
 
     // Media & Network
     cfg.media.stremio = get_bool("stremio", true);
@@ -489,6 +497,8 @@ r#"{{
       azahar = {azahar};
       rpcs3 = {rpcs3};
       xemu = {xemu};
+      cemu = {cemu};
+      xenia-canary = {xenia_canary};
     }};
   }};
 
@@ -588,6 +598,8 @@ r#"{{
         azahar = c.emulation.azahar,
         rpcs3 = c.emulation.rpcs3,
         xemu = c.emulation.xemu,
+        cemu = c.emulation.cemu,
+        xenia_canary = c.emulation.xenia_canary,
         steering_wheels = c.gaming.steering_wheels,
         davinci = c.creation.davinci_resolve,
         blender = c.creation.blender,
@@ -749,5 +761,28 @@ mod tests {
         let re = regex::Regex::new(r#"shell\s*=\s*"[^"]+";"#).unwrap();
         let replaced = re.replace(&u, r#"shell = "zsh";"#);
         assert!(replaced.contains(r#"shell = "zsh";"#));
+    }
+
+    #[test]
+    fn test_emulation_cemu_and_xenia() {
+        let mut cfg = ChomiamConfig::default();
+        assert!(!cfg.emulation.cemu);
+        assert!(!cfg.emulation.xenia_canary);
+
+        cfg.emulation.cemu = true;
+        cfg.emulation.xenia_canary = true;
+
+        let json = serde_json::to_string(&cfg).expect("serialize");
+        assert!(json.contains(r#""cemu":true"#));
+        assert!(json.contains(r#""xenia_canary":true"#));
+
+        let deserialized: ChomiamConfig = serde_json::from_str(&json).expect("deserialize");
+        assert!(deserialized.emulation.cemu);
+        assert!(deserialized.emulation.xenia_canary);
+
+        let json_alias = r#"{"enable":true,"duckstation":false,"frontend":"es-de","retroarch":false,"eden":false,"dolphin":false,"pcsx2":false,"ppsspp":false,"melonds":false,"azahar":false,"mgba":false,"rpcs3":false,"xemu":false,"cemu":true,"xenia-canary":true}"#;
+        let emu: EmulationConfig = serde_json::from_str(json_alias).expect("deserialize alias");
+        assert!(emu.cemu);
+        assert!(emu.xenia_canary);
     }
 }

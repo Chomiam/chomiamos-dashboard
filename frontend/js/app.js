@@ -437,6 +437,8 @@ function populateConfigUI(c) {
   setCheck("cfg-mgba", c.emulation.mgba);
   setCheck("cfg-rpcs3", c.emulation.rpcs3);
   setCheck("cfg-xemu", c.emulation.xemu);
+  setCheck("cfg-xenia", c.emulation.xenia_canary || (c.emulation && c.emulation["xenia-canary"]));
+  setCheck("cfg-cemu", c.emulation.cemu);
 
   // Media
   setCheck("cfg-stremio", c.media.stremio);
@@ -535,6 +537,8 @@ function readConfigFromUI() {
   currentConfig.emulation.mgba = isChecked("cfg-mgba");
   currentConfig.emulation.rpcs3 = isChecked("cfg-rpcs3");
   currentConfig.emulation.xemu = isChecked("cfg-xemu");
+  currentConfig.emulation.xenia_canary = isChecked("cfg-xenia");
+  currentConfig.emulation.cemu = isChecked("cfg-cemu");
 
   currentConfig.media.stremio = isChecked("cfg-stremio");
   currentConfig.media.vlc = isChecked("cfg-vlc");
@@ -605,7 +609,7 @@ function updateCategoryPillCounters() {
   };
 
   updateCount("gaming", 11);
-  updateCount("emulation", 11);
+  updateCount("emulation", 14);
   updateCount("multimedia", 4);
   updateCount("video", 2);
   updateCount("audio", 2);

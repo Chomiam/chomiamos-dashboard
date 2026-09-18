@@ -318,6 +318,12 @@ pub fn get_system_conflicts() -> HashMap<String, String> {
         if config.emulation.xemu {
             conflicts.insert("xemu".into(), "Émulateur xemu (Xbox) configuré dans vars.nix".into());
         }
+        if config.emulation.cemu {
+            conflicts.insert("cemu".into(), "Émulateur Wii U Cemu configuré dans vars.nix".into());
+        }
+        if config.emulation.xenia_canary {
+            conflicts.insert("xenia-canary".into(), "Émulateur Xbox 360 Xenia Canary configuré dans vars.nix".into());
+        }
         if config.emulation.eden {
             conflicts.insert("eden".into(), "Émulateur Switch Eden configuré dans vars.nix".into());
         }

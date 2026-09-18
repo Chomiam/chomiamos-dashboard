@@ -76,7 +76,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.4.4 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.4.5 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -1047,7 +1047,7 @@
             <button class="cat-pill" data-category="emulation" type="button">
               <span class="cat-icon">🕹️</span>
               <span class="cat-name">Émulation</span>
-              <span class="cat-counter" id="cat-count-emulation">0/11</span>
+              <span class="cat-counter" id="cat-count-emulation">0/14</span>
             </button>
             <button class="cat-pill" data-category="browser" type="button">
               <span class="cat-icon">🌐</span>
@@ -1394,6 +1394,28 @@
                     <div class="toggle-text">
                       <strong>xemu (Xbox Première Génération)</strong>
                       <small>Émulateur open-source original Xbox avec rendu haute résolution et émulation réseau</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-xenia">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🟢</span>
+                    <div class="toggle-text">
+                      <strong>Xenia (Xbox 360)</strong>
+                      <small>Émulateur Microsoft Xbox 360 moderne avec rendu Vulkan haute performance</small>
+                    </div>
+                  </div>
+                  <div class="switch"></div>
+                </label>
+                <label class="toggle-card">
+                  <input type="checkbox" id="cfg-cemu">
+                  <div class="toggle-card-body">
+                    <span class="toggle-icon">🟡</span>
+                    <div class="toggle-text">
+                      <strong>Cemu (Wii U)</strong>
+                      <small>Émulateur Nintendo Wii U moderne avec support Vulkan et packs graphiques</small>
                     </div>
                   </div>
                   <div class="switch"></div>
@@ -2999,7 +3021,7 @@
             <div class="dash-version-row">
               <span class="dash-ver-label">Version actuelle installée :</span>
               <div style="display: flex; gap: 8px; align-items: center;">
-                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.4</span>
+                <span id="modal-dash-current-ver" class="dash-ver-badge current">v0.4.5</span>
                 <span id="modal-dash-current-channel-tag" class="dash-channel-tag tag-testing">Testing</span>
               </div>
             </div>

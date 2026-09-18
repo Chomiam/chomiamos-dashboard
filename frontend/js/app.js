@@ -64,6 +64,7 @@ async function initDashboardVersionBadge() {
 document.addEventListener("DOMContentLoaded", () => {
   initDashboardVersionBadge();
   initTabs();
+  initAppIcons();
   startMetricsPolling();
   loadGenerations();
   loadConfig();
@@ -83,6 +84,106 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(checkForUpdates, 45000);
   }, 200);
 });
+
+// 🎨 Application Real Logos System (SVG with Emoji Fallback)
+const APP_ICONS = {
+  // Desktop Environments
+  "desktop_env:gnome": "gnome.svg",
+  "desktop_env:cosmic": "cosmic.svg",
+  "desktop_env:cinnamon": "cinnamon.svg",
+  "desktop_env:kde": "kde.svg",
+
+  // Gaming
+  "cfg-steam": "steam.svg",
+  "cfg-lutris": "lutris.svg",
+  "cfg-heroic": "heroic.svg",
+  "cfg-geforce": "geforcenow.svg",
+  "cfg-sober": "roblox.svg",
+
+  // Emulation
+  "cfg-esde": "es-de.svg",
+  "cfg-retroarch": "retroarch.svg",
+  "cfg-duckstation": "duckstation.svg",
+  "cfg-pcsx2": "pcsx2.svg",
+  "cfg-eden": "eden.svg",
+  "cfg-dolphin": "dolphin.svg",
+  "cfg-ppsspp": "ppsspp.svg",
+  "cfg-azahar": "azahar.svg",
+  "cfg-mgba": "mgba.svg",
+  "cfg-rpcs3": "rpcs3.svg",
+  "cfg-xemu": "xemu.svg",
+  "cfg-xenia": "xenia.svg",
+  "cfg-cemu": "cemu.svg",
+
+  // Browsers
+  "browser:brave": "brave.svg",
+  "browser:chrome": "chrome.svg",
+  "browser:firefox": "firefox.svg",
+  "browser:zen": "zen.svg",
+  "browser:librewolf": "librewolf.svg",
+  "browser:opera": "opera.svg",
+  "browser:opera-gx": "operagx.svg",
+
+  // Discord
+  "discord_client:discord": "discord.svg",
+  "discord_client:vesktop": "vesktop.svg",
+
+  // Media
+  "cfg-stremio": "stremio.svg",
+  "cfg-vlc": "vlc.svg",
+  "cfg-mpv": "mpv.svg",
+  "cfg-obs": "obs.svg",
+  "cfg-kdenlive": "kdenlive.svg",
+  "davinci_resolve:free": "davinci.svg",
+  "davinci_resolve:studio": "davinci.svg",
+  "cfg-audacity": "audacity.svg",
+  "cfg-ardour": "ardour.svg",
+
+  // 3D & Tools
+  "cfg-blender": "blender.svg",
+  "cfg-godot": "godot.svg",
+  "cfg-prusaslicer": "prusaslicer.svg",
+  "cfg-cura": "cura.svg",
+  "cfg-flatseal": "flatseal.svg",
+  "cfg-tailscale": "tailscale.svg",
+  "cfg-localsend": "localsend.svg",
+  "cfg-motrix": "motrix.svg",
+  "cfg-kvm": "virt-manager.svg",
+  "cfg-ide-zed": "zed.svg",
+  "cfg-ide-vscode": "vscode.svg",
+};
+
+function initAppIcons() {
+  for (const [key, iconFile] of Object.entries(APP_ICONS)) {
+    let inputEl = null;
+    if (key.includes(":")) {
+      const [name, val] = key.split(":");
+      inputEl = document.querySelector(`input[name="${name}"][value="${val}"]`);
+    } else {
+      inputEl = document.getElementById(key);
+    }
+    if (!inputEl) continue;
+
+    const card = inputEl.closest(".toggle-card, .radio-card");
+    if (!card) continue;
+    const iconSpan = card.querySelector(".toggle-icon, .radio-icon");
+    if (!iconSpan || iconSpan.dataset.logoLoaded) continue;
+
+    const originalEmoji = iconSpan.textContent.trim();
+    const img = document.createElement("img");
+    img.src = `assets/icons/apps/${iconFile}`;
+    img.className = "app-logo";
+    img.alt = "";
+    img.loading = "lazy";
+    img.onerror = () => {
+      img.remove();
+      iconSpan.textContent = originalEmoji;
+    };
+    iconSpan.textContent = "";
+    iconSpan.appendChild(img);
+    iconSpan.dataset.logoLoaded = "true";
+  }
+}
 
 // 1. Tab Navigation
 function initTabs() {

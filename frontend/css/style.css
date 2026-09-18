@@ -768,6 +768,12 @@ body {
 
 .radio-icon {
   font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
 }
 
 .radio-card-body strong {
@@ -822,6 +828,27 @@ body {
 
 .toggle-icon {
   font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.app-logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border-radius: 4px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  display: block;
+}
+
+.toggle-card:hover .app-logo,
+.radio-card:hover .app-logo {
+  transform: scale(1.12);
 }
 
 .toggle-text {

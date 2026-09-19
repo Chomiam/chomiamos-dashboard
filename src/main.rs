@@ -83,6 +83,26 @@ fn set_user_shell(shell: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn get_user_terminal() -> Result<String, String> {
+    Ok(config::get_configured_terminal())
+}
+
+#[tauri::command]
+fn set_user_terminal(terminal: String) -> Result<String, String> {
+    config::set_configured_terminal(&terminal)
+}
+
+#[tauri::command]
+fn get_terminals_list() -> Result<Vec<config::TerminalOptionInfo>, String> {
+    Ok(config::get_terminals_list())
+}
+
+#[tauri::command]
+fn launch_terminal_app(terminal: String) -> Result<(), String> {
+    config::launch_terminal_app(&terminal)
+}
+
+#[tauri::command]
 fn get_chomiamos_config() -> Result<ChomiamConfig, String> {
     let path = get_vars_path();
     read_vars_nix(&path)
@@ -1108,6 +1128,10 @@ fn main() {
             start_podman_container,
             get_user_shell,
             set_user_shell,
+            get_user_terminal,
+            set_user_terminal,
+            get_terminals_list,
+            launch_terminal_app,
             get_systemd_services,
             control_systemd_service,
             get_systemd_service_logs,

@@ -77,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initNetworkCenter();
   loadCommitSecurityInfo();
   loadUserShell();
+  loadUserTerminal();
 
   // Évaluation des mises à jour en arrière-plan sans bloquer l'affichage
   setTimeout(() => {
@@ -215,6 +216,7 @@ function initTabs() {
         } else if (targetId === "tab-generations") {
           loadGenerations();
           loadUserShell();
+          loadUserTerminal();
           initFastfetchView();
         }
       }
@@ -4799,6 +4801,8 @@ function switchNixShellSubtab(subtabId) {
         }
       }, 80);
     });
+  } else if (subtabId === "nix-subtab-terminal") {
+    loadUserTerminal();
   }
 }
 
@@ -4911,6 +4915,158 @@ window.applySelectedShell = applySelectedShell;
 window.applyShellAndRebuild = applyShellAndRebuild;
 window.loadUserShell = loadUserShell;
 
+
+// =========================================================================
+// 💻 TERMINAL MANAGER : CHOIX DU TERMINAL PAR DÉFAUT & GRAPHISMES D'IMAGES
+// =========================================================================
+
+let currentConfiguredTerminal = "kitty";
+let selectedTerminalChoice = "kitty";
+let terminalsCatalog = [];
+
+async function loadUserTerminal() {
+  try {
+    const [term, list] = await Promise.all([
+      invoke("get_user_terminal"),
+      invoke("get_terminals_list").catch(() => [])
+    ]);
+
+    if (list && Array.isArray(list) && list.length > 0) {
+      terminalsCatalog = list;
+    }
+
+    currentConfiguredTerminal = (term || "kitty").trim().toLowerCase();
+    selectedTerminalChoice = currentConfiguredTerminal;
+    updateTerminalUI(currentConfiguredTerminal);
+  } catch (err) {
+    console.error("Erreur lors de la récupération du terminal utilisateur:", err);
+  }
+}
+
+function selectTerminal(termId) {
+  selectedTerminalChoice = termId.toLowerCase();
+  updateTerminalUI(selectedTerminalChoice);
+}
+
+function updateTerminalUI(activeTerm) {
+  const terminalKeys = ["kitty", "konsole", "alacritty", "gnome-terminal", "cosmic-term"];
+  
+  terminalKeys.forEach(t => {
+    const card = document.getElementById(`terminal-card-${t}`);
+    const badge = document.getElementById(`terminal-badge-${t}`);
+    const btn = document.getElementById(`btn-select-${t}`);
+
+    const isSelected = t === activeTerm;
+    const isSaved = t === currentConfiguredTerminal;
+
+    if (card) {
+      if (isSelected) {
+        card.classList.add("active");
+      } else {
+        card.classList.remove("active");
+      }
+    }
+
+    if (badge) {
+      if (isSaved && isSelected) {
+        badge.textContent = "✓ Actif (vars.nix)";
+        badge.style.color = "var(--green)";
+        badge.style.borderColor = "rgba(166, 227, 161, 0.4)";
+      } else if (isSelected) {
+        badge.textContent = "Sélectionné";
+        badge.style.color = "var(--blue)";
+        badge.style.borderColor = "rgba(137, 180, 250, 0.4)";
+      } else {
+        const info = terminalsCatalog.find(item => item.id === t);
+        if (info && !info.is_installed) {
+          badge.textContent = "Non installé";
+          badge.style.color = "var(--subtext0)";
+          badge.style.borderColor = "transparent";
+        } else {
+          badge.textContent = "Disponible";
+          badge.style.color = "var(--subtext0)";
+          badge.style.borderColor = "transparent";
+        }
+      }
+    }
+
+    if (btn) {
+      const termTitle = t === "gnome-terminal" ? "GNOME" : t === "cosmic-term" ? "COSMIC" : t.charAt(0).toUpperCase() + t.slice(1);
+      if (isSaved && isSelected) {
+        btn.textContent = "✓ Terminal Actif";
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-outline");
+      } else if (isSelected) {
+        btn.textContent = "Enregistrer ce terminal";
+        btn.classList.add("btn-primary");
+        btn.classList.remove("btn-outline");
+      } else {
+        btn.textContent = `Choisir ${termTitle}`;
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-outline");
+      }
+    }
+  });
+
+  const display = document.getElementById("current-terminal-display");
+  if (display) {
+    const formattedName = activeTerm === "gnome-terminal" ? "GNOME Terminal" : activeTerm === "cosmic-term" ? "COSMIC Terminal" : activeTerm.charAt(0).toUpperCase() + activeTerm.slice(1);
+    const isUnsaved = activeTerm !== currentConfiguredTerminal;
+    display.innerHTML = `${formattedName} ${isUnsaved ? '<span style="color: var(--peach); font-size: 0.85rem;">(non sauvegardé)</span>' : '<span style="color: var(--green); font-size: 0.85rem;">(configuré)</span>'}`;
+  }
+
+  const testBtn = document.getElementById("btn-launch-current-term");
+  if (testBtn) {
+    const shortName = activeTerm === "gnome-terminal" ? "GNOME" : activeTerm === "cosmic-term" ? "COSMIC" : activeTerm.charAt(0).toUpperCase() + activeTerm.slice(1);
+    testBtn.innerHTML = `<span class="btn-icon">🚀</span> Tester (${shortName})`;
+  }
+
+  const sidebarBadge = document.getElementById("terminal-nav-badge");
+  if (sidebarBadge) {
+    const badgeName = currentConfiguredTerminal === "gnome-terminal" ? "GNOME" : currentConfiguredTerminal === "cosmic-term" ? "COSMIC" : currentConfiguredTerminal.toUpperCase();
+    sidebarBadge.textContent = badgeName;
+  }
+}
+
+async function applySelectedTerminal() {
+  try {
+    const saved = await invoke("set_user_terminal", { terminal: selectedTerminalChoice });
+    currentConfiguredTerminal = saved;
+    updateTerminalUI(currentConfiguredTerminal);
+    showToast(`✓ Terminal par défaut défini sur "${saved}" dans /etc/nixos/vars.nix !`, "success");
+  } catch (err) {
+    showToast(`Erreur lors de la configuration du terminal : ${err}`, "error");
+  }
+}
+
+async function applyTerminalAndRebuild() {
+  try {
+    const saved = await invoke("set_user_terminal", { terminal: selectedTerminalChoice });
+    currentConfiguredTerminal = saved;
+    updateTerminalUI(currentConfiguredTerminal);
+    showToast(`✓ Terminal configuré sur "${saved}". Démarrage du switch NixOS...`, "success");
+    runAction("switch");
+  } catch (err) {
+    showToast(`Erreur : ${err}`, "error");
+  }
+}
+
+async function testLaunchTerminal(termId) {
+  const targetId = termId || selectedTerminalChoice || "kitty";
+  try {
+    await invoke("launch_terminal_app", { terminal: targetId });
+    showToast(`🚀 Terminal "${targetId}" lancé avec succès !`, "success");
+  } catch (err) {
+    showToast(`Erreur lors du lancement de ${targetId} : ${err}`, "error");
+  }
+}
+
+window.switchNixShellSubtab = switchNixShellSubtab;
+window.selectTerminal = selectTerminal;
+window.applySelectedTerminal = applySelectedTerminal;
+window.applyTerminalAndRebuild = applyTerminalAndRebuild;
+window.testLaunchTerminal = testLaunchTerminal;
+window.loadUserTerminal = loadUserTerminal;
 
 // =========================================================================
 // ⚙️ SYSTEMD SERVICES MANAGER : GESTIONNAIRE DES SERVICES EN DIRECT

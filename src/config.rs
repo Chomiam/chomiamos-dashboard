@@ -749,6 +749,167 @@ pub fn set_configured_shell(new_shell: &str) -> Result<String, String> {
     Ok(new_shell)
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TerminalOptionInfo {
+    pub id: String,
+    pub name: String,
+    pub binary: String,
+    pub description: String,
+    pub image_support: String,
+    pub is_installed: bool,
+    pub badge: String,
+    pub icon: String,
+}
+
+pub fn get_configured_terminal() -> String {
+    let path = get_vars_path();
+    if let Ok(content) = fs::read_to_string(&path) {
+        if let Some(term) = extract_string_var(&content, "terminal") {
+            return term;
+        }
+    }
+    if let Ok(term) = std::env::var("TERMINAL") {
+        let t = term.trim().to_lowercase();
+        if ["kitty", "gnome-terminal", "konsole", "alacritty", "cosmic-term"].contains(&t.as_str()) {
+            return t;
+        }
+    }
+    "kitty".to_string()
+}
+
+pub fn set_configured_terminal(new_term: &str) -> Result<String, String> {
+    let new_term = new_term.trim().to_lowercase();
+    let valid_terms = ["kitty", "gnome-terminal", "konsole", "alacritty", "cosmic-term"];
+    if !valid_terms.contains(&new_term.as_str()) {
+        return Err(format!("Terminal non supporté: '{}'. Options valides: kitty, gnome-terminal, konsole, alacritty, cosmic-term.", new_term));
+    }
+
+    let path = get_vars_path();
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Impossible de lire {}: {}", path.display(), e))?;
+
+    let term_re = regex::Regex::new(r#"terminal\s*=\s*"[^"]+";"#)
+        .map_err(|e| e.to_string())?;
+
+    let updated_content = if term_re.is_match(&content) {
+        term_re.replace(&content, format!(r#"terminal = "{}";"#, new_term)).to_string()
+    } else {
+        let browser_re = regex::Regex::new(r#"(browser\s*=\s*"[^"]+";)"#)
+            .map_err(|e| e.to_string())?;
+        if browser_re.is_match(&content) {
+            browser_re.replace(&content, format!(r#"$1
+
+  # Émulateur de terminal principal
+  terminal = "{}";"#, new_term)).to_string()
+        } else if let Some(first_brace) = content.find('{') {
+            let mut s = content[..first_brace + 1].to_string();
+            s.push_str(&format!(r#"
+  terminal = "{}";"#, new_term));
+            s.push_str(&content[first_brace + 1..]);
+            s
+        } else {
+            return Err("Format vars.nix invalide".into());
+        }
+    };
+
+    let tmp_path = path.with_extension("nix.tmp");
+    fs::write(&tmp_path, &updated_content)
+        .map_err(|e| format!("Impossible d'écrire dans {}: {}", tmp_path.display(), e))?;
+
+    fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("Impossible de remplacer {}: {}", path.display(), e))?;
+
+    let _ = fs::write("/etc/nixos/.vars.nix.backup", &updated_content);
+
+    // Mettre à jour dconf si GNOME / Cinnamon
+    let _ = std::process::Command::new("dconf")
+        .args(["write", "/org/gnome/desktop/default-applications/terminal/exec", &format!("'{}'", new_term)])
+        .output();
+    let _ = std::process::Command::new("dconf")
+        .args(["write", "/org/cinnamon/desktop/default-applications/terminal/exec", &format!("'{}'", new_term)])
+        .output();
+
+    Ok(new_term)
+}
+
+pub fn get_terminals_list() -> Vec<TerminalOptionInfo> {
+    fn is_cmd_available(bin: &str) -> bool {
+        std::process::Command::new("which").arg(bin).output().map(|o| o.status.success()).unwrap_or(false)
+            || Path::new(&format!("/run/current-system/sw/bin/{}", bin)).exists()
+            || Path::new(&format!("/etc/profiles/per-user/{}/bin/{}", std::env::var("USER").unwrap_or_default(), bin)).exists()
+    }
+
+    vec![
+        TerminalOptionInfo {
+            id: "kitty".into(),
+            name: "Kitty".into(),
+            binary: "kitty".into(),
+            description: "Émulateur ultra-performant accéléré par GPU (OpenGL). Support natif du Kitty Graphics Protocol pour un affichage parfait des logos et images en haute résolution.".into(),
+            image_support: "Protocole Kitty Graphics natif (Pixels HD)".into(),
+            is_installed: is_cmd_available("kitty"),
+            badge: "GPU OpenGL • Natif HD".into(),
+            icon: "🐱".into(),
+        },
+        TerminalOptionInfo {
+            id: "konsole".into(),
+            name: "Konsole".into(),
+            binary: "konsole".into(),
+            description: "Le terminal complet et personnalisable de KDE Plasma. Supporte les graphismes Sixel et le rendu d'images 24-bit TrueColor via Chafa, avec gestion avancée des onglets et profils.".into(),
+            image_support: "Sixel Graphics & Chafa TrueColor".into(),
+            is_installed: is_cmd_available("konsole"),
+            badge: "KDE Plasma • Sixel & Chafa".into(),
+            icon: "🖥️".into(),
+        },
+        TerminalOptionInfo {
+            id: "alacritty".into(),
+            name: "Alacritty".into(),
+            binary: "alacritty".into(),
+            description: "Émulateur minimaliste et ultra-rapide écrit en Rust, accéléré par GPU. Rendu impeccable des images et logos Fastfetch en 24-bit TrueColor via les demi-blocs Unicode Chafa.".into(),
+            image_support: "Chafa ANSI 24-bit TrueColor".into(),
+            is_installed: is_cmd_available("alacritty"),
+            badge: "Rust GPU • Minimaliste".into(),
+            icon: "⚡".into(),
+        },
+        TerminalOptionInfo {
+            id: "gnome-terminal".into(),
+            name: "GNOME Terminal".into(),
+            binary: "gnome-terminal".into(),
+            description: "Le terminal standard de l'environnement GNOME basé sur VTE. Intègre le support complet des couleurs 24-bit TrueColor et le rendu d'images haute fidélité avec Chafa.".into(),
+            image_support: "VTE TrueColor & Chafa".into(),
+            is_installed: is_cmd_available("gnome-terminal"),
+            badge: "GNOME Officiel • VTE".into(),
+            icon: "📟".into(),
+        },
+        TerminalOptionInfo {
+            id: "cosmic-term".into(),
+            name: "COSMIC Terminal".into(),
+            binary: "cosmic-term".into(),
+            description: "Le terminal moderne de System76 développé en Rust pour l'environnement COSMIC Desktop. Rendu GPU fluide avec Wgpu et affichage d'images Fastfetch TrueColor via Chafa.".into(),
+            image_support: "Chafa ANSI 24-bit TrueColor".into(),
+            is_installed: is_cmd_available("cosmic-term"),
+            badge: "COSMIC Rust • Wgpu".into(),
+            icon: "🌌".into(),
+        },
+    ]
+}
+
+pub fn launch_terminal_app(terminal_id: &str) -> Result<(), String> {
+    let binary = match terminal_id {
+        "kitty" => "kitty",
+        "konsole" => "konsole",
+        "alacritty" => "alacritty",
+        "gnome-terminal" => "gnome-terminal",
+        "cosmic-term" => "cosmic-term",
+        other => return Err(format!("Terminal inconnu : {}", other)),
+    };
+
+    std::process::Command::new(binary)
+        .spawn()
+        .map_err(|e| format!("Impossible de lancer {}: {}", binary, e))?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -817,5 +978,35 @@ mod tests {
         assert_eq!(extract_bool_var_in_block(sample, "gaming", "sunshine"), Some(false));
         assert_eq!(extract_bool_var_in_block(sample, "gaming", "enable"), Some(true));
         assert_eq!(extract_string_var_in_block(sample, "keyboard", "layout"), Some("fr".to_string()));
+    }
+
+    #[test]
+    fn test_terminals_list() {
+        let list = get_terminals_list();
+        assert_eq!(list.len(), 5);
+        let ids: Vec<&str> = list.iter().map(|t| t.id.as_str()).collect();
+        assert!(ids.contains(&"kitty"));
+        assert!(ids.contains(&"konsole"));
+        assert!(ids.contains(&"alacritty"));
+        assert!(ids.contains(&"gnome-terminal"));
+        assert!(ids.contains(&"cosmic-term"));
+
+        for term in &list {
+            assert!(!term.image_support.is_empty());
+            assert!(!term.name.is_empty());
+            assert!(!term.binary.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_terminal_regex_replacement() {
+        let sample = r#"{
+  browser = "zen";
+  terminal = "kitty";
+}"#;
+        let term_re = regex::Regex::new(r#"terminal\s*=\s*"[^"]+";"#).unwrap();
+        let replaced = term_re.replace(sample, "terminal = \"alacritty\";").to_string();
+        assert!(replaced.contains(r#"terminal = "alacritty";"#));
+        assert!(!replaced.contains(r#"terminal = "kitty";"#));
     }
 }

@@ -493,6 +493,15 @@
                 </div>
                 <span id="fastfetch-nav-badge" class="nix-shell-subnav-pill fastfetch-pill-ok">Nix</span>
               </button>
+
+              <button type="button" class="nix-shell-subnav-btn" data-subtab="nix-subtab-terminal" onclick="switchNixShellSubtab('nix-subtab-terminal')">
+                <span class="nix-shell-subnav-icon">💻</span>
+                <div class="nix-shell-subnav-text">
+                  <strong>Terminal</strong>
+                  <small>Émulateur & Graphismes</small>
+                </div>
+                <span id="terminal-nav-badge" class="nix-shell-subnav-pill terminal-pill-active">Kitty</span>
+              </button>
             </nav>
 
             <div class="nix-shell-sidebar-footer">
@@ -1022,6 +1031,229 @@
                 </div>
 
               </div>
+            </div>
+
+            <!-- ================= SOUS-ONGLET 5 : TERMINAL PAR DÉFAUT & GRAPHISMES ================= -->
+            <div id="nix-subtab-terminal" class="nix-shell-subtab-pane">
+              <div class="section-title">
+                <h2>Gestionnaire d'Émulateur de Terminal & Rendu d'Images</h2>
+                <p>Définissez votre terminal interactif par défaut (<code>vars.terminal</code> dans <code>/etc/nixos/vars.nix</code>) avec support des images haute fidélité pour Fastfetch.</p>
+              </div>
+
+              <!-- Bannière de garantie du support d'images -->
+              <div class="card terminal-notice-card">
+                <div class="terminal-notice-icon">🖼️</div>
+                <div class="terminal-notice-body">
+                  <h4>Affichage d'images et logos Fastfetch garanti sur chaque terminal</h4>
+                  <p>
+                    Chaque terminal supporté est configuré dans ChomiamOS pour afficher les images et logos : 
+                    <strong>Kitty</strong> utilise son protocole haute définition matériel <code>Kitty Graphics</code> natif au pixel près, 
+                    <strong>Konsole</strong> prend en charge les graphismes <code>Sixel</code> et <code>Chafa</code> TrueColor, tandis que 
+                    <strong>Alacritty</strong>, <strong>GNOME Terminal</strong> et <strong>COSMIC Terminal</strong> bénéficient de notre wrapper intelligent Fastfetch avec moteur <code>Chafa</code> 24-bit TrueColor (demi-blocs Unicode haute fidélité).
+                  </p>
+                </div>
+              </div>
+
+              <!-- Grille des Émulateurs de Terminal -->
+              <div class="terminal-options-grid" id="terminal-cards-container">
+                
+                <!-- Kitty Card -->
+                <div class="card terminal-card" id="terminal-card-kitty" onclick="selectTerminal('kitty')">
+                  <div class="terminal-card-header">
+                    <div class="terminal-card-icon-title">
+                      <span class="terminal-icon">🐱</span>
+                      <div>
+                        <h3>Kitty</h3>
+                        <span class="terminal-sub">GPU OpenGL • Natif HD</span>
+                      </div>
+                    </div>
+                    <span class="terminal-status-badge" id="terminal-badge-kitty">Disponible</span>
+                  </div>
+                  <div class="terminal-img-support-pill">
+                    <span class="pill-dot">●</span> Protocole Kitty Graphics natif (HD Pixels)
+                  </div>
+                  <p class="terminal-desc">
+                    Émulateur ultra-performant accéléré par GPU. Support natif du protocole Kitty Graphics pour un rendu de logos et photos au pixel près sans aucune pixellisation.
+                  </p>
+                  <ul class="terminal-features-list">
+                    <li><span class="feat-bullet">🖼️</span> Rendu d'images matériel Kitty Graphics Protocol natif</li>
+                    <li><span class="feat-bullet">⚡</span> Moteur graphique accéléré par GPU (OpenGL)</li>
+                    <li><span class="feat-bullet">🎨</span> Palette TrueColor 24-bit, ligatures de polices & emojis</li>
+                    <li><span class="feat-bullet">📑</span> Multiplexage d'onglets et fenêtres natif intégré</li>
+                  </ul>
+                  <div class="terminal-card-actions">
+                    <button type="button" class="btn btn-sm btn-outline terminal-test-btn" onclick="event.stopPropagation(); testLaunchTerminal('kitty')" title="Tester et ouvrir Kitty">
+                      🚀 Lancer Kitty
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline terminal-select-btn" id="btn-select-kitty" onclick="event.stopPropagation(); selectTerminal('kitty')">
+                      Choisir Kitty
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Konsole Card -->
+                <div class="card terminal-card" id="terminal-card-konsole" onclick="selectTerminal('konsole')">
+                  <div class="terminal-card-header">
+                    <div class="terminal-card-icon-title">
+                      <span class="terminal-icon">🖥️</span>
+                      <div>
+                        <h3>Konsole</h3>
+                        <span class="terminal-sub">KDE Plasma • Sixel & Chafa</span>
+                      </div>
+                    </div>
+                    <span class="terminal-status-badge" id="terminal-badge-konsole">Disponible</span>
+                  </div>
+                  <div class="terminal-img-support-pill">
+                    <span class="pill-dot">●</span> Sixel Graphics & Chafa TrueColor
+                  </div>
+                  <p class="terminal-desc">
+                    Le terminal officiel riche et personnalisable de KDE Plasma. Supporte les graphismes bitmap Sixel et le rendu d'images 24-bit TrueColor via Chafa.
+                  </p>
+                  <ul class="terminal-features-list">
+                    <li><span class="feat-bullet">🖼️</span> Support des graphismes Sixel et demi-blocs Chafa</li>
+                    <li><span class="feat-bullet">📑</span> Gestion avancée des onglets, profils et dispositions d'écrans</li>
+                    <li><span class="feat-bullet">🔍</span> Recherche intégrée, historique illimité et signets</li>
+                    <li><span class="feat-bullet">🧩</span> Intégration parfaite avec l'écosystème Qt et KDE Plasma</li>
+                  </ul>
+                  <div class="terminal-card-actions">
+                    <button type="button" class="btn btn-sm btn-outline terminal-test-btn" onclick="event.stopPropagation(); testLaunchTerminal('konsole')" title="Tester et ouvrir Konsole">
+                      🚀 Lancer Konsole
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline terminal-select-btn" id="btn-select-konsole" onclick="event.stopPropagation(); selectTerminal('konsole')">
+                      Choisir Konsole
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Alacritty Card -->
+                <div class="card terminal-card" id="terminal-card-alacritty" onclick="selectTerminal('alacritty')">
+                  <div class="terminal-card-header">
+                    <div class="terminal-card-icon-title">
+                      <span class="terminal-icon">⚡</span>
+                      <div>
+                        <h3>Alacritty</h3>
+                        <span class="terminal-sub">Rust GPU • Minimaliste</span>
+                      </div>
+                    </div>
+                    <span class="terminal-status-badge" id="terminal-badge-alacritty">Disponible</span>
+                  </div>
+                  <div class="terminal-img-support-pill">
+                    <span class="pill-dot">●</span> Chafa ANSI 24-bit TrueColor
+                  </div>
+                  <p class="terminal-desc">
+                    Émulateur ultra-léger et minimaliste développé en Rust, axé sur la performance brute. Affiche les images Fastfetch impeccablement grâce aux demi-blocs Chafa.
+                  </p>
+                  <ul class="terminal-features-list">
+                    <li><span class="feat-bullet">🖼️</span> Rendu d'images Fastfetch Chafa ANSI 24-bit haute fidélité</li>
+                    <li><span class="feat-bullet">🦀</span> Entièrement programmé en Rust avec accélération GPU</li>
+                    <li><span class="feat-bullet">⏱️</span> Latence de frappe la plus faible du marché</li>
+                    <li><span class="feat-bullet">📄</span> Configuration déclarative limpide en syntaxe TOML</li>
+                  </ul>
+                  <div class="terminal-card-actions">
+                    <button type="button" class="btn btn-sm btn-outline terminal-test-btn" onclick="event.stopPropagation(); testLaunchTerminal('alacritty')" title="Tester et ouvrir Alacritty">
+                      🚀 Lancer Alacritty
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline terminal-select-btn" id="btn-select-alacritty" onclick="event.stopPropagation(); selectTerminal('alacritty')">
+                      Choisir Alacritty
+                    </button>
+                  </div>
+                </div>
+
+                <!-- GNOME Terminal Card -->
+                <div class="card terminal-card" id="terminal-card-gnome-terminal" onclick="selectTerminal('gnome-terminal')">
+                  <div class="terminal-card-header">
+                    <div class="terminal-card-icon-title">
+                      <span class="terminal-icon">📟</span>
+                      <div>
+                        <h3>GNOME Terminal</h3>
+                        <span class="terminal-sub">GNOME Officiel • VTE</span>
+                      </div>
+                    </div>
+                    <span class="terminal-status-badge" id="terminal-badge-gnome-terminal">Disponible</span>
+                  </div>
+                  <div class="terminal-img-support-pill">
+                    <span class="pill-dot">●</span> VTE TrueColor & Chafa
+                  </div>
+                  <p class="terminal-desc">
+                    L'émulateur standard de l'environnement de bureau GNOME basé sur VTE. Rendu fidèle des couleurs TrueColor 24-bit et intégration directe aux paramètres système.
+                  </p>
+                  <ul class="terminal-features-list">
+                    <li><span class="feat-bullet">🖼️</span> Rendu des photos et logos Fastfetch en 24-bit via Chafa</li>
+                    <li><span class="feat-bullet">🎨</span> Synchronisation fluide avec le thème sombre/clair GNOME</li>
+                    <li><span class="feat-bullet">🛡️</span> Fiabilité et robustesse éprouvée sur les bureaux GNOME</li>
+                    <li><span class="feat-bullet">🔗</span> Détection automatique des URLs cliquables et fichiers</li>
+                  </ul>
+                  <div class="terminal-card-actions">
+                    <button type="button" class="btn btn-sm btn-outline terminal-test-btn" onclick="event.stopPropagation(); testLaunchTerminal('gnome-terminal')" title="Tester et ouvrir GNOME Terminal">
+                      🚀 Lancer GNOME
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline terminal-select-btn" id="btn-select-gnome-terminal" onclick="event.stopPropagation(); selectTerminal('gnome-terminal')">
+                      Choisir GNOME
+                    </button>
+                  </div>
+                </div>
+
+                <!-- COSMIC Terminal Card -->
+                <div class="card terminal-card" id="terminal-card-cosmic-term" onclick="selectTerminal('cosmic-term')">
+                  <div class="terminal-card-header">
+                    <div class="terminal-card-icon-title">
+                      <span class="terminal-icon">🌌</span>
+                      <div>
+                        <h3>COSMIC Terminal</h3>
+                        <span class="terminal-sub">COSMIC Rust • Wgpu</span>
+                      </div>
+                    </div>
+                    <span class="terminal-status-badge" id="terminal-badge-cosmic-term">Disponible</span>
+                  </div>
+                  <div class="terminal-img-support-pill">
+                    <span class="pill-dot">●</span> Chafa ANSI 24-bit TrueColor
+                  </div>
+                  <p class="terminal-desc">
+                    L'émulateur moderne conçu par System76 pour l'environnement COSMIC Desktop en Rust. Rendu GPU Wgpu ultra-réactif avec scission d'écrans native.
+                  </p>
+                  <ul class="terminal-features-list">
+                    <li><span class="feat-bullet">🖼️</span> Rendu des images Fastfetch 24-bit avec le moteur Chafa</li>
+                    <li><span class="feat-bullet">🌌</span> Intégration native avec les thèmes et applets COSMIC</li>
+                    <li><span class="feat-bullet">🦀</span> Architecture moderne en Rust avec backend Wgpu</li>
+                    <li><span class="feat-bullet">📐</span> Division d'écrans (splits) et gestion d'onglets fluide</li>
+                  </ul>
+                  <div class="terminal-card-actions">
+                    <button type="button" class="btn btn-sm btn-outline terminal-test-btn" onclick="event.stopPropagation(); testLaunchTerminal('cosmic-term')" title="Tester et ouvrir COSMIC Terminal">
+                      🚀 Lancer COSMIC
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline terminal-select-btn" id="btn-select-cosmic-term" onclick="event.stopPropagation(); selectTerminal('cosmic-term')">
+                      Choisir COSMIC
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Terminal Action & Apply Bar -->
+              <div class="card terminal-action-card">
+                <div class="terminal-action-summary">
+                  <div class="terminal-summary-indicator">
+                    <span class="indicator-icon">🎯</span>
+                    <div>
+                      <strong>Terminal sélectionné : <span id="current-terminal-display">Chargement...</span></strong>
+                      <p id="current-terminal-meta">Modifie <code>vars.terminal</code> dans <code>/etc/nixos/vars.nix</code>, variable <code>$TERMINAL</code> et dconf</p>
+                    </div>
+                  </div>
+                  <div class="terminal-action-buttons">
+                    <button id="btn-launch-current-term" class="btn btn-outline" onclick="testLaunchTerminal(selectedTerminalChoice)">
+                      <span class="btn-icon">🚀</span> Tester (Lancer)
+                    </button>
+                    <button id="btn-save-terminal" class="btn btn-primary" onclick="applySelectedTerminal()">
+                      <span class="btn-icon">💾</span> Sauvegarder dans vars.nix
+                    </button>
+                    <button id="btn-rebuild-terminal" class="btn btn-success" onclick="applyTerminalAndRebuild()">
+                      <span class="btn-icon">⚡</span> Sauvegarder & Appliquer (nh os switch)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
 
           </div>
         </div>

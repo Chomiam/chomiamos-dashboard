@@ -827,6 +827,12 @@
                   </div>
 
                   <div class="fastfetch-quick-actions">
+                    <button type="button" class="btn btn-primary-soft btn-sm" onclick="toggleFastfetchGithubBar()" title="Importer un profil ou ensemble complet depuis GitHub">
+                      <span>🐙</span> Importer GitHub
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="triggerFastfetchFolderPicker()" title="Importer un dossier local avec ses images et fichiers">
+                      <span>📁</span> Dossier Local
+                    </button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="loadActiveFastfetchConfig()" title="Charger la configuration active actuelle">
                       <span>📥</span> Config Active
                     </button>
@@ -838,24 +844,75 @@
                     </button>
                   </div>
                 </div>
+
+                <!-- GitHub Import Bar (Pliable) -->
+                <div id="fastfetch-github-bar" class="fastfetch-github-bar hidden">
+                  <div class="fastfetch-github-input-wrap">
+                    <span class="fastfetch-github-icon">🐙</span>
+                    <input type="text" id="fastfetch-github-url" class="fastfetch-github-input" placeholder="Ex: https://github.com/Chick207/fastfetch-presets ou user/dotfiles/tree/main/.config/fastfetch" onkeydown="if(event.key==='Enter') triggerFastfetchGithubImport()">
+                    <button type="button" id="btn-fastfetch-github-import" class="btn btn-primary btn-sm" onclick="triggerFastfetchGithubImport()">
+                      <span>⚡</span> Télécharger & Analyser
+                    </button>
+                  </div>
+                  <div class="fastfetch-github-suggestions">
+                    <span class="fastfetch-suggestion-label">Suggestions en 1 clic :</span>
+                    <button type="button" class="fastfetch-suggestion-chip" onclick="quickFillGithubUrl('fastfetch-cli/fastfetch/tree/dev/presets/examples')">📦 Presets Officiels Fastfetch</button>
+                    <button type="button" class="fastfetch-suggestion-chip" onclick="quickFillGithubUrl('Chick207/fastfetch-presets')">🎨 Chick207 Presets</button>
+                  </div>
+                </div>
               </div>
 
               <!-- Main Fastfetch Grid (Éditeur/Validation à gauche, Terminal à droite) -->
               <div class="fastfetch-main-grid">
                 
-                <!-- Colonne Gauche : Import, Éditeur & Diagnostics -->
+                <!-- Colonne Gauche : Import, Bundle, Éditeur & Diagnostics -->
                 <div class="fastfetch-left-col">
                   
-                  <!-- Zone de Drop & Sélection de Fichier -->
-                  <div class="card fastfetch-drop-card" id="fastfetch-dropzone" onclick="document.getElementById('fastfetch-file-input').click()">
-                    <input type="file" id="fastfetch-file-input" accept=".json,.jsonc" style="display: none;" onchange="handleFastfetchFileSelected(event)">
+                  <!-- Zone de Drop & Sélection de Fichiers/Dossiers -->
+                  <div class="card fastfetch-drop-card" id="fastfetch-dropzone">
+                    <input type="file" id="fastfetch-file-input" accept=".json,.jsonc,.zip,.tar.gz" style="display: none;" onchange="handleFastfetchFileSelected(event)">
+                    <input type="file" id="fastfetch-folder-input" webkitdirectory directory multiple style="display: none;" onchange="handleFastfetchFolderSelected(event)">
                     <div class="fastfetch-dropzone-body">
-                      <span class="fastfetch-dropzone-icon">📁</span>
+                      <span class="fastfetch-dropzone-icon">📦</span>
                       <div class="fastfetch-dropzone-text">
-                        <strong>Glissez-déposez un profil (.jsonc ou .json)</strong>
-                        <small>ou cliquez pour parcourir vos fichiers locaux</small>
+                        <strong>Glissez-déposez un dossier, une archive (.zip) ou un fichier (.jsonc)</strong>
+                        <small>Prise en charge complète des images, logos et sous-dossiers compagnons</small>
                       </div>
-                      <span class="fastfetch-dropzone-badge">JSONC / JSON</span>
+                      <div class="fastfetch-dropzone-btns">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('fastfetch-file-input').click()">📄 Fichier / Zip</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="document.getElementById('fastfetch-folder-input').click()">📁 Dossier</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Carte d'Informations du Bundle Importé (Dynamique) -->
+                  <div class="card fastfetch-bundle-card hidden" id="fastfetch-bundle-card">
+                    <div class="fastfetch-bundle-header">
+                      <div class="fastfetch-bundle-info-left">
+                        <span class="fastfetch-bundle-icon" id="fastfetch-bundle-source-icon">📦</span>
+                        <div>
+                          <strong id="fastfetch-bundle-name">Paquet importé</strong>
+                          <div id="fastfetch-bundle-desc" class="fastfetch-bundle-desc">Origine : ...</div>
+                        </div>
+                      </div>
+                      <div class="fastfetch-bundle-stats">
+                        <span id="fastfetch-bundle-files-count" class="badge-stat">0 fichiers</span>
+                        <span id="fastfetch-bundle-images-count" class="badge-stat">0 image</span>
+                        <span id="fastfetch-bundle-size" class="badge-stat">0 Ko</span>
+                      </div>
+                    </div>
+
+                    <!-- Ligne Sélecteur de Configuration / Preset -->
+                    <div class="fastfetch-bundle-preset-row" id="fastfetch-bundle-preset-row">
+                      <label for="fastfetch-preset-select">Preset / Configuration :</label>
+                      <select id="fastfetch-preset-select" class="fastfetch-preset-select" onchange="handleFastfetchPresetChanged(event)"></select>
+                      <button type="button" class="btn btn-xs btn-outline" onclick="toggleFastfetchBundleFiles()" id="btn-toggle-bundle-files">📁 Arborescence</button>
+                    </div>
+
+                    <!-- Explorateur de Fichiers du Bundle -->
+                    <div id="fastfetch-bundle-files-explorer" class="fastfetch-bundle-explorer hidden">
+                      <div class="fastfetch-explorer-header">Fichiers inclus dans le paquet :</div>
+                      <div id="fastfetch-bundle-files-list" class="fastfetch-files-list"></div>
                     </div>
                   </div>
 

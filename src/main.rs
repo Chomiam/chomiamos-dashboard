@@ -1001,13 +1001,13 @@ async fn repair_network_dns() -> Result<String, String> {
 
 
 #[tauri::command]
-fn validate_fastfetch_config(content: String) -> Result<fastfetch::FastfetchValidationReport, String> {
-    Ok(fastfetch::validate_fastfetch(&content))
+fn validate_fastfetch_config(content: String, staging_id: Option<String>) -> Result<fastfetch::FastfetchValidationReport, String> {
+    Ok(fastfetch::validate_fastfetch(&content, staging_id.as_deref()))
 }
 
 #[tauri::command]
-async fn preview_fastfetch_config(content: String) -> Result<fastfetch::FastfetchPreviewResult, String> {
-    tokio::task::spawn_blocking(move || fastfetch::preview_fastfetch(&content))
+async fn preview_fastfetch_config(content: String, staging_id: Option<String>) -> Result<fastfetch::FastfetchPreviewResult, String> {
+    tokio::task::spawn_blocking(move || fastfetch::preview_fastfetch(&content, staging_id.as_deref()))
         .await
         .map_err(|e| format!("Task join error: {}", e))?
 }
@@ -1018,13 +1018,35 @@ fn get_fastfetch_state() -> Result<fastfetch::FastfetchConfigState, String> {
 }
 
 #[tauri::command]
-fn apply_fastfetch_profile(content: String) -> Result<String, String> {
-    fastfetch::apply_fastfetch_profile(&content)
+fn apply_fastfetch_profile(content: String, staging_id: Option<String>) -> Result<String, String> {
+    fastfetch::apply_fastfetch_profile(&content, staging_id.as_deref())
 }
 
 #[tauri::command]
 fn restore_fastfetch_default() -> Result<String, String> {
     fastfetch::restore_fastfetch_default()
+}
+
+#[tauri::command]
+async fn import_fastfetch_github(url: String) -> Result<fastfetch::FastfetchBundleInfo, String> {
+    tokio::task::spawn_blocking(move || fastfetch::import_fastfetch_from_github(&url))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+fn import_fastfetch_local_folder(path: String) -> Result<fastfetch::FastfetchBundleInfo, String> {
+    fastfetch::import_fastfetch_from_local_folder(&path)
+}
+
+#[tauri::command]
+fn import_fastfetch_archive(archive_path: String) -> Result<fastfetch::FastfetchBundleInfo, String> {
+    fastfetch::import_fastfetch_from_archive(&archive_path)
+}
+
+#[tauri::command]
+fn switch_fastfetch_bundle_config(staging_id: String, config_rel_path: String) -> Result<fastfetch::FastfetchBundleInfo, String> {
+    fastfetch::switch_fastfetch_bundle_config(&staging_id, &config_rel_path)
 }
 
 fn main() {
@@ -1102,7 +1124,11 @@ fn main() {
             preview_fastfetch_config,
             get_fastfetch_state,
             apply_fastfetch_profile,
-            restore_fastfetch_default
+            restore_fastfetch_default,
+            import_fastfetch_github,
+            import_fastfetch_local_folder,
+            import_fastfetch_archive,
+            switch_fastfetch_bundle_config
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

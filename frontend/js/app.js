@@ -5895,6 +5895,9 @@ let fastfetchRawTerminalOutput = "";
 let currentFastfetchState = null;
 let currentFastfetchPreviewResult = null;
 let currentFastfetchRenderMode = "hd";
+let currentFastfetchStagingId = null;
+let currentFastfetchBundle = null;
+let fastfetchBundleExplorerOpen = false;
 
 function updateFastfetchPreviewRender(mode) {
   currentFastfetchRenderMode = mode;
@@ -6067,6 +6070,97 @@ function initFastfetchTerminal() {
   fastfetchTerm.writeln("\x1b[38;2;137;180;250m« Prévisualiser »\x1b[0m \x1b[38;2;166;173;200mpour observer le rendu complet avec codes ANSI.\x1b[0m\n");
 }
 
+function toggleFastfetchGithubBar() {
+  const bar = document.getElementById("fastfetch-github-bar");
+  if (!bar) return;
+  bar.classList.toggle("hidden");
+  if (!bar.classList.contains("hidden")) {
+    const input = document.getElementById("fastfetch-github-url");
+    if (input) input.focus();
+  }
+}
+
+function quickFillGithubUrl(url) {
+  const input = document.getElementById("fastfetch-github-url");
+  if (input) {
+    input.value = url;
+    triggerFastfetchGithubImport();
+  }
+}
+
+async function triggerFastfetchGithubImport() {
+  const input = document.getElementById("fastfetch-github-url");
+  if (!input) return;
+  const url = input.value.trim();
+  if (!url) {
+    showToast("Veuillez saisir une URL ou un dépôt GitHub.", "warning");
+    return;
+  }
+
+  const btn = document.getElementById("btn-fastfetch-github-import");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = "<span>⏳</span> Clonage & Analyse...";
+  }
+
+  try {
+    showToast("Clonage et analyse du dépôt GitHub en cours...", "info");
+    const bundle = await invoke("import_fastfetch_github", { url });
+    applyLoadedBundle(bundle);
+    showToast(`Dépôt « ${bundle.name} » importé avec succès (${bundle.total_files} fichiers) !`, "success");
+    const bar = document.getElementById("fastfetch-github-bar");
+    if (bar) bar.classList.add("hidden");
+  } catch (err) {
+    console.error("Erreur import GitHub Fastfetch :", err);
+    showToast("Erreur lors de l'import GitHub : " + err, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = "<span>⚡</span> Télécharger & Analyser";
+    }
+  }
+}
+
+function triggerFastfetchFolderPicker() {
+  const input = document.getElementById("fastfetch-folder-input");
+  if (input) input.click();
+}
+
+async function handleFastfetchFolderSelected(event) {
+  const input = event.target;
+  if (!input.files || input.files.length === 0) return;
+
+  const firstFile = input.files[0];
+  if (firstFile.path) {
+    let folderPath = firstFile.path;
+    const lastSlash = folderPath.lastIndexOf("/");
+    if (lastSlash > 0) {
+      const relParts = (firstFile.webkitRelativePath || "").split("/").filter(Boolean);
+      if (relParts.length > 1) {
+        let p = folderPath;
+        for (let i = 0; i < relParts.length; i++) {
+          const idx = p.lastIndexOf("/");
+          if (idx > 0) p = p.substring(0, idx);
+        }
+        folderPath = p;
+      } else {
+        folderPath = folderPath.substring(0, lastSlash);
+      }
+    }
+    try {
+      showToast("Importation du dossier local...", "info");
+      const bundle = await invoke("import_fastfetch_local_folder", { path: folderPath });
+      applyLoadedBundle(bundle);
+      showToast(`Dossier « ${bundle.name} » importé avec succès !`, "success");
+    } catch (err) {
+      showToast("Erreur import dossier : " + err, "error");
+    }
+  } else {
+    showToast("Chemin physique introuvable pour ce dossier.", "warning");
+  }
+  input.value = "";
+}
+
 function setupFastfetchDropzone() {
   const dropzone = document.getElementById("fastfetch-dropzone");
   if (!dropzone) return;
@@ -6087,13 +6181,163 @@ function setupFastfetchDropzone() {
     }, false);
   });
 
-  dropzone.addEventListener("drop", (e) => {
+  dropzone.addEventListener("drop", async (e) => {
     const dt = e.dataTransfer;
     const files = dt.files;
     if (files && files.length > 0) {
-      loadFastfetchFile(files[0]);
+      const file = files[0];
+      if (file.name.endsWith(".zip") || file.name.endsWith(".tar.gz")) {
+        if (file.path) {
+          try {
+            showToast("Décompression de l'archive...", "info");
+            const bundle = await invoke("import_fastfetch_archive", { archivePath: file.path });
+            applyLoadedBundle(bundle);
+            showToast(`Archive « ${bundle.name} » importée avec succès !`, "success");
+          } catch (err) {
+            showToast("Erreur archive : " + err, "error");
+          }
+        } else {
+          showToast("Impossible d'accéder au chemin de l'archive.", "warning");
+        }
+      } else if (file.path && files.length === 1 && !file.name.includes(".")) {
+        // Dossier potentiel glissé
+        try {
+          showToast("Importation du dossier...", "info");
+          const bundle = await invoke("import_fastfetch_local_folder", { path: file.path });
+          applyLoadedBundle(bundle);
+          showToast(`Dossier « ${bundle.name} » importé avec succès !`, "success");
+        } catch (_) {
+          loadFastfetchFile(file);
+        }
+      } else {
+        loadFastfetchFile(file);
+      }
     }
   }, false);
+}
+
+function applyLoadedBundle(bundle) {
+  currentFastfetchStagingId = bundle.staging_id;
+  currentFastfetchBundle = bundle;
+
+  const card = document.getElementById("fastfetch-bundle-card");
+  const nameEl = document.getElementById("fastfetch-bundle-name");
+  const descEl = document.getElementById("fastfetch-bundle-desc");
+  const filesCountEl = document.getElementById("fastfetch-bundle-files-count");
+  const imagesCountEl = document.getElementById("fastfetch-bundle-images-count");
+  const sizeEl = document.getElementById("fastfetch-bundle-size");
+  const selectEl = document.getElementById("fastfetch-preset-select");
+  const filesListEl = document.getElementById("fastfetch-bundle-files-list");
+  const iconEl = document.getElementById("fastfetch-bundle-source-icon");
+
+  if (card) card.classList.remove("hidden");
+  if (nameEl) nameEl.textContent = bundle.name;
+  if (descEl) descEl.textContent = bundle.source_description;
+  if (iconEl) {
+    iconEl.textContent = bundle.source_description.toLowerCase().includes("github") ? "🐙" : "📦";
+  }
+
+  if (filesCountEl) filesCountEl.textContent = `${bundle.total_files} fichier${bundle.total_files > 1 ? "s" : ""}`;
+  const imagesCount = bundle.files.filter(f => f.is_image).length;
+  if (imagesCountEl) imagesCountEl.textContent = `${imagesCount} image${imagesCount > 1 ? "s" : ""}`;
+
+  const sizeKb = Math.round(bundle.total_size / 1024);
+  if (sizeEl) sizeEl.textContent = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} Mo` : `${sizeKb} Ko`;
+
+  if (selectEl) {
+    selectEl.innerHTML = "";
+    bundle.available_configs.forEach(cfg => {
+      const opt = document.createElement("option");
+      opt.value = cfg;
+      opt.textContent = cfg;
+      if (cfg === bundle.entry_config) opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  if (filesListEl) {
+    filesListEl.innerHTML = "";
+    bundle.files.forEach(f => {
+      const row = document.createElement("div");
+      row.className = "fastfetch-file-row" + (f.relative_path === bundle.entry_config ? " is-active-config" : "");
+      let icon = "📄";
+      if (f.is_image) icon = "🖼️";
+      else if (f.is_ascii) icon = "📜";
+      else if (f.is_config) icon = "⚙️";
+
+      const fSizeKb = Math.max(1, Math.round(f.file_size / 1024));
+      row.innerHTML = `
+        <span class="fastfetch-file-name">${icon} ${escapeHtml(f.relative_path)}</span>
+        <span class="fastfetch-file-size">${fSizeKb} Ko</span>
+      `;
+      filesListEl.appendChild(row);
+    });
+  }
+
+  const editor = document.getElementById("fastfetch-editor");
+  if (editor) {
+    editor.value = bundle.config_content;
+    updateFastfetchEditorLines();
+  }
+
+  triggerFastfetchValidation(false);
+  setTimeout(() => {
+    triggerFastfetchPreview();
+  }, 100);
+}
+
+async function handleFastfetchPresetChanged(event) {
+  const selectedConfig = event.target.value;
+  if (!currentFastfetchStagingId || !selectedConfig) return;
+
+  try {
+    const updated = await invoke("switch_fastfetch_bundle_config", {
+      stagingId: currentFastfetchStagingId,
+      configRelPath: selectedConfig,
+    });
+    currentFastfetchBundle = updated;
+
+    const editor = document.getElementById("fastfetch-editor");
+    if (editor) {
+      editor.value = updated.config_content;
+      updateFastfetchEditorLines();
+    }
+
+    const filesListEl = document.getElementById("fastfetch-bundle-files-list");
+    if (filesListEl) {
+      const rows = filesListEl.querySelectorAll(".fastfetch-file-row");
+      rows.forEach(r => {
+        const text = r.textContent || "";
+        if (text.includes(selectedConfig)) {
+          r.classList.add("is-active-config");
+        } else {
+          r.classList.remove("is-active-config");
+        }
+      });
+    }
+
+    showToast(`Preset basculé sur « ${selectedConfig} » !`, "info");
+    triggerFastfetchValidation(false);
+    setTimeout(() => {
+      triggerFastfetchPreview();
+    }, 100);
+  } catch (err) {
+    showToast("Erreur changement preset : " + err, "error");
+  }
+}
+
+function toggleFastfetchBundleFiles() {
+  const explorer = document.getElementById("fastfetch-bundle-files-explorer");
+  const btn = document.getElementById("btn-toggle-bundle-files");
+  if (!explorer) return;
+  fastfetchBundleExplorerOpen = !fastfetchBundleExplorerOpen;
+  if (fastfetchBundleExplorerOpen) {
+    explorer.classList.remove("hidden");
+    if (btn) btn.textContent = "✖ Fermer arborescence";
+  } else {
+    explorer.classList.add("hidden");
+    if (btn) btn.textContent = "📁 Arborescence";
+  }
 }
 
 function setupFastfetchEditor() {
@@ -6171,6 +6415,12 @@ async function loadActiveFastfetchConfig() {
     const state = await invoke("get_fastfetch_state");
     currentFastfetchState = state;
     const editor = document.getElementById("fastfetch-editor");
+
+    // Réinitialiser staging bundle si on revient à la config active
+    currentFastfetchStagingId = null;
+    currentFastfetchBundle = null;
+    const card = document.getElementById("fastfetch-bundle-card");
+    if (card) card.classList.add("hidden");
 
     if (state.current_content && editor) {
       editor.value = state.current_content;
@@ -6272,6 +6522,11 @@ function loadSampleFastfetchConfig() {
   ]
 }`;
   const editor = document.getElementById("fastfetch-editor");
+  currentFastfetchStagingId = null;
+  currentFastfetchBundle = null;
+  const card = document.getElementById("fastfetch-bundle-card");
+  if (card) card.classList.add("hidden");
+
   if (editor) {
     editor.value = sample;
     updateFastfetchEditorLines();
@@ -6283,7 +6538,24 @@ function loadSampleFastfetchConfig() {
 function handleFastfetchFileSelected(event) {
   const input = event.target;
   if (input.files && input.files[0]) {
-    loadFastfetchFile(input.files[0]);
+    const file = input.files[0];
+    if (file.name.endsWith(".zip") || file.name.endsWith(".tar.gz")) {
+      if (file.path) {
+        showToast("Décompression de l'archive...", "info");
+        invoke("import_fastfetch_archive", { archivePath: file.path })
+          .then(bundle => {
+            applyLoadedBundle(bundle);
+            showToast(`Archive « ${bundle.name} » importée avec succès !`, "success");
+          })
+          .catch(err => {
+            showToast("Erreur archive : " + err, "error");
+          });
+      } else {
+        showToast("Impossible de lire le chemin physique de l'archive.", "warning");
+      }
+    } else {
+      loadFastfetchFile(file);
+    }
   }
   input.value = "";
 }
@@ -6294,6 +6566,11 @@ function loadFastfetchFile(file) {
   reader.onload = (e) => {
     const text = e.target.result;
     const editor = document.getElementById("fastfetch-editor");
+    currentFastfetchStagingId = null;
+    currentFastfetchBundle = null;
+    const card = document.getElementById("fastfetch-bundle-card");
+    if (card) card.classList.add("hidden");
+
     if (editor) {
       editor.value = text;
       updateFastfetchEditorLines();
@@ -6337,72 +6614,102 @@ async function triggerFastfetchValidation(showToastOnSuccess = false) {
   }
 
   try {
-    const report = await invoke("validate_fastfetch_config", { content });
+    const report = await invoke("validate_fastfetch_config", {
+      content,
+      stagingId: currentFastfetchStagingId,
+    });
     fastfetchLastValidatedContent = content;
-    fastfetchLastValidationSuccess = report.valid;
+    fastfetchLastValidationSuccess = report.syntax_valid;
 
-    if (report.valid) {
-      diagCard.className = "card fastfetch-diag-card diag-valid";
-      diagIcon.textContent = "✅";
-      diagTitle.textContent = "Syntaxe et schéma 100% valides";
-      diagSub.textContent = "Prêt pour la prévisualisation dans le terminal intégré.";
-      diagBadge.className = "badge-diag badge-valid";
-      diagBadge.textContent = "Conforme";
-      errorsContainer.classList.add("hidden");
+    // Supprimer ancienne pastille d'asset
+    const oldAssetPill = document.getElementById("fastfetch-asset-pill");
+    if (oldAssetPill) oldAssetPill.remove();
 
+    if (report.syntax_valid) {
+      if (report.schema_valid && (!report.asset_report || report.asset_report.exists)) {
+        diagCard.className = "card fastfetch-diag-card diag-valid";
+        diagIcon.textContent = "✅";
+        diagTitle.textContent = "Syntaxe et schéma 100% valides";
+        diagSub.textContent = "Configuration conforme et prête pour la prévisualisation dans le terminal intégré.";
+        diagBadge.className = "badge-diag badge-valid";
+        diagBadge.textContent = "Conforme";
+      } else {
+        diagCard.className = "card fastfetch-diag-card diag-warning";
+        diagIcon.textContent = "⚠️";
+        diagTitle.textContent = "Configuration syntaxiquement valide";
+        diagSub.textContent = "Syntaxe JSONC correcte. Des avertissements ou extensions de schéma sont signalés ci-dessous.";
+        diagBadge.className = "badge-diag badge-warning";
+        diagBadge.textContent = "Valide (Avertissements)";
+      }
+
+      // Permettre l'exécution car la syntaxe est saine !
       if (btnPreview) btnPreview.disabled = false;
       if (btnApply) btnApply.disabled = !fastfetchLastPreviewSuccess;
 
+      // Afficher le statut de l'asset
+      if (report.asset_report) {
+        const assetPill = document.createElement("div");
+        assetPill.id = "fastfetch-asset-pill";
+        assetPill.className = "fastfetch-asset-pill " + (report.asset_report.exists ? "asset-ok" : "asset-missing");
+        const statusIcon = report.asset_report.exists ? "🖼️" : "⚠️";
+        const sizeStr = report.asset_report.file_size ? ` (${Math.round(report.asset_report.file_size / 1024)} Ko)` : "";
+        assetPill.innerHTML = `
+          <span>${statusIcon}</span>
+          <span>Logo : <strong>${escapeHtml(report.asset_report.referenced_path)}</strong>${sizeStr} — ${report.asset_report.exists ? "Fichier trouvé" : "Introuvable"}</span>
+        `;
+        diagCard.appendChild(assetPill);
+      }
+
+      if (report.errors.length > 0 || report.warnings.length > 0) {
+        errorsContainer.classList.remove("hidden");
+        errorsList.innerHTML = "";
+
+        report.warnings.forEach(w => {
+          const item = document.createElement("div");
+          item.className = "fastfetch-error-item is-schema";
+          item.innerHTML = `<span class="fastfetch-error-badge badge-schema">Info</span> <span class="fastfetch-error-msg">${escapeHtml(w)}</span>`;
+          errorsList.appendChild(item);
+        });
+
+        report.errors.forEach(err => {
+          const item = document.createElement("div");
+          item.className = "fastfetch-error-item is-schema";
+          const locStr = err.line ? `<span class="fastfetch-error-loc">Ligne ${err.line}:${err.column || 1}</span>` : "";
+          const pathStr = err.instance_path ? `<span class="fastfetch-error-path">${escapeHtml(err.instance_path)}</span>` : "";
+          item.innerHTML = `
+            <span class="fastfetch-error-badge badge-schema">Schéma</span>
+            ${locStr} ${pathStr}
+            <span class="fastfetch-error-msg">${escapeHtml(err.message)}</span>
+          `;
+          errorsList.appendChild(item);
+        });
+      } else {
+        errorsContainer.classList.add("hidden");
+      }
+
       if (showToastOnSuccess) {
-        showToast("Configuration Fastfetch analysée et validée avec succès !", "success");
+        showToast("Configuration Fastfetch analysée avec succès !", "success");
       }
     } else {
       diagCard.className = "card fastfetch-diag-card diag-invalid";
       diagIcon.textContent = "❌";
-
-      if (!report.syntax_valid) {
-        diagTitle.textContent = "Erreur de syntaxe JSONC";
-        diagSub.textContent = "Le fichier contient des erreurs de structure ou de format.";
-        diagBadge.className = "badge-diag badge-error";
-        diagBadge.textContent = "Syntaxe invalide";
-      } else {
-        diagTitle.textContent = "Erreur de schéma Fastfetch";
-        diagSub.textContent = "Propriétés ou modules non conformes à la spécification officielle.";
-        diagBadge.className = "badge-diag badge-error";
-        diagBadge.textContent = "Schéma non respecté";
-      }
+      diagTitle.textContent = "Erreur de syntaxe JSONC";
+      diagSub.textContent = "Le fichier contient des erreurs de structure ou de format empêchant son exécution.";
+      diagBadge.className = "badge-diag badge-error";
+      diagBadge.textContent = "Syntaxe invalide";
 
       errorsContainer.classList.remove("hidden");
       errorsList.innerHTML = "";
 
       report.errors.forEach(err => {
         const item = document.createElement("div");
-        item.className = "fastfetch-error-item" + (err.kind === "schema" ? " is-schema" : "");
-
-        const badge = document.createElement("span");
-        badge.className = "fastfetch-error-badge" + (err.kind === "schema" ? " badge-schema" : "");
-        badge.textContent = err.kind === "schema" ? "Schéma" : "Syntaxe";
-        item.appendChild(badge);
-
-        if (err.line !== null && err.line !== undefined) {
-          const loc = document.createElement("span");
-          loc.className = "fastfetch-error-loc";
-          loc.textContent = `Ligne ${err.line}:${err.column || 1}`;
-          item.appendChild(loc);
-        }
-
-        if (err.instance_path) {
-          const path = document.createElement("span");
-          path.className = "fastfetch-error-path";
-          path.textContent = err.instance_path;
-          item.appendChild(path);
-        }
-
-        const msg = document.createElement("span");
-        msg.className = "fastfetch-error-msg";
-        msg.textContent = err.message;
-        item.appendChild(msg);
-
+        item.className = "fastfetch-error-item";
+        const locStr = err.line ? `<span class="fastfetch-error-loc">Ligne ${err.line}:${err.column || 1}</span>` : "";
+        item.innerHTML = `
+          <span class="fastfetch-error-badge">Syntaxe</span>
+          ${locStr}
+          <span class="fastfetch-error-msg">${escapeHtml(err.message)}</span>
+        `;
         errorsList.appendChild(item);
       });
 
@@ -6439,7 +6746,10 @@ async function triggerFastfetchPreview() {
   const startTime = performance.now();
 
   try {
-    const res = await invoke("preview_fastfetch_config", { content });
+    const res = await invoke("preview_fastfetch_config", {
+      content,
+      stagingId: currentFastfetchStagingId,
+    });
     currentFastfetchPreviewResult = res;
     const elapsed = Math.round(performance.now() - startTime);
 
@@ -6486,11 +6796,13 @@ async function triggerFastfetchApply() {
   if (!content) return;
 
   if (!fastfetchLastValidationSuccess) {
-    showToast("Veuillez valider rigoureusement le profil avant de l'appliquer.", "warning");
+    showToast("Veuillez corriger les erreurs de syntaxe avant d'appliquer.", "warning");
     return;
   }
 
-  if (!confirm("Voulez-vous appliquer ce profil Fastfetch pour votre session utilisateur ?\n\n- Le profil sera enregistré dans ~/.config/fastfetch/profiles/dashboard.jsonc\n- Si un fichier manuel existe, une sauvegarde horodatée sera créée.\n- Vos déclarations NixOS restent intactes et protégées.")) {
+  const bundleNotice = currentFastfetchBundle ? `\n- Tous les assets et dossiers compagnons (${currentFastfetchBundle.total_files} fichiers) seront installés dans ~/.config/fastfetch/` : "";
+
+  if (!confirm(`Voulez-vous appliquer ce profil Fastfetch pour votre session utilisateur ?\n\n- Le profil sera enregistré dans ~/.config/fastfetch/profiles/dashboard.jsonc${bundleNotice}\n- Si des fichiers manuels existent, une sauvegarde horodatée sera créée.\n- Vos déclarations NixOS restent intactes et protégées.`)) {
     return;
   }
 
@@ -6501,7 +6813,10 @@ async function triggerFastfetchApply() {
   }
 
   try {
-    const res = await invoke("apply_fastfetch_profile", { content });
+    const res = await invoke("apply_fastfetch_profile", {
+      content,
+      stagingId: currentFastfetchStagingId,
+    });
     showToast(res, "success");
     await loadFastfetchState(false);
   } catch (err) {
@@ -6522,6 +6837,13 @@ async function restoreDefaultFastfetchConfig() {
 
   try {
     const res = await invoke("restore_fastfetch_default");
+    currentFastfetchStagingId = null;
+    currentFastfetchBundle = null;
+    const card = document.getElementById("fastfetch-bundle-card");
+    if (card) card.classList.add("hidden");
+    const assetPill = document.getElementById("fastfetch-asset-pill");
+    if (assetPill) assetPill.remove();
+
     showToast(res, "success");
     await loadFastfetchState(false);
     await loadActiveFastfetchConfig();

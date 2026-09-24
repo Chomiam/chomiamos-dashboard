@@ -78,6 +78,37 @@ pub struct CreationConfig {
     pub omniroute: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OllamaConfig {
+    #[serde(default = "default_true")]
+    pub enable: bool,
+    #[serde(default = "default_ollama_accel")]
+    pub acceleration: String, // "auto" | "rocm" | "cuda" | "cpu"
+    #[serde(default = "default_ollama_model")]
+    pub model: String,
+    #[serde(default = "default_ollama_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub rocm_override_gfx: Option<String>,
+}
+
+fn default_true() -> bool { true }
+fn default_ollama_accel() -> String { "auto".to_string() }
+fn default_ollama_model() -> String { "qwen2.5-coder:7b".to_string() }
+fn default_ollama_port() -> u16 { 11434 }
+
+impl Default for OllamaConfig {
+    fn default() -> Self {
+        Self {
+            enable: true,
+            acceleration: default_ollama_accel(),
+            model: default_ollama_model(),
+            port: default_ollama_port(),
+            rocm_override_gfx: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SlicersConfig {
     pub orcaslicer: bool,
@@ -112,6 +143,8 @@ pub struct ChomiamConfig {
     pub creation: CreationConfig,
     #[serde(default)]
     pub slicers: SlicersConfig,
+    #[serde(default)]
+    pub ollama: OllamaConfig,
 }
 
 fn default_gpu() -> String { "amd".to_string() }
@@ -211,6 +244,7 @@ impl Default for ChomiamConfig {
                 omniroute: false,
             },
             slicers: SlicersConfig::default(),
+            ollama: OllamaConfig::default(),
         }
     }
 }
@@ -371,6 +405,26 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.creation.pear_desktop = get_bool("pearDesktop", true);
     cfg.creation.virtualisation = get_bool_in_block("virtualisation", "enable", false);
     cfg.creation.omniroute = get_bool_in_block("iaSuite", "enable", false) || get_bool_in_block("aiSuite", "enable", false) || get_bool_in_block("omniroute", "enable", false);
+
+    // Ollama AI Suite
+    cfg.ollama.enable = get_bool_in_block("ollama", "enable", false)
+        || get_bool_in_block("iaSuite", "enable", false)
+        || get_bool_in_block("aiSuite", "enable", false)
+        || get_bool_in_block("omniroute", "enable", false);
+    if let Some(val) = extract_string_var_in_block(&content, "ollama", "acceleration")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "acceleration"))) {
+        cfg.ollama.acceleration = val;
+    }
+    if let Some(val) = extract_string_var_in_block(&content, "ollama", "model")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "model"))) {
+        cfg.ollama.model = val;
+    }
+    if let Some(val) = extract_int_var_in_block(&content, "ollama", "port")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_int_var_in_block(d, "ollama", "port"))) {
+        cfg.ollama.port = val as u16;
+    }
+    cfg.ollama.rocm_override_gfx = extract_string_var_in_block(&content, "ollama", "rocmOverrideGfx")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "rocmOverrideGfx")));
 
     Ok(cfg)
 }
@@ -547,11 +601,13 @@ r#"{{
   kdenlive = {kdenlive};
   obsStudio = {obs_studio};
 
-  # Suite IA locale complète (Open WebUI, Ollama accéléré par GPU, Agent IA Hermes)
-  # Interfaces : Open WebUI sur http://localhost:8080, Hermes Dashboard sur http://localhost:9119
-  iaSuite = {{
-    enable = {omniroute};
-  }};
+  # Service d'inférence LLM local Ollama pour l'autocomplétion de code dans Neovim
+  ollama = {{
+    enable = {ollama_enable};
+    acceleration = "{ollama_acceleration}";
+    model = "{ollama_model}";
+    port = {ollama_port};
+{ollama_rocm_override}  }};
 }}
 "#,
         hostname = c.host_name,
@@ -616,7 +672,19 @@ r#"{{
         pear_desktop = c.creation.pear_desktop,
         kdenlive = c.creation.kdenlive,
         obs_studio = c.creation.obs_studio,
-        omniroute = c.creation.omniroute,
+        ollama_enable = c.ollama.enable,
+        ollama_acceleration = &c.ollama.acceleration,
+        ollama_model = &c.ollama.model,
+        ollama_port = c.ollama.port,
+        ollama_rocm_override = if let Some(ref gfx) = c.ollama.rocm_override_gfx {
+            if !gfx.trim().is_empty() {
+                format!("    rocmOverrideGfx = \"{}\";\n", gfx.trim())
+            } else {
+                "".to_string()
+            }
+        } else {
+            "".to_string()
+        },
     )
 }
 
@@ -679,6 +747,16 @@ fn extract_block_content(text: &str, block: &str) -> Option<String> {
 fn extract_bool_var_in_block(text: &str, block: &str, var_name: &str) -> Option<bool> {
     let inside = extract_block_content(text, block)?;
     extract_bool_var(&inside, var_name)
+}
+
+fn extract_int_var(text: &str, var_name: &str) -> Option<i64> {
+    let re = regex::Regex::new(&format!(r#"{}\s*=\s*([0-9]+)"#, regex::escape(var_name))).ok()?;
+    re.captures(text).and_then(|cap| cap[1].parse().ok())
+}
+
+fn extract_int_var_in_block(text: &str, block: &str, var_name: &str) -> Option<i64> {
+    let inside = extract_block_content(text, block)?;
+    extract_int_var(&inside, var_name)
 }
 
 fn extract_string_var_in_block(text: &str, block: &str, var_name: &str) -> Option<String> {
@@ -956,6 +1034,24 @@ mod tests {
         let emu: EmulationConfig = serde_json::from_str(json_alias).expect("deserialize alias");
         assert!(emu.cemu);
         assert!(emu.xenia_canary);
+    }
+
+
+    #[test]
+    fn test_ollama_config_serialization_and_parsing() {
+        let mut cfg = ChomiamConfig::default();
+        assert!(cfg.ollama.enable);
+        assert_eq!(cfg.ollama.model, "qwen2.5-coder:7b");
+        assert_eq!(cfg.ollama.acceleration, "auto");
+        assert_eq!(cfg.ollama.port, 11434);
+
+        cfg.ollama.model = "qwen2.5-coder:3b".to_string();
+        cfg.ollama.rocm_override_gfx = Some("12.0.1".to_string());
+
+        let generated = generate_vars_nix_content(&cfg);
+        assert!(generated.contains("ollama = {"));
+        assert!(generated.contains(r#"model = "qwen2.5-coder:3b";"#));
+        assert!(generated.contains(r#"rocmOverrideGfx = "12.0.1";"#));
     }
 
     #[test]

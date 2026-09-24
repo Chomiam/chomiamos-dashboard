@@ -55,6 +55,11 @@
           <span class="tab-label">Gestionnaire d'Apps</span>
           <span id="config-dirty-badge" class="badge-dot hidden"></span>
         </button>
+        <button class="tab-btn" data-tab="tab-ai">
+          <span class="tab-icon">🧠</span>
+          <span class="tab-label">IA</span>
+          <span id="ai-dirty-badge" class="badge-dot hidden"></span>
+        </button>
         <button class="tab-btn" data-tab="tab-packages">
           <span class="tab-icon">📦</span>
           <span class="tab-label">Logithèque Nix</span>
@@ -76,7 +81,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.4.7 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.5.0 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2222,22 +2227,219 @@
                   <div class="switch"></div>
                 </label>
 
-                <label class="toggle-card">
-                  <input type="checkbox" id="cfg-omniroute">
-                  <div class="toggle-card-body">
-                    <span class="toggle-icon">🧠</span>
-                    <div class="toggle-text">
-                      <strong>Suite IA locale</strong>
-                      <small>Open WebUI, Ollama (accélération GPU) & Agent IA Hermes</small>
-                    </div>
-                  </div>
-                  <div class="switch"></div>
-                </label>
+
               </div>
             </div>
           </div>
         </div>
       
+
+            </section>
+
+      <!-- ==================== TAB 5: INTELLIGENCE ARTIFICIELLE (OLLAMA & NEOVIM) ==================== -->
+      <section id="tab-ai" class="tab-content">
+        <div class="section-title">
+          <h2>Intelligence Artificielle & Inférence Locale (Ollama)</h2>
+          <p>Moteur d'inférence LLM local accéléré par GPU et autocomplétion intelligente de code pour Neovim. Les réglages sont persistés dans <code>/etc/nixos/vars.nix</code>.</p>
+        </div>
+
+        <div class="config-sections">
+
+          <!-- 1. Interrupteur Principal & État du Service -->
+          <div class="card config-card ai-hero-card">
+            <div class="card-header">
+              <div class="card-title-wrap">
+                <span class="card-icon ai-hero-icon">🧠</span>
+                <div>
+                  <h3>Service IA Ollama</h3>
+                  <p class="card-subtitle">Active ou désactive entièrement le serveur local Ollama et l'autocomplétion IA associée</p>
+                </div>
+              </div>
+              <div class="ai-header-controls">
+                <span id="ai-status-pill" class="badge-status-pill online">Actif</span>
+                <label class="switch switch-large">
+                  <input type="checkbox" id="cfg-ollama-enable">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Conteneur des options dépendantes de l'activation -->
+          <div id="ai-options-container" class="ai-options-wrapper">
+            
+            <!-- 2. Choix du Modèle de Code / LLM -->
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">⚡</span>
+                  <div>
+                    <h3>Modèle de Langage (LLM & Complétion de Code)</h3>
+                    <p class="card-subtitle">Sélectionnez le modèle préchargé au démarrage dans Ollama pour l'autocomplétion Neovim</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Presets rapides de modèles -->
+              <div class="ai-model-presets">
+                <div class="ai-preset-card active" data-model="qwen2.5-coder:7b" onclick="selectAiModel('qwen2.5-coder:7b')">
+                  <div class="ai-preset-header">
+                    <span class="ai-preset-badge recommended">⭐ Recommandé</span>
+                    <span class="ai-preset-size">~4.7 Go</span>
+                  </div>
+                  <strong>Qwen 2.5 Coder 7B</strong>
+                  <p>Idéal pour GPU 8-16 Go (RX 9070 XT). Précision syntaxique maximale et raisonnement approfondi.</p>
+                </div>
+
+                <div class="ai-preset-card" data-model="qwen2.5-coder:3b" onclick="selectAiModel('qwen2.5-coder:3b')">
+                  <div class="ai-preset-header">
+                    <span class="ai-preset-badge fast">🚀 Ultra-Rapide</span>
+                    <span class="ai-preset-size">~2.0 Go</span>
+                  </div>
+                  <strong>Qwen 2.5 Coder 3B</strong>
+                  <p>Léger et instantané. Recommandé pour libérer un maximum de mémoire VRAM pour le gaming.</p>
+                </div>
+
+                <div class="ai-preset-card" data-model="qwen2.5-coder:1.5b" onclick="selectAiModel('qwen2.5-coder:1.5b')">
+                  <div class="ai-preset-header">
+                    <span class="ai-preset-badge light">🪶 Plume</span>
+                    <span class="ai-preset-size">~1.0 Go</span>
+                  </div>
+                  <strong>Qwen 2.5 Coder 1.5B</strong>
+                  <p>Modèle miniature à latence quasi-nulle. Idéal pour les configurations d'entrée de gamme ou CPU.</p>
+                </div>
+
+                <div class="ai-preset-card" data-model="deepseek-r1:8b" onclick="selectAiModel('deepseek-r1:8b')">
+                  <div class="ai-preset-header">
+                    <span class="ai-preset-badge reasoning">🧠 Raisonnement</span>
+                    <span class="ai-preset-size">~4.9 Go</span>
+                  </div>
+                  <strong>DeepSeek R1 8B</strong>
+                  <p>Modèle de réflexion pas-à-pas spécialisé en logique complexe, algorithmes et mathématiques.</p>
+                </div>
+              </div>
+
+              <div class="ai-custom-input-wrap">
+                <label for="cfg-ollama-model">
+                  <strong>Modèle personnalisé :</strong>
+                  <small>Entrez n'importe quel identifiant de modèle du catalogue Ollama (ex: <code>codellama</code>, <code>llama3.1:8b</code>)</small>
+                </label>
+                <input type="text" id="cfg-ollama-model" class="input-styled" placeholder="qwen2.5-coder:7b">
+              </div>
+            </div>
+
+            <!-- 3. Accélération Matérielle & Détection GPU -->
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🎮</span>
+                  <div>
+                    <h3>Accélération Matérielle & Détection GPU</h3>
+                    <p class="card-subtitle">Sélectionnez le backend d'accélération matérielle ou laissez la détection automatique</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-grid-two-col">
+                <div class="ai-field-group">
+                  <label for="cfg-ollama-acceleration">
+                    <strong>Mode d'accélération matérielle :</strong>
+                    <small>Détermine le backend d'exécution d'Ollama</small>
+                  </label>
+                  <select id="cfg-ollama-acceleration" class="select-styled">
+                    <option value="auto">🔄 Détection Automatique (AMD ROCm / NVIDIA CUDA / CPU)</option>
+                    <option value="rocm">🔴 Forcer AMD ROCm (Radeon RX)</option>
+                    <option value="cuda">🟢 Forcer NVIDIA CUDA (GeForce / RTX)</option>
+                    <option value="cpu">⚪ Forcer CPU uniquement (Sans déchargement GPU)</option>
+                  </select>
+                </div>
+
+                <div class="ai-field-group">
+                  <label for="cfg-ollama-rocm-gfx">
+                    <strong>Override Architecture ROCm (HSA_OVERRIDE_GFX_VERSION) :</strong>
+                    <small>Requis pour les architectures AMD récentes (ex: 12.0.1 pour RDNA 4)</small>
+                  </label>
+                  <input type="text" id="cfg-ollama-rocm-gfx" class="input-styled" placeholder="ex: 12.0.1 (défaut automatique RX 9070 XT)">
+                  <div class="ai-quick-tags">
+                    <span class="ai-tag-chip" onclick="setRocmGfx('12.0.1')">12.0.1 (RX 9070 XT / RDNA 4)</span>
+                    <span class="ai-tag-chip" onclick="setRocmGfx('11.0.0')">11.0.0 (RX 7900 / RDNA 3)</span>
+                    <span class="ai-tag-chip" onclick="setRocmGfx('10.3.0')">10.3.0 (RX 6000 / RDNA 2)</span>
+                    <span class="ai-tag-chip clear" onclick="setRocmGfx('')">Effacer (Auto)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Configuration Réseau & Port -->
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🌐</span>
+                  <div>
+                    <h3>Paramètres Réseau & Écoute</h3>
+                    <p class="card-subtitle">Port d'écoute du serveur HTTP compatible OpenAI</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-grid-two-col">
+                <div class="ai-field-group">
+                  <label for="cfg-ollama-port">
+                    <strong>Port TCP d'écoute :</strong>
+                    <small>Standard natif Ollama (défaut : 11434)</small>
+                  </label>
+                  <input type="number" id="cfg-ollama-port" class="input-styled" value="11434" min="1024" max="65535">
+                </div>
+
+                <div class="ai-field-group">
+                  <label>
+                    <strong>Interface d'écoute :</strong>
+                    <small>Sécurité : écoute locale pour protéger vos données et code</small>
+                  </label>
+                  <input type="text" class="input-styled disabled" value="127.0.0.1 (Localhost uniquement)" disabled>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Intégration Neovim & Statut -->
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">📝</span>
+                  <div>
+                    <h3>Intégration Neovim (Autocomplétion Ghost-Text)</h3>
+                    <p class="card-subtitle">Plugin <code>minuet-ai.nvim</code> connecté au backend Fill-In-The-Middle (FIM)</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-neovim-info-grid">
+                <div class="ai-info-box">
+                  <span class="ai-info-icon">🔌</span>
+                  <div class="ai-info-text">
+                    <strong>Endpoint FIM actif</strong>
+                    <code>http://127.0.0.1:11434/v1/completions</code>
+                  </div>
+                </div>
+                <div class="ai-info-box">
+                  <span class="ai-info-icon">⌨️</span>
+                  <div class="ai-info-text">
+                    <strong>Raccourcis Clavier en Mode Insertion</strong>
+                    <div class="ai-shortcuts-list">
+                      <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>y</kbd> : Accepter tout</span>
+                      <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>l</kbd> : Accepter la ligne</span>
+                      <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>]</kbd> : Suivant</span>
+                      <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>e</kbd> : Ignorer</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
         <!-- Bandeau d'action flottant épinglé en bas (Visible uniquement si modifications) -->
         <div id="config-floating-bar" class="config-floating-bar hidden">
           <div class="config-bar-inner">
@@ -2262,9 +2464,7 @@
             </div>
           </div>
         </div>
-      </section>
 
-    
       <!-- ==================== TAB 5: NIXPKGS STORE & CUSTOM PACKAGES ==================== -->
       <section id="tab-packages" class="tab-content">
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px;">

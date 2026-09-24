@@ -577,7 +577,25 @@ function populateConfigUI(c) {
   setCheck("cfg-ide-zed", c.creation.zed);
   setCheck("cfg-ide-antigravity", c.creation.antigravity);
   setCheck("cfg-ide-vscode", c.creation.vscode);
-  setCheck("cfg-omniroute", c.creation.omniroute);
+
+  // Ollama AI Suite
+  if (c.ollama) {
+    setCheck("cfg-ollama-enable", c.ollama.enable);
+    const modelInput = document.getElementById("cfg-ollama-model");
+    if (modelInput) modelInput.value = c.ollama.model || "qwen2.5-coder:7b";
+
+    const accelSelect = document.getElementById("cfg-ollama-acceleration");
+    if (accelSelect) accelSelect.value = c.ollama.acceleration || "auto";
+
+    const portInput = document.getElementById("cfg-ollama-port");
+    if (portInput) portInput.value = c.ollama.port || 11434;
+
+    const rocmInput = document.getElementById("cfg-ollama-rocm-gfx");
+    if (rocmInput) rocmInput.value = c.ollama.rocm_override_gfx || "";
+
+    updateAiPresetUI(c.ollama.model || "qwen2.5-coder:7b");
+    updateAiStatusUI(c.ollama.enable);
+  }
 
   updateCategoryPillCounters();
   checkDirtyState();
@@ -594,12 +612,18 @@ function setCheck(id, val) {
 }
 
 function attachConfigChangeListeners() {
-  const inputs = document.querySelectorAll("#tab-config input");
+  const inputs = document.querySelectorAll("#tab-config input, #tab-config select, #tab-ai input, #tab-ai select");
   inputs.forEach(input => {
     input.addEventListener("change", () => {
       readConfigFromUI();
       checkDirtyState();
     });
+    if (input.type === "text" || input.type === "number") {
+      input.addEventListener("input", () => {
+        readConfigFromUI();
+        checkDirtyState();
+      });
+    }
   });
 }
 
@@ -674,7 +698,27 @@ function readConfigFromUI() {
   currentConfig.creation.zed = isChecked("cfg-ide-zed");
   currentConfig.creation.antigravity = isChecked("cfg-ide-antigravity");
   currentConfig.creation.vscode = isChecked("cfg-ide-vscode");
-  currentConfig.creation.omniroute = isChecked("cfg-omniroute");
+
+  // Ollama AI Suite
+  if (!currentConfig.ollama) currentConfig.ollama = {};
+  currentConfig.ollama.enable = isChecked("cfg-ollama-enable");
+
+  const modelInput = document.getElementById("cfg-ollama-model");
+  if (modelInput) currentConfig.ollama.model = modelInput.value.trim() || "qwen2.5-coder:7b";
+
+  const accelSelect = document.getElementById("cfg-ollama-acceleration");
+  if (accelSelect) currentConfig.ollama.acceleration = accelSelect.value;
+
+  const portInput = document.getElementById("cfg-ollama-port");
+  if (portInput) currentConfig.ollama.port = parseInt(portInput.value, 10) || 11434;
+
+  const rocmInput = document.getElementById("cfg-ollama-rocm-gfx");
+  if (rocmInput) {
+    const val = rocmInput.value.trim();
+    currentConfig.ollama.rocm_override_gfx = val ? val : null;
+  }
+
+  updateAiStatusUI(currentConfig.ollama.enable);
 
   updateCategoryPillCounters();
 }
@@ -718,7 +762,7 @@ function updateCategoryPillCounters() {
   updateCount("audio", 2);
   updateCount("creation3d", 2);
   updateCount("printing3d", 4);
-  updateCount("system", 7);
+  updateCount("system", 6);
 }
 
 function isChecked(id) {
@@ -733,10 +777,36 @@ function checkDirtyState() {
 
   if (!bar) return;
 
+  const configBadge = document.getElementById("config-dirty-badge");
+  const aiBadge = document.getElementById("ai-dirty-badge");
+
   if (!isDirty) {
     bar.classList.add("hidden");
     bar.classList.remove("visible", "de-change");
+    if (configBadge) configBadge.classList.add("hidden");
+    if (aiBadge) aiBadge.classList.add("hidden");
     return;
+  }
+
+  if (initialCfg && currentConfig) {
+    const aiDirty = JSON.stringify(currentConfig.ollama) !== JSON.stringify(initialCfg.ollama);
+    if (aiBadge) {
+      if (aiDirty) aiBadge.classList.remove("hidden");
+      else aiBadge.classList.add("hidden");
+    }
+
+    const appDirty = (
+      JSON.stringify(currentConfig.desktop_env) !== JSON.stringify(initialCfg.desktop_env) ||
+      JSON.stringify(currentConfig.gaming) !== JSON.stringify(initialCfg.gaming) ||
+      JSON.stringify(currentConfig.emulation) !== JSON.stringify(initialCfg.emulation) ||
+      JSON.stringify(currentConfig.media) !== JSON.stringify(initialCfg.media) ||
+      JSON.stringify(currentConfig.creation) !== JSON.stringify(initialCfg.creation) ||
+      JSON.stringify(currentConfig.slicers) !== JSON.stringify(initialCfg.slicers)
+    );
+    if (configBadge) {
+      if (appDirty) configBadge.classList.remove("hidden");
+      else configBadge.classList.add("hidden");
+    }
   }
 
   bar.classList.remove("hidden");
@@ -7093,3 +7163,55 @@ window.clearFastfetchEditor = clearFastfetchEditor;
 window.formatFastfetchEditor = formatFastfetchEditor;
 window.toggleFastfetchTerminalExpand = toggleFastfetchTerminalExpand;
 window.toggleFastfetchRenderMode = toggleFastfetchRenderMode;
+
+
+// ==================== OLLAMA & IA HELPERS ====================
+function updateAiStatusUI(enabled) {
+  const pill = document.getElementById("ai-status-pill");
+  const optionsContainer = document.getElementById("ai-options-container");
+  if (pill) {
+    if (enabled) {
+      pill.className = "badge-status-pill online";
+      pill.textContent = "Actif • Prêt pour Neovim";
+    } else {
+      pill.className = "badge-status-pill offline";
+      pill.textContent = "Désactivé";
+    }
+  }
+  if (optionsContainer) {
+    if (enabled) {
+      optionsContainer.classList.remove("ai-disabled-section");
+    } else {
+      optionsContainer.classList.add("ai-disabled-section");
+    }
+  }
+}
+
+function selectAiModel(modelName) {
+  const modelInput = document.getElementById("cfg-ollama-model");
+  if (modelInput) {
+    modelInput.value = modelName;
+    updateAiPresetUI(modelName);
+    readConfigFromUI();
+    checkDirtyState();
+  }
+}
+
+function updateAiPresetUI(selectedModel) {
+  document.querySelectorAll(".ai-preset-card").forEach(card => {
+    if (card.getAttribute("data-model") === selectedModel) {
+      card.classList.add("active");
+    } else {
+      card.classList.remove("active");
+    }
+  });
+}
+
+function setRocmGfx(val) {
+  const rocmInput = document.getElementById("cfg-ollama-rocm-gfx");
+  if (rocmInput) {
+    rocmInput.value = val;
+    readConfigFromUI();
+    checkDirtyState();
+  }
+}

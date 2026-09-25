@@ -81,7 +81,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.5.3 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.5.4 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2515,6 +2515,181 @@
                       <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>l</kbd> : Accepter la ligne</span>
                       <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>]</kbd> : Suivant</span>
                       <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>e</kbd> : Ignorer</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 7. Assistant CLI & Terminal (AIChat) -->
+            <div class="card config-card aichat-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🤖</span>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <h3>Assistant IA Terminal (AIChat)</h3>
+                      <span class="badge badge-info" style="font-size: 0.72rem;">CLI • REPL</span>
+                    </div>
+                    <p class="card-subtitle">Client terminal tout-en-un ultra-rapide préconfiguré avec Ollama local, avec autocomplétion intelligente et support Bash, Fish et Zsh</p>
+                  </div>
+                </div>
+                <div class="ai-header-controls">
+                  <span id="aichat-status-pill" class="badge-status-pill">Désactivé</span>
+                  <label class="switch" title="Activer ou désactiver le client CLI AIChat">
+                    <input type="checkbox" id="cfg-ollama-aichat">
+                  </label>
+                </div>
+              </div>
+
+              <!-- Bannière Intégration Shell -->
+              <div class="aichat-shell-banner">
+                <div class="aichat-shell-info">
+                  <span class="aichat-shell-icon">🐚</span>
+                  <div class="aichat-shell-text">
+                    <strong>Intégration Shell Universelle Active</strong>
+                    <p>Compatible nativement avec <strong>Bash</strong>, <strong>Fish</strong> et <strong>Zsh</strong>. Utilisez l'alias rapide <code>ai</code> ou le raccourci magique <kbd>Alt</kbd> + <kbd>e</kbd> directement dans votre invite de commande pour transformer du texte naturel en commande shell.</p>
+                  </div>
+                </div>
+                <div class="aichat-shell-badges">
+                  <span class="ai-kbd-badge"><kbd>Alt</kbd> + <kbd>e</kbd> : Compléter la commande</span>
+                  <span class="ai-kbd-badge"><code>ai</code> = <code>aichat</code></span>
+                </div>
+              </div>
+
+              <!-- Section Guide des commandes principales -->
+              <div class="aichat-cheatsheet-wrap">
+                <div class="aichat-cheatsheet-title">
+                  <span>📖</span>
+                  <strong>Guide des Commandes Principales de AIChat</strong>
+                </div>
+
+                <div class="aichat-cheatsheet-grid">
+                  <!-- Catégorie 1: Mode Conversation & REPL -->
+                  <div class="aichat-cmd-category">
+                    <div class="aichat-cat-header">
+                      <span class="aichat-cat-icon">💬</span>
+                      <strong>Mode Interactif & REPL</strong>
+                    </div>
+                    
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Lance une session interactive REPL avec streaming immédiat.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat -s session_dev</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat -s session_dev', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Démarre ou reprend une session persistante avec mémoire de contexte.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">.help / .exit</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('.help', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Affiche les commandes internes du REPL ou quitte le chat.</span>
+                    </div>
+                  </div>
+
+                  <!-- Catégorie 2: Génération Shell & Code -->
+                  <div class="aichat-cmd-category">
+                    <div class="aichat-cat-header">
+                      <span class="aichat-cat-icon">⚡</span>
+                      <strong>Génération de Commandes & Code</strong>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat -e "lister conteneurs docker"</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat -e &quot;lister conteneurs docker&quot;', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Génère une commande shell prête à être exécutée ou modifiée.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat -c "regex email en python"</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat -c &quot;regex email en python&quot;', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Ne génère que le bloc de code brut, idéal pour scripter ou rediriger vers un fichier.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">&lt;prompt dans le terminal&gt; + Alt+e</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('Alt+e', this)" title="Copier le raccourci">⌨️</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Raccourci magique : tapez votre prompt dans le shell et appuyez sur <kbd>Alt</kbd>+<kbd>e</kbd>.</span>
+                    </div>
+                  </div>
+
+                  <!-- Catégorie 3: Pipes Unix & Fichiers -->
+                  <div class="aichat-cmd-category">
+                    <div class="aichat-cat-header">
+                      <span class="aichat-cat-icon">🔗</span>
+                      <strong>Pipes Unix & Analyse de Fichiers</strong>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">journalctl -xe | aichat "Diagnostique l'erreur"</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('journalctl -xe | aichat &quot;Diagnostique l'erreur&quot;', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Injecte la sortie d'une commande ou des logs système directement dans l'IA.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat -f src/main.rs "Analyse le code"</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat -f src/main.rs &quot;Analyse le code&quot;', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Inclus un fichier ou dossier source pour analyse ou refactorisation.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">git diff | aichat "Génère un commit conventionnel"</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('git diff | aichat &quot;Génère un commit conventionnel&quot;', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Génère automatiquement une description de commit à partir de votre git diff.</span>
+                    </div>
+                  </div>
+
+                  <!-- Catégorie 4: Rôles & Modèles -->
+                  <div class="aichat-cmd-category">
+                    <div class="aichat-cat-header">
+                      <span class="aichat-cat-icon">🛠️</span>
+                      <strong>Rôles & Modèles</strong>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat --list-models</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat --list-models', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Liste les modèles IA configurés et disponibles localement sur Ollama.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat --list-roles</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat --list-roles', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Affiche tous les rôles et personas préconfigurés ou personnalisés.</span>
+                    </div>
+
+                    <div class="aichat-cmd-item">
+                      <div class="aichat-cmd-code-row">
+                        <code class="aichat-cmd-code">aichat --info</code>
+                        <button type="button" class="btn-copy-cmd" onclick="copyAichatCmd('aichat --info', this)" title="Copier la commande">📋</button>
+                      </div>
+                      <span class="aichat-cmd-desc">Affiche la configuration active, les chemins de fichiers et le modèle actif.</span>
                     </div>
                   </div>
                 </div>

@@ -92,6 +92,8 @@ pub struct OllamaConfig {
     pub rocm_override_gfx: Option<String>,
     #[serde(default)]
     pub system_prompt: Option<String>,
+    #[serde(default)]
+    pub aichat: bool,
 }
 
 fn default_true() -> bool { true }
@@ -108,6 +110,7 @@ impl Default for OllamaConfig {
             port: default_ollama_port(),
             rocm_override_gfx: None,
             system_prompt: None,
+            aichat: false,
         }
     }
 }
@@ -430,6 +433,9 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
         .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "rocmOverrideGfx")));
     cfg.ollama.system_prompt = extract_string_var_in_block(&content, "ollama", "systemPrompt")
         .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "systemPrompt")));
+    cfg.ollama.aichat = extract_bool_var_in_block(&content, "ollama", "aichat")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "ollama", "aichat")))
+        .unwrap_or(false);
 
     Ok(cfg)
 }
@@ -612,7 +618,8 @@ r#"{{
     acceleration = "{ollama_acceleration}";
     model = "{ollama_model}";
     port = {ollama_port};
-{ollama_rocm_override}{ollama_system_prompt}  }};
+{ollama_rocm_override}{ollama_system_prompt}    aichat = {ollama_aichat};
+  }};
 }}
 "#,
         hostname = c.host_name,
@@ -690,6 +697,7 @@ r#"{{
         } else {
             "".to_string()
         },
+        ollama_aichat = c.ollama.aichat,
         ollama_system_prompt = if let Some(ref prompt) = c.ollama.system_prompt {
             let trimmed = prompt.trim();
             if !trimmed.is_empty() {
@@ -1078,12 +1086,14 @@ mod tests {
         cfg.ollama.model = "qwen2.5-coder:3b".to_string();
         cfg.ollama.rocm_override_gfx = Some("12.0.1".to_string());
         cfg.ollama.system_prompt = Some("Tu es un assistant concis.".to_string());
+        cfg.ollama.aichat = true;
 
         let generated = generate_vars_nix_content(&cfg);
         assert!(generated.contains("ollama = {"));
         assert!(generated.contains(r#"model = "qwen2.5-coder:3b";"#));
         assert!(generated.contains(r#"rocmOverrideGfx = "12.0.1";"#));
         assert!(generated.contains(r#"systemPrompt = "Tu es un assistant concis.";"#));
+        assert!(generated.contains("aichat = true;"));
     }
 
     #[test]

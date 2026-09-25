@@ -601,6 +601,9 @@ function populateConfigUI(c) {
       updateSystemPromptCounter();
     }
 
+    setCheck("cfg-ollama-aichat", c.ollama.aichat);
+    updateAichatStatusUI(c.ollama.aichat);
+
     updateAiPresetUI(c.ollama.model || "qwen2.5-coder:7b");
     updateAiStatusUI(c.ollama.enable);
     if (c.ollama.enable) checkAllOllamaModels(false);
@@ -735,6 +738,9 @@ function readConfigFromUI() {
     const val = sysPromptInput.value.trim();
     currentConfig.ollama.system_prompt = val ? val : null;
   }
+
+  currentConfig.ollama.aichat = isChecked("cfg-ollama-aichat");
+  updateAichatStatusUI(currentConfig.ollama.aichat);
 
   updateAiStatusUI(currentConfig.ollama.enable);
 
@@ -7800,3 +7806,38 @@ function setAiSystemPrompt(text) {
 }
 window.setAiSystemPrompt = setAiSystemPrompt;
 window.updateSystemPromptCounter = updateSystemPromptCounter;
+
+
+function updateAichatStatusUI(enabled) {
+  const sw = document.getElementById("cfg-ollama-aichat");
+  if (sw && sw.checked !== !!enabled) {
+    sw.checked = !!enabled;
+  }
+  const pill = document.getElementById("aichat-status-pill");
+  if (pill) {
+    if (enabled) {
+      pill.className = "badge-status-pill online";
+      pill.textContent = "Actif • Shells intégrés";
+    } else {
+      pill.className = "badge-status-pill offline";
+      pill.textContent = "Désactivé";
+    }
+  }
+}
+
+function copyAichatCmd(text, btn) {
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = "✓";
+      btn.classList.add("copied");
+      setTimeout(() => {
+        btn.innerHTML = orig;
+        btn.classList.remove("copied");
+      }, 1500);
+    }
+  }).catch(err => {
+    console.error("Erreur copie clipboard :", err);
+  });
+}

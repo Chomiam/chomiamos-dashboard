@@ -81,7 +81,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.5.1 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.5.2 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2257,9 +2257,8 @@
               </div>
               <div class="ai-header-controls">
                 <span id="ai-status-pill" class="badge-status-pill online">Actif</span>
-                <label class="switch switch-large">
+                <label class="switch" title="Activer ou désactiver le service Ollama">
                   <input type="checkbox" id="cfg-ollama-enable">
-                  <span class="slider"></span>
                 </label>
               </div>
             </div>
@@ -2703,9 +2702,8 @@
 
             <!-- Global Enable/Disable Toggle -->
             <div class="fw-master-toggle-wrap">
-              <label class="switch-toggle master-switch">
+              <label class="switch" title="Activer ou désactiver le pare-feu">
                 <input type="checkbox" id="fw-global-switch" onchange="toggleFirewallGlobal(this.checked)">
-                <span class="slider round"></span>
               </label>
               <div class="master-toggle-text">
                 <strong id="fw-toggle-label">Pare-feu Désactivé</strong>
@@ -3135,9 +3133,8 @@
                     <label class="sftp-switch-label" for="sftp-toggle-enable">
                       <span>Bloc OpenSSH :</span>
                     </label>
-                    <label class="switch">
+                    <label class="switch" title="Activer ou désactiver OpenSSH">
                       <input type="checkbox" id="sftp-toggle-enable" checked onchange="toggleSftpServiceFromUI(this.checked)">
-                      <span class="slider round"></span>
                     </label>
                   </div>
                 </div>

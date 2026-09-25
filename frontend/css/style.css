@@ -868,7 +868,8 @@ body {
 }
 
 /* Custom Switch */
-.switch {
+.switch,
+.switch-toggle {
   width: 44px;
   height: 24px;
   background-color: var(--surface1);
@@ -876,9 +877,32 @@ body {
   position: relative;
   transition: var(--transition-fast);
   flex-shrink: 0;
+  display: inline-block;
+  cursor: pointer;
+  user-select: none;
+  vertical-align: middle;
 }
 
-.switch::after {
+/* Hide native checkbox inside standalone switches */
+.switch input,
+.switch-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* If a dummy .slider element is present in HTML, ignore/hide it */
+.switch .slider,
+.switch-toggle .slider {
+  display: none;
+}
+
+.switch::after,
+.switch-toggle::after {
   content: '';
   position: absolute;
   width: 18px;
@@ -890,13 +914,31 @@ body {
   transition: var(--transition-fast);
 }
 
-.toggle-card input:checked ~ .switch {
+/* Active / Checked state */
+.toggle-card input:checked ~ .switch,
+.toggle-card:has(input:checked) .switch,
+.switch:has(input:checked),
+.switch-toggle:has(input:checked) {
   background-color: var(--green);
 }
 
-.toggle-card input:checked ~ .switch::after {
+.toggle-card input:checked ~ .switch::after,
+.toggle-card:has(input:checked) .switch::after,
+.switch:has(input:checked)::after,
+.switch-toggle:has(input:checked)::after {
   transform: translateX(20px);
   background-color: var(--crust);
+}
+
+.switch:hover,
+.switch-toggle:hover {
+  filter: brightness(1.1);
+}
+
+.switch:has(input:focus-visible),
+.switch-toggle:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Terminal Modal / Live Stream */

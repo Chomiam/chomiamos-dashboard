@@ -7217,6 +7217,10 @@ function getCurrentSelectedModel() {
 }
 
 function updateAiStatusUI(enabled) {
+  const sw = document.getElementById("cfg-ollama-enable");
+  if (sw && sw.checked !== !!enabled) {
+    sw.checked = !!enabled;
+  }
   const pill = document.getElementById("ai-status-pill");
   const optionsContainer = document.getElementById("ai-options-container");
   if (pill) {

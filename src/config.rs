@@ -90,6 +90,8 @@ pub struct OllamaConfig {
     pub port: u16,
     #[serde(default)]
     pub rocm_override_gfx: Option<String>,
+    #[serde(default)]
+    pub system_prompt: Option<String>,
 }
 
 fn default_true() -> bool { true }
@@ -105,6 +107,7 @@ impl Default for OllamaConfig {
             model: default_ollama_model(),
             port: default_ollama_port(),
             rocm_override_gfx: None,
+            system_prompt: None,
         }
     }
 }
@@ -425,6 +428,8 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     }
     cfg.ollama.rocm_override_gfx = extract_string_var_in_block(&content, "ollama", "rocmOverrideGfx")
         .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "rocmOverrideGfx")));
+    cfg.ollama.system_prompt = extract_string_var_in_block(&content, "ollama", "systemPrompt")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_string_var_in_block(d, "ollama", "systemPrompt")));
 
     Ok(cfg)
 }
@@ -607,7 +612,7 @@ r#"{{
     acceleration = "{ollama_acceleration}";
     model = "{ollama_model}";
     port = {ollama_port};
-{ollama_rocm_override}  }};
+{ollama_rocm_override}{ollama_system_prompt}  }};
 }}
 "#,
         hostname = c.host_name,
@@ -685,6 +690,20 @@ r#"{{
         } else {
             "".to_string()
         },
+        ollama_system_prompt = if let Some(ref prompt) = c.ollama.system_prompt {
+            let trimmed = prompt.trim();
+            if !trimmed.is_empty() {
+                if trimmed.contains('\n') || trimmed.contains('"') {
+                    format!("    systemPrompt = ''\n      {}\n    '';\n", trimmed.replace("''", "'''"))
+                } else {
+                    format!("    systemPrompt = \"{}\";\n", trimmed)
+                }
+            } else {
+                "".to_string()
+            }
+        } else {
+            "".to_string()
+        },
     )
 }
 
@@ -716,8 +735,19 @@ fn extract_user_block(text: &str) -> Option<String> {
 }
 
 fn extract_string_var(text: &str, var_name: &str) -> Option<String> {
-    let re = regex::Regex::new(&format!(r#"{}\s*=\s*"([^"]+)""#, var_name)).ok()?;
-    re.captures(text).map(|cap| cap[1].to_string())
+    // 1. Double-quoted string: var = "..."
+    if let Ok(re) = regex::Regex::new(&format!(r#"{}\s*=\s*"([^"\\]*(?:\\.[^"\\]*)*)""#, regex::escape(var_name))) {
+        if let Some(cap) = re.captures(text) {
+            return Some(cap[1].replace(r#"\""#, r#"""#).replace(r#"\n"#, "\n"));
+        }
+    }
+    // 2. Nix multiline string: var = ''...''
+    if let Ok(re_ml) = regex::Regex::new(&format!(r#"{}\s*=\s*''([\s\S]*?)''"#, regex::escape(var_name))) {
+        if let Some(cap) = re_ml.captures(text) {
+            return Some(cap[1].trim().to_string());
+        }
+    }
+    None
 }
 
 fn extract_bool_var(text: &str, var_name: &str) -> Option<bool> {
@@ -1047,11 +1077,13 @@ mod tests {
 
         cfg.ollama.model = "qwen2.5-coder:3b".to_string();
         cfg.ollama.rocm_override_gfx = Some("12.0.1".to_string());
+        cfg.ollama.system_prompt = Some("Tu es un assistant concis.".to_string());
 
         let generated = generate_vars_nix_content(&cfg);
         assert!(generated.contains("ollama = {"));
         assert!(generated.contains(r#"model = "qwen2.5-coder:3b";"#));
         assert!(generated.contains(r#"rocmOverrideGfx = "12.0.1";"#));
+        assert!(generated.contains(r#"systemPrompt = "Tu es un assistant concis.";"#));
     }
 
     #[test]

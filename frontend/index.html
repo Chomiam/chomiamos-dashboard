@@ -81,7 +81,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.5.2 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.5.3 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2382,7 +2382,38 @@
               </div>
             </div>
 
-            <!-- 3. Accélération Matérielle & Détection GPU -->
+            <!-- 3. Prompt Système Global (Directives Personnalisées) -->
+            <div class="card config-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">📜</span>
+                  <div>
+                    <h3>Prompt Système Global (System Prompt)</h3>
+                    <p class="card-subtitle">Directives racine et rôle injectés par défaut au modèle d'autocomplétion Neovim et aux requêtes IA</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-system-prompt-wrap">
+                <div class="ai-system-prompt-header">
+                  <label for="cfg-ollama-system-prompt">
+                    <strong>Instructions Système & Contexte Général :</strong>
+                    <small>Définit le comportement, la concision et les conventions de code respectées par le modèle</small>
+                  </label>
+                  <span class="ai-prompt-len" id="ai-system-prompt-counter">0 caractère</span>
+                </div>
+                <textarea id="cfg-ollama-system-prompt" class="ai-system-prompt-textarea" rows="4" placeholder="Exemple : Tu es un assistant expert en programmation (Rust, Nix, TypeScript, Python). Sois concis, direct et produis du code idiomatique sans verbiage superflu."></textarea>
+
+                <div class="ai-quick-tags" style="margin-top: 10px;">
+                  <span class="ai-tag-chip" onclick="setAiSystemPrompt('Tu es un assistant de programmation expert. Sois concis, direct et produis uniquement du code idiomatique et sécurisé sans explications superflues.')">💻 Développeur Concis</span>
+                  <span class="ai-tag-chip" onclick="setAiSystemPrompt('Tu es un ingénieur système senior spécialisé en Linux, NixOS et architecture logicielle. Réponds avec précision et pragmatisme.')">❄️ Spécialiste NixOS</span>
+                  <span class="ai-tag-chip" onclick="setAiSystemPrompt('Complète le code de manière optimale selon le contexte environnant. Pas de commentaires inutiles, respecte strictement les conventions du projet.')">⚡ Complétion FIM</span>
+                  <span class="ai-tag-chip clear" onclick="setAiSystemPrompt('')">Effacer (Par défaut)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Accélération Matérielle & Détection GPU -->
             <div class="card config-card">
               <div class="card-header">
                 <div class="card-title-wrap">
@@ -2424,7 +2455,7 @@
               </div>
             </div>
 
-            <!-- 4. Configuration Réseau & Port -->
+            <!-- 5. Configuration Réseau & Port -->
             <div class="card config-card">
               <div class="card-header">
                 <div class="card-title-wrap">
@@ -2455,7 +2486,7 @@
               </div>
             </div>
 
-            <!-- 5. Intégration Neovim & Statut -->
+            <!-- 6. Intégration Neovim & Statut -->
             <div class="card config-card">
               <div class="card-header">
                 <div class="card-title-wrap">

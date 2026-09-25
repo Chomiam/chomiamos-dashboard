@@ -8470,3 +8470,49 @@ body {
   margin: 0;
   opacity: 0.85;
 }
+
+/* AI Global System Prompt */
+.ai-system-prompt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-system-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-prompt-len {
+  font-size: 0.76rem;
+  color: var(--subtext0);
+  font-family: 'JetBrains Mono\, monospace;
+  font-weight: 500;
+}
+
+.ai-system-prompt-textarea {
+  width: 100%;
+  min-height: 95px;
+  max-height: 320px;
+  resize: vertical;
+  background: rgba(17, 17, 27, 0.65);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono\, monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+.ai-system-prompt-textarea:focus {
+  border-color: var(--mauve);
+  box-shadow: 0 0 0 2px rgba(203, 166, 247, 0.2);
+  background: rgba(17, 17, 27, 0.9);
+}

@@ -595,6 +595,12 @@ function populateConfigUI(c) {
     const rocmInput = document.getElementById("cfg-ollama-rocm-gfx");
     if (rocmInput) rocmInput.value = c.ollama.rocm_override_gfx || "";
 
+    const sysPromptInput = document.getElementById("cfg-ollama-system-prompt");
+    if (sysPromptInput) {
+      sysPromptInput.value = c.ollama.system_prompt || "";
+      updateSystemPromptCounter();
+    }
+
     updateAiPresetUI(c.ollama.model || "qwen2.5-coder:7b");
     updateAiStatusUI(c.ollama.enable);
     if (c.ollama.enable) checkAllOllamaModels(false);
@@ -615,14 +621,17 @@ function setCheck(id, val) {
 }
 
 function attachConfigChangeListeners() {
-  const inputs = document.querySelectorAll("#tab-config input, #tab-config select, #tab-ai input, #tab-ai select");
+  const inputs = document.querySelectorAll("#tab-config input, #tab-config select, #tab-ai input, #tab-ai select, #tab-ai textarea");
   inputs.forEach(input => {
     input.addEventListener("change", () => {
       readConfigFromUI();
       checkDirtyState();
     });
-    if (input.type === "text" || input.type === "number") {
+    if (input.type === "text" || input.type === "number" || input.tagName === "TEXTAREA") {
       input.addEventListener("input", () => {
+        if (input.id === "cfg-ollama-system-prompt") {
+          updateSystemPromptCounter();
+        }
         readConfigFromUI();
         checkDirtyState();
       });
@@ -719,6 +728,12 @@ function readConfigFromUI() {
   if (rocmInput) {
     const val = rocmInput.value.trim();
     currentConfig.ollama.rocm_override_gfx = val ? val : null;
+  }
+
+  const sysPromptInput = document.getElementById("cfg-ollama-system-prompt");
+  if (sysPromptInput) {
+    const val = sysPromptInput.value.trim();
+    currentConfig.ollama.system_prompt = val ? val : null;
   }
 
   updateAiStatusUI(currentConfig.ollama.enable);
@@ -7764,3 +7779,24 @@ window.toggleModelLoadState = toggleModelLoadState;
 window.onCustomModelInputChanged = onCustomModelInputChanged;
 window.checkCustomModelInput = checkCustomModelInput;
 window.downloadCustomModelInput = downloadCustomModelInput;
+
+function updateSystemPromptCounter() {
+  const el = document.getElementById("cfg-ollama-system-prompt");
+  const counter = document.getElementById("ai-system-prompt-counter");
+  if (el && counter) {
+    const len = el.value.length;
+    counter.textContent = `${len} caractère${len > 1 ? "s" : ""}`;
+  }
+}
+
+function setAiSystemPrompt(text) {
+  const el = document.getElementById("cfg-ollama-system-prompt");
+  if (el) {
+    el.value = text;
+    updateSystemPromptCounter();
+    readConfigFromUI();
+    checkDirtyState();
+  }
+}
+window.setAiSystemPrompt = setAiSystemPrompt;
+window.updateSystemPromptCounter = updateSystemPromptCounter;

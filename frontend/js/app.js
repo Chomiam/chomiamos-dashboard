@@ -213,6 +213,8 @@ function initTabs() {
         } else if (targetId === "tab-firewall") {
           loadFirewallState();
           initNetworkCenter();
+        } else if (targetId === "tab-ai") {
+          checkAllOllamaModels(false);
         } else if (targetId === "tab-generations") {
           loadGenerations();
           loadUserShell();
@@ -595,6 +597,7 @@ function populateConfigUI(c) {
 
     updateAiPresetUI(c.ollama.model || "qwen2.5-coder:7b");
     updateAiStatusUI(c.ollama.enable);
+    if (c.ollama.enable) checkAllOllamaModels(false);
   }
 
   updateCategoryPillCounters();
@@ -7166,6 +7169,53 @@ window.toggleFastfetchRenderMode = toggleFastfetchRenderMode;
 
 
 // ==================== OLLAMA & IA HELPERS ====================
+
+let cachedOllamaStatus = null;
+let activeOllamaDownload = null;
+let ollamaPullListenerRegistered = false;
+
+function formatAiBytes(bytes) {
+  if (!bytes || bytes <= 0) return "0 o";
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(0)} Mo`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} Go`;
+}
+
+function matchesModelName(target, candidate) {
+  if (!target || !candidate) return false;
+  const t = target.trim().toLowerCase();
+  const c = candidate.trim().toLowerCase();
+  if (t === c) return true;
+  if (`${t}:latest` === c) return true;
+  if (`${c}:latest` === t) return true;
+  if (c.startsWith(`${t}:`)) return true;
+  return false;
+}
+
+function getCurrentOllamaPort() {
+  const portInput = document.getElementById("cfg-ollama-port");
+  if (portInput && portInput.value) {
+    const p = parseInt(portInput.value, 10);
+    if (!isNaN(p) && p > 0) return p;
+  }
+  if (currentConfig && currentConfig.ollama && currentConfig.ollama.port) {
+    return currentConfig.ollama.port;
+  }
+  return 11434;
+}
+
+function getCurrentSelectedModel() {
+  const modelInput = document.getElementById("cfg-ollama-model");
+  if (modelInput && modelInput.value.trim()) {
+    return modelInput.value.trim();
+  }
+  if (currentConfig && currentConfig.ollama && currentConfig.ollama.model) {
+    return currentConfig.ollama.model;
+  }
+  return "qwen2.5-coder:7b";
+}
+
 function updateAiStatusUI(enabled) {
   const pill = document.getElementById("ai-status-pill");
   const optionsContainer = document.getElementById("ai-options-container");
@@ -7194,6 +7244,9 @@ function selectAiModel(modelName) {
     updateAiPresetUI(modelName);
     readConfigFromUI();
     checkDirtyState();
+    if (cachedOllamaStatus) {
+      updateAllAiModelsUI(cachedOllamaStatus);
+    }
   }
 }
 
@@ -7215,3 +7268,495 @@ function setRocmGfx(val) {
     checkDirtyState();
   }
 }
+
+async function checkAllOllamaModels(showToastNotification = false) {
+  const port = getCurrentOllamaPort();
+  const checkBtn = document.getElementById("btn-check-ai-models");
+  const checkIcon = document.getElementById("ai-check-icon");
+  const checkText = document.getElementById("ai-check-text");
+
+  if (checkIcon) checkIcon.textContent = "⏳";
+  if (checkText) checkText.textContent = "Vérification...";
+  if (checkBtn) checkBtn.disabled = true;
+
+  try {
+    const status = await invoke("get_ollama_status", { port });
+    cachedOllamaStatus = status;
+
+    updateAllAiModelsUI(status);
+
+    if (showToastNotification) {
+      if (!status.online) {
+        showToast(status.error || `Ollama n'est pas accessible sur le port ${port}`, "warning");
+      } else {
+        const count = status.installed_models ? status.installed_models.length : 0;
+        const loadedCount = status.loaded_models ? status.loaded_models.length : 0;
+        showToast(
+          `Modèles IA vérifiés : ${count} installé(s) • ${loadedCount} en mémoire VRAM (Ollama v${status.version || "0.32+"})`,
+          "success"
+        );
+      }
+    }
+  } catch (err) {
+    console.error("Erreur vérification modèles Ollama:", err);
+    if (showToastNotification) {
+      showToast(`Erreur Ollama : ${err}`, "error");
+    }
+  } finally {
+    if (checkIcon) checkIcon.textContent = "🧪";
+    if (checkText) checkText.textContent = "Tester les modèles";
+    if (checkBtn) checkBtn.disabled = false;
+  }
+}
+
+function updateAllAiModelsUI(status) {
+  if (!status) return;
+
+  const currentModel = getCurrentSelectedModel();
+  const installedList = status.installed_models || [];
+  const loadedList = status.loaded_models || [];
+
+  // 1. Mise à jour de la bannière du modèle actuellement sélectionné
+  const nameEl = document.getElementById("ai-selected-model-name");
+  const installPill = document.getElementById("ai-selected-install-pill");
+  const loadPill = document.getElementById("ai-selected-load-pill");
+  const metaEl = document.getElementById("ai-selected-meta");
+  const actionsEl = document.getElementById("ai-selected-action-buttons");
+
+  if (nameEl) nameEl.textContent = currentModel;
+
+  if (!status.online) {
+    if (installPill) {
+      installPill.className = "ai-pill missing";
+      installPill.textContent = "Service Hors Ligne";
+    }
+    if (loadPill) {
+      loadPill.className = "ai-pill unloaded";
+      loadPill.textContent = "Non démarré";
+    }
+    if (metaEl) {
+      metaEl.innerHTML = `<span style="color: var(--red);">⚠️ Le serveur Ollama n'est pas accessible sur le port ${status.port}. Activez le service ou appliquez la configuration.</span>`;
+    }
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <button type="button" class="btn btn-outline btn-sm" onclick="checkAllOllamaModels(true)">
+          <span>🔄</span> Réessayer
+        </button>
+      `;
+    }
+  } else {
+    const installed = installedList.find(m => matchesModelName(currentModel, m.name) || matchesModelName(currentModel, m.model));
+    const loaded = loadedList.find(m => matchesModelName(currentModel, m.name) || matchesModelName(currentModel, m.model));
+
+    if (installPill) {
+      if (installed) {
+        installPill.className = "ai-pill installed";
+        installPill.innerHTML = `<span>✓</span> Installé (${formatAiBytes(installed.size)})`;
+      } else {
+        installPill.className = "ai-pill missing";
+        installPill.innerHTML = `<span>⚠️</span> Non installé localement`;
+      }
+    }
+
+    if (loadPill) {
+      if (loaded) {
+        const vramStr = loaded.size_vram > 0 ? `VRAM: ${formatAiBytes(loaded.size_vram)}` : `RAM: ${formatAiBytes(loaded.size)}`;
+        loadPill.className = "ai-pill loaded";
+        loadPill.innerHTML = `<span>⚡</span> Chargé en mémoire (${vramStr})`;
+      } else {
+        loadPill.className = "ai-pill unloaded";
+        loadPill.textContent = "Déchargé (En veille)";
+      }
+    }
+
+    if (metaEl) {
+      if (!installed) {
+        metaEl.innerHTML = `<span style="color: var(--peach);">Ce modèle n'est pas encore téléchargé sur ce PC. Cliquez sur <strong>Télécharger</strong> pour le récupérer interactivement.</span>`;
+      } else if (loaded) {
+        const expires = loaded.expires_at ? new Date(loaded.expires_at).toLocaleTimeString() : "Inactif";
+        const ctx = loaded.context_length ? ` • Contexte : ${loaded.context_length} tokens` : "";
+        metaEl.innerHTML = `<span style="color: var(--sapphire);">🟢 Actif dans le GPU/VRAM. Latence Neovim quasi-nulle. Libération auto si inactif à : ${expires}${ctx}.</span>`;
+      } else {
+        metaEl.innerHTML = `<span style="color: var(--subtext0);">Disponible localement. Se chargera en VRAM automatiquement dès la première utilisation dans Neovim.</span>`;
+      }
+    }
+
+    if (actionsEl) {
+      let btns = "";
+      if (!installed) {
+        btns += `
+          <button type="button" class="btn btn-primary btn-sm" onclick="openOllamaDownloadModal(event, '${escapeHtml(currentModel)}')">
+            <span>⬇️</span> Télécharger ce modèle
+          </button>
+        `;
+      } else {
+        if (loaded) {
+          btns += `
+            <button type="button" class="btn btn-outline btn-sm" onclick="doUnloadModel('${escapeHtml(currentModel)}')" title="Libère immédiatement la mémoire VRAM pour vos jeux vidéo ou autres tâches">
+              <span>⏹️</span> Décharger de la VRAM
+            </button>
+          `;
+        } else {
+          btns += `
+            <button type="button" class="btn btn-secondary btn-sm" onclick="doLoadModel('${escapeHtml(currentModel)}')" title="Précharge le modèle en mémoire VRAM pour une autocomplétion instantanée">
+              <span>⚡</span> Précharger en VRAM
+            </button>
+          `;
+        }
+      }
+      btns += `
+        <button type="button" class="btn btn-outline btn-sm" onclick="checkAllOllamaModels(false)" title="Actualiser l'état">
+          <span>🔄</span>
+        </button>
+      `;
+      actionsEl.innerHTML = btns;
+    }
+  }
+
+  // 2. Mise à jour des cartes de presets prédéfinis
+  const presetCards = document.querySelectorAll(".ai-preset-card");
+  presetCards.forEach(card => {
+    const modelTag = card.getAttribute("data-model");
+    if (!modelTag) return;
+
+    const badgeEl = document.getElementById(`ai-status-badge-${modelTag}`);
+    const actionsWrap = document.getElementById(`ai-card-actions-${modelTag}`);
+
+    if (!status.online) {
+      if (badgeEl) {
+        badgeEl.className = "ai-card-status-badge checking";
+        badgeEl.textContent = "Ollama inactif";
+      }
+      if (actionsWrap) actionsWrap.innerHTML = "";
+      return;
+    }
+
+    const inst = installedList.find(m => matchesModelName(modelTag, m.name) || matchesModelName(modelTag, m.model));
+    const isLoaded = loadedList.find(m => matchesModelName(modelTag, m.name) || matchesModelName(modelTag, m.model));
+
+    if (inst) {
+      if (isLoaded) {
+        if (badgeEl) {
+          badgeEl.className = "ai-card-status-badge loaded";
+          badgeEl.innerHTML = `<span>⚡</span> En VRAM`;
+        }
+      } else {
+        if (badgeEl) {
+          badgeEl.className = "ai-card-status-badge installed";
+          badgeEl.innerHTML = `<span>✓</span> Installé (${formatAiBytes(inst.size)})`;
+        }
+      }
+      if (actionsWrap) {
+        actionsWrap.innerHTML = `
+          <button type="button" class="btn btn-sm btn-outline ai-card-action-btn" onclick="event.stopPropagation(); toggleModelLoadState('${escapeHtml(modelTag)}', ${Boolean(isLoaded)})" title="${isLoaded ? 'Décharger de la VRAM' : 'Précharger dans la VRAM'}">
+            <span>${isLoaded ? '⏹️' : '⚡'}</span> ${isLoaded ? 'Décharger' : 'Charger'}
+          </button>
+        `;
+      }
+    } else {
+      if (badgeEl) {
+        badgeEl.className = "ai-card-status-badge missing";
+        badgeEl.innerHTML = `<span>⬇️</span> Non installé`;
+      }
+      if (actionsWrap) {
+        actionsWrap.innerHTML = `
+          <button type="button" class="btn btn-sm btn-primary ai-card-action-btn" onclick="event.stopPropagation(); openOllamaDownloadModal(event, '${escapeHtml(modelTag)}')">
+            <span>⬇️</span> Télécharger
+          </button>
+        `;
+      }
+    }
+  });
+
+  // 3. Mise à jour du feedback modèle personnalisé
+  checkCustomModelFeedback(status);
+}
+
+async function doLoadModel(modelName) {
+  const port = getCurrentOllamaPort();
+  try {
+    showToast(`Chargement de ${modelName} dans la VRAM...`, "info");
+    const res = await invoke("load_ollama_model", { model: modelName, port });
+    showToast(res, "success");
+    await checkAllOllamaModels(false);
+  } catch (err) {
+    showToast(`Erreur lors du chargement : ${err}`, "error");
+  }
+}
+
+async function doUnloadModel(modelName) {
+  const port = getCurrentOllamaPort();
+  try {
+    const res = await invoke("unload_ollama_model", { model: modelName, port });
+    showToast(res, "success");
+    await checkAllOllamaModels(false);
+  } catch (err) {
+    showToast(`Erreur lors du déchargement : ${err}`, "error");
+  }
+}
+
+async function toggleModelLoadState(modelName, currentlyLoaded) {
+  if (currentlyLoaded) {
+    await doUnloadModel(modelName);
+  } else {
+    await doLoadModel(modelName);
+  }
+}
+
+async function openOllamaDownloadModal(event, modelName) {
+  if (event && event.stopPropagation) {
+    event.stopPropagation();
+  }
+
+  activeOllamaDownload = modelName;
+  const port = getCurrentOllamaPort();
+
+  const modal = document.getElementById("modal-ollama-download");
+  const title = document.getElementById("ollama-dl-modal-title");
+  const targetName = document.getElementById("ollama-dl-target-name");
+  const serverInfo = document.getElementById("ollama-dl-server-info");
+  const statusText = document.getElementById("ollama-dl-status-text");
+  const percentEl = document.getElementById("ollama-dl-percent");
+  const bar = document.getElementById("ollama-dl-progress-bar");
+  const bytesEl = document.getElementById("ollama-dl-bytes");
+  const digestEl = document.getElementById("ollama-dl-digest");
+  const consolePre = document.getElementById("ollama-dl-console-output");
+  const successBanner = document.getElementById("ollama-dl-success-banner");
+  const errorBanner = document.getElementById("ollama-dl-error-banner");
+  const cancelBtn = document.getElementById("ollama-dl-cancel-btn");
+  const preloadBtn = document.getElementById("ollama-dl-preload-btn");
+  const closeBtn = document.getElementById("ollama-dl-close-btn");
+
+  if (title) title.textContent = `Téléchargement : ${modelName}`;
+  if (targetName) targetName.textContent = modelName;
+  if (serverInfo) serverInfo.textContent = `http://127.0.0.1:${port}`;
+  if (statusText) statusText.textContent = "Démarrage du téléchargement...";
+  if (percentEl) percentEl.textContent = "0%";
+  if (bar) {
+    bar.style.width = "0%";
+    bar.classList.add("striped");
+  }
+  if (bytesEl) bytesEl.textContent = "Connexion à Ollama...";
+  if (digestEl) digestEl.textContent = "";
+  if (consolePre) consolePre.textContent = `[${new Date().toLocaleTimeString()}] Démarrage du téléchargement pour ${modelName}...\n`;
+
+  if (successBanner) successBanner.classList.add("hidden");
+  if (errorBanner) errorBanner.classList.add("hidden");
+  if (cancelBtn) {
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    cancelBtn.innerHTML = "<span>🛑</span> Interrompre";
+  }
+  if (preloadBtn) preloadBtn.classList.add("hidden");
+  if (closeBtn) closeBtn.classList.add("hidden");
+
+  if (modal) modal.classList.remove("hidden");
+
+  // Enregistrement unique de l'écouteur d'événements Tauri
+  if (!ollamaPullListenerRegistered) {
+    ollamaPullListenerRegistered = true;
+    listenEvent("ollama-pull-progress", (event) => {
+      onOllamaPullProgress(event.payload);
+    });
+  }
+
+  try {
+    await invoke("pull_ollama_model", { model: modelName, port });
+  } catch (err) {
+    console.error("Erreur invoke pull_ollama_model:", err);
+    if (errorBanner) {
+      errorBanner.classList.remove("hidden");
+      const errEl = document.getElementById("ollama-dl-error-desc");
+      if (errEl) errEl.textContent = String(err);
+    }
+    if (bar) bar.classList.remove("striped");
+    if (cancelBtn) cancelBtn.innerHTML = "<span>✕</span> Fermer";
+  }
+}
+
+function onOllamaPullProgress(payload) {
+  if (!payload) return;
+  if (activeOllamaDownload && payload.model !== activeOllamaDownload) return;
+
+  const statusText = document.getElementById("ollama-dl-status-text");
+  const percentEl = document.getElementById("ollama-dl-percent");
+  const bar = document.getElementById("ollama-dl-progress-bar");
+  const bytesEl = document.getElementById("ollama-dl-bytes");
+  const digestEl = document.getElementById("ollama-dl-digest");
+  const consolePre = document.getElementById("ollama-dl-console-output");
+  const successBanner = document.getElementById("ollama-dl-success-banner");
+  const errorBanner = document.getElementById("ollama-dl-error-banner");
+  const cancelBtn = document.getElementById("ollama-dl-cancel-btn");
+  const preloadBtn = document.getElementById("ollama-dl-preload-btn");
+  const closeBtn = document.getElementById("ollama-dl-close-btn");
+
+  const timestamp = new Date().toLocaleTimeString();
+  let logLine = `[${timestamp}] ${payload.status}`;
+  if (payload.digest) logLine += ` (${payload.digest.substring(0, 16)}...)`;
+  if (payload.error) logLine += ` [ERREUR: ${payload.error}]`;
+
+  if (consolePre) {
+    consolePre.textContent += logLine + "\n";
+    consolePre.scrollTop = consolePre.scrollHeight;
+  }
+
+  if (payload.digest && digestEl) {
+    digestEl.textContent = payload.digest;
+  }
+
+  if (payload.status && statusText) {
+    let friendly = payload.status;
+    if (friendly.startsWith("pulling manifest")) friendly = "Récupération du manifest...";
+    else if (friendly.startsWith("downloading")) friendly = "Téléchargement des couches du modèle...";
+    else if (friendly.startsWith("verifying")) friendly = "Vérification de l'intégrité (hash sha256)...";
+    else if (friendly.startsWith("writing")) friendly = "Écriture des couches...";
+    else if (friendly.startsWith("removing")) friendly = "Nettoyage des fichiers temporaires...";
+    else if (friendly === "success") friendly = "Téléchargement terminé avec succès !";
+    statusText.textContent = friendly;
+  }
+
+  if (payload.percentage !== null && payload.percentage !== undefined) {
+    const pct = Math.min(100, Math.max(0, payload.percentage));
+    if (percentEl) percentEl.textContent = `${pct.toFixed(1)}%`;
+    if (bar) bar.style.width = `${pct}%`;
+  }
+
+  if (payload.completed && payload.total && bytesEl) {
+    bytesEl.textContent = `${formatAiBytes(payload.completed)} / ${formatAiBytes(payload.total)}`;
+  }
+
+  if (payload.error) {
+    if (bar) bar.classList.remove("striped");
+    if (errorBanner) {
+      errorBanner.classList.remove("hidden");
+      const errEl = document.getElementById("ollama-dl-error-desc");
+      if (errEl) errEl.textContent = payload.error;
+    }
+    if (cancelBtn) {
+      cancelBtn.innerHTML = "<span>✕</span> Fermer";
+    }
+  }
+
+  if (payload.done && !payload.error) {
+    if (bar) {
+      bar.style.width = "100%";
+      bar.classList.remove("striped");
+    }
+    if (percentEl) percentEl.textContent = "100%";
+    if (successBanner) successBanner.classList.remove("hidden");
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+    if (preloadBtn) preloadBtn.classList.remove("hidden");
+    if (closeBtn) closeBtn.classList.remove("hidden");
+
+    checkAllOllamaModels(false);
+  }
+}
+
+async function cancelOllamaDownload() {
+  if (activeOllamaDownload) {
+    try {
+      await invoke("cancel_ollama_pull", { model: activeOllamaDownload });
+    } catch (e) {
+      console.warn("Erreur annulation pull:", e);
+    }
+  }
+  closeOllamaDownloadModal();
+}
+
+function closeOllamaDownloadModal() {
+  const modal = document.getElementById("modal-ollama-download");
+  if (modal) modal.classList.add("hidden");
+  activeOllamaDownload = null;
+  checkAllOllamaModels(false);
+}
+
+async function preloadDownloadedModel() {
+  if (activeOllamaDownload) {
+    const m = activeOllamaDownload;
+    closeOllamaDownloadModal();
+    await doLoadModel(m);
+  } else {
+    closeOllamaDownloadModal();
+  }
+}
+
+function onCustomModelInputChanged(val) {
+  readConfigFromUI();
+  checkDirtyState();
+  updateAiPresetUI(val);
+  checkCustomModelFeedback(cachedOllamaStatus);
+}
+
+function checkCustomModelFeedback(status) {
+  const input = document.getElementById("cfg-ollama-model");
+  const feedbackWrap = document.getElementById("ai-custom-model-feedback");
+  const badgeEl = document.getElementById("ai-custom-feedback-badge");
+  const textEl = document.getElementById("ai-custom-feedback-text");
+  const dlBtn = document.getElementById("btn-custom-model-dl");
+
+  if (!input || !feedbackWrap || !badgeEl || !textEl) return;
+
+  const val = input.value.trim();
+  if (!val) {
+    feedbackWrap.classList.add("hidden");
+    if (dlBtn) dlBtn.classList.add("hidden");
+    return;
+  }
+
+  feedbackWrap.classList.remove("hidden");
+
+  if (!status || !status.online) {
+    badgeEl.className = "ai-pill checking";
+    badgeEl.textContent = "Ollama inactif";
+    textEl.textContent = "Impossible de vérifier la présence sans le service Ollama actif.";
+    if (dlBtn) dlBtn.classList.add("hidden");
+    return;
+  }
+
+  const installedList = status.installed_models || [];
+  const loadedList = status.loaded_models || [];
+  const inst = installedList.find(m => matchesModelName(val, m.name) || matchesModelName(val, m.model));
+  const isLoaded = loadedList.find(m => matchesModelName(val, m.name) || matchesModelName(val, m.model));
+
+  if (inst) {
+    if (isLoaded) {
+      badgeEl.className = "ai-pill loaded";
+      badgeEl.innerHTML = `<span>⚡</span> En VRAM (${formatAiBytes(inst.size)})`;
+    } else {
+      badgeEl.className = "ai-pill installed";
+      badgeEl.innerHTML = `<span>✓</span> Installé (${formatAiBytes(inst.size)})`;
+    }
+    textEl.textContent = "Ce modèle est installé localement sur votre système.";
+    if (dlBtn) dlBtn.classList.add("hidden");
+  } else {
+    badgeEl.className = "ai-pill missing";
+    badgeEl.innerHTML = `<span>⬇️</span> Non installé`;
+    textEl.textContent = "Ce modèle n'est pas encore téléchargé localement.";
+    if (dlBtn) dlBtn.classList.remove("hidden");
+  }
+}
+
+async function checkCustomModelInput() {
+  await checkAllOllamaModels(true);
+}
+
+function downloadCustomModelInput() {
+  const input = document.getElementById("cfg-ollama-model");
+  if (input && input.value.trim()) {
+    openOllamaDownloadModal(null, input.value.trim());
+  }
+}
+
+window.selectAiModel = selectAiModel;
+window.setRocmGfx = setRocmGfx;
+window.checkAllOllamaModels = checkAllOllamaModels;
+window.openOllamaDownloadModal = openOllamaDownloadModal;
+window.closeOllamaDownloadModal = closeOllamaDownloadModal;
+window.cancelOllamaDownload = cancelOllamaDownload;
+window.preloadDownloadedModel = preloadDownloadedModel;
+window.doLoadModel = doLoadModel;
+window.doUnloadModel = doUnloadModel;
+window.toggleModelLoadState = toggleModelLoadState;
+window.onCustomModelInputChanged = onCustomModelInputChanged;
+window.checkCustomModelInput = checkCustomModelInput;
+window.downloadCustomModelInput = downloadCustomModelInput;

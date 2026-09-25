@@ -12,6 +12,8 @@ use network::*;
 mod sftp;
 use sftp::*;
 mod fastfetch;
+mod ollama;
+use ollama::*;
 mod systemd;
 use systemd::{list_systemd_services, control_systemd_service as do_control_systemd_service, get_systemd_logs, SystemdOverview};
 
@@ -398,7 +400,13 @@ fn start_terminal_task(
                 # 4. Installation de la version sélectionnée
                 nix profile add --refresh "$FLAKE_TARGET"
 
-                # 5. Synchronisation optionnelle de flake.lock en arrière-plan sans reconstruire tout l'OS
+                # 5. Nettoyage et purge des anciennes versions du Dashboard
+                echo -e "\n🧹 Purge et nettoyage des anciennes versions du Dashboard..."
+                nix profile wipe-history 2>/dev/null || true
+                nix-collect-garbage 2>/dev/null || true
+                echo -e "  \033[32m[✓]\033[0m Anciennes versions et historiques du Dashboard purgés avec succès"
+
+                # 6. Synchronisation optionnelle de flake.lock en arrière-plan sans reconstruire tout l'OS
                 if [ -w /etc/nixos/flake.lock ]; then
                     echo -e "\n📦 Synchronisation de flake.lock (/etc/nixos) en arrière-plan..."
                     nix flake update chomiamos-dashboard --flake /etc/nixos 2>/dev/null || true
@@ -1079,10 +1087,12 @@ fn main() {
 
     let collector = Arc::new(Mutex::new(SystemCollector::new()));
     let pty_manager = PtyManager::new();
+    let ollama_manager = OllamaManager::new();
 
     tauri::Builder::default()
         .manage(collector)
         .manage(pty_manager)
+        .manage(ollama_manager)
         .invoke_handler(tauri::generate_handler![
             get_system_metrics,
             get_generations,
@@ -1152,7 +1162,12 @@ fn main() {
             import_fastfetch_github,
             import_fastfetch_local_folder,
             import_fastfetch_archive,
-            switch_fastfetch_bundle_config
+            switch_fastfetch_bundle_config,
+            get_ollama_status,
+            load_ollama_model,
+            unload_ollama_model,
+            pull_ollama_model,
+            cancel_ollama_pull
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

@@ -8015,3 +8015,416 @@ body {
   padding: 2px 6px;
   font-weight: 600;
 }
+
+
+/* ==========================================================================
+   AI ADVANCED SUITE: MODEL STATUS & INTERACTIVE DOWNLOAD MODAL
+   ========================================================================== */
+
+.ai-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Selected Model Status Banner */
+.ai-selected-banner {
+  background: linear-gradient(135deg, rgba(30, 30, 46, 0.95) 0%, rgba(24, 24, 37, 0.98) 100%);
+  border: 1px solid rgba(203, 166, 247, 0.3);
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-top: 14px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  position: relative;
+  overflow: hidden;
+}
+
+.ai-selected-banner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--mauve), var(--sapphire), var(--green));
+}
+
+.ai-selected-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.ai-selected-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(203, 166, 247, 0.15);
+  color: var(--mauve);
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 14px rgba(203, 166, 247, 0.25);
+}
+
+.ai-selected-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-selected-top-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-selected-label {
+  font-size: 0.82rem;
+  color: var(--subtext0);
+  font-weight: 500;
+}
+
+.ai-selected-badge-name {
+  font-family: monospace;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: var(--surface0);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--surface1);
+}
+
+.ai-selected-meta {
+  font-size: 0.85rem;
+  color: var(--subtext0);
+  line-height: 1.35;
+}
+
+.ai-selected-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Status Pills & Badges */
+.ai-pill {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.ai-pill.checking {
+  background: rgba(108, 112, 134, 0.15);
+  color: var(--overlay0);
+  border: 1px solid rgba(108, 112, 134, 0.3);
+}
+
+.ai-pill.installed {
+  background: rgba(166, 227, 161, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.ai-pill.missing {
+  background: rgba(243, 139, 168, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+.ai-pill.loaded {
+  background: rgba(137, 180, 250, 0.18);
+  color: var(--sapphire);
+  border: 1px solid rgba(137, 180, 250, 0.35);
+  box-shadow: 0 0 8px rgba(137, 180, 250, 0.2);
+}
+
+.ai-pill.loaded::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sapphire);
+  box-shadow: 0 0 6px var(--sapphire);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.ai-pill.unloaded {
+  background: rgba(108, 112, 134, 0.15);
+  color: var(--subtext0);
+  border: 1px solid rgba(108, 112, 134, 0.25);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* Preset Cards Footer */
+.ai-preset-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid rgba(69, 71, 90, 0.25);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-card-status-badge {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-card-status-badge.installed {
+  background: rgba(166, 227, 161, 0.12);
+  color: var(--green);
+}
+
+.ai-card-status-badge.loaded {
+  background: rgba(137, 180, 250, 0.15);
+  color: var(--sapphire);
+  box-shadow: 0 0 6px rgba(137, 180, 250, 0.2);
+}
+
+.ai-card-status-badge.missing {
+  background: rgba(243, 139, 168, 0.12);
+  color: var(--red);
+}
+
+.ai-card-status-badge.checking {
+  background: rgba(108, 112, 134, 0.1);
+  color: var(--overlay0);
+}
+
+.ai-card-btn-wrap {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-card-action-btn {
+  font-size: 0.78rem !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+}
+
+/* Custom Model Row */
+.ai-custom-input-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Modal Download Elements */
+.ai-dl-info-card {
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ai-dl-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-dl-label {
+  font-size: 0.82rem;
+  color: var(--subtext0);
+}
+
+.ai-dl-target-name {
+  font-family: monospace;
+  font-size: 0.95rem;
+  color: var(--mauve);
+}
+
+.ai-dl-server-tag {
+  font-family: monospace;
+  font-size: 0.8rem;
+  background: var(--surface0);
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--subtext0);
+}
+
+.ai-dl-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface0);
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface1);
+}
+
+.ai-dl-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-dl-status-text {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ai-dl-percent {
+  font-size: 1.1rem;
+  color: var(--sapphire);
+  font-family: monospace;
+}
+
+.ai-dl-progress-track {
+  width: 100%;
+  height: 12px;
+  background: var(--mantle);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--surface1);
+}
+
+.ai-dl-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--mauve) 0%, var(--sapphire) 50%, var(--green) 100%);
+  border-radius: 6px;
+  transition: width 0.25s ease;
+  box-shadow: 0 0 10px rgba(203, 166, 247, 0.4);
+}
+
+.ai-dl-progress-bar.striped {
+  background-size: 30px 30px;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 30px 0; }
+}
+
+.ai-dl-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--subtext0);
+}
+
+.ai-dl-digest-subtext {
+  font-family: monospace;
+  font-size: 0.76rem;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-dl-console-container {
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.ai-dl-console-header {
+  background: rgba(17, 17, 27, 0.7);
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  color: var(--subtext0);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--surface0);
+}
+
+.ai-dl-console-pre {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--subtext0);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ai-dl-banner {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  animation: fadeIn 0.3s ease;
+}
+
+.ai-dl-banner.success {
+  background: rgba(166, 227, 161, 0.1);
+  border: 1px solid rgba(166, 227, 161, 0.3);
+  color: var(--green);
+}
+
+.ai-dl-banner.error {
+  background: rgba(243, 139, 168, 0.1);
+  border: 1px solid rgba(243, 139, 168, 0.3);
+  color: var(--red);
+}
+
+.ai-dl-banner-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.ai-dl-banner-content strong {
+  display: block;
+  font-size: 0.92rem;
+  margin-bottom: 2px;
+}
+
+.ai-dl-banner-content p {
+  font-size: 0.82rem;
+  margin: 0;
+  opacity: 0.85;
+}

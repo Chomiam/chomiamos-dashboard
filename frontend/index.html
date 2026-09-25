@@ -81,7 +81,7 @@
         </button>
         <div id="nav-dashboard-version-pill" class="dashboard-version-pill" onclick="openDashboardUpdateModal()" title="Gestion des versions et du canal du Dashboard">
           <span class="status-indicator online"></span>
-          <span id="nav-dashboard-version-text">v0.5.0 • Stable</span>
+          <span id="nav-dashboard-version-text">v0.5.1 • Stable</span>
           <span id="nav-dashboard-update-arrow" class="update-arrow-glow hidden" title="Mise à jour du Dashboard disponible">⬆</span>
         </div>
       </div>
@@ -2278,6 +2278,33 @@
                     <p class="card-subtitle">Sélectionnez le modèle préchargé au démarrage dans Ollama pour l'autocomplétion Neovim</p>
                   </div>
                 </div>
+                <div class="ai-header-actions">
+                  <button type="button" class="btn btn-outline btn-sm" id="btn-check-ai-models" onclick="checkAllOllamaModels(true)" title="Tester la présence locale et l'état en mémoire des modèles proposés">
+                    <span id="ai-check-icon">🧪</span>
+                    <span id="ai-check-text">Tester les modèles</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Bannière interactive d'état du modèle sélectionné -->
+              <div id="ai-selected-model-banner" class="ai-selected-banner">
+                <div class="ai-selected-left">
+                  <div class="ai-selected-avatar">🦙</div>
+                  <div class="ai-selected-text">
+                    <div class="ai-selected-top-line">
+                      <span class="ai-selected-label">Modèle sélectionné :</span>
+                      <strong id="ai-selected-model-name" class="ai-selected-badge-name">qwen2.5-coder:7b</strong>
+                      <span id="ai-selected-install-pill" class="ai-pill checking">Vérification...</span>
+                      <span id="ai-selected-load-pill" class="ai-pill checking">Mémoire...</span>
+                    </div>
+                    <div id="ai-selected-meta" class="ai-selected-meta">
+                      Détection de l'état du modèle dans Ollama...
+                    </div>
+                  </div>
+                </div>
+                <div class="ai-selected-actions" id="ai-selected-action-buttons">
+                  <!-- Boutons dynamiques : Précharger / Décharger / Télécharger / Actualiser -->
+                </div>
               </div>
 
               <!-- Presets rapides de modèles -->
@@ -2289,6 +2316,10 @@
                   </div>
                   <strong>Qwen 2.5 Coder 7B</strong>
                   <p>Idéal pour GPU 8-16 Go (RX 9070 XT). Précision syntaxique maximale et raisonnement approfondi.</p>
+                  <div class="ai-preset-footer">
+                    <span class="ai-card-status-badge checking" id="ai-status-badge-qwen2.5-coder:7b">Vérification...</span>
+                    <div class="ai-card-btn-wrap" id="ai-card-actions-qwen2.5-coder:7b"></div>
+                  </div>
                 </div>
 
                 <div class="ai-preset-card" data-model="qwen2.5-coder:3b" onclick="selectAiModel('qwen2.5-coder:3b')">
@@ -2298,6 +2329,10 @@
                   </div>
                   <strong>Qwen 2.5 Coder 3B</strong>
                   <p>Léger et instantané. Recommandé pour libérer un maximum de mémoire VRAM pour le gaming.</p>
+                  <div class="ai-preset-footer">
+                    <span class="ai-card-status-badge checking" id="ai-status-badge-qwen2.5-coder:3b">Vérification...</span>
+                    <div class="ai-card-btn-wrap" id="ai-card-actions-qwen2.5-coder:3b"></div>
+                  </div>
                 </div>
 
                 <div class="ai-preset-card" data-model="qwen2.5-coder:1.5b" onclick="selectAiModel('qwen2.5-coder:1.5b')">
@@ -2307,6 +2342,10 @@
                   </div>
                   <strong>Qwen 2.5 Coder 1.5B</strong>
                   <p>Modèle miniature à latence quasi-nulle. Idéal pour les configurations d'entrée de gamme ou CPU.</p>
+                  <div class="ai-preset-footer">
+                    <span class="ai-card-status-badge checking" id="ai-status-badge-qwen2.5-coder:1.5b">Vérification...</span>
+                    <div class="ai-card-btn-wrap" id="ai-card-actions-qwen2.5-coder:1.5b"></div>
+                  </div>
                 </div>
 
                 <div class="ai-preset-card" data-model="deepseek-r1:8b" onclick="selectAiModel('deepseek-r1:8b')">
@@ -2316,6 +2355,10 @@
                   </div>
                   <strong>DeepSeek R1 8B</strong>
                   <p>Modèle de réflexion pas-à-pas spécialisé en logique complexe, algorithmes et mathématiques.</p>
+                  <div class="ai-preset-footer">
+                    <span class="ai-card-status-badge checking" id="ai-status-badge-deepseek-r1:8b">Vérification...</span>
+                    <div class="ai-card-btn-wrap" id="ai-card-actions-deepseek-r1:8b"></div>
+                  </div>
                 </div>
               </div>
 
@@ -2324,7 +2367,19 @@
                   <strong>Modèle personnalisé :</strong>
                   <small>Entrez n'importe quel identifiant de modèle du catalogue Ollama (ex: <code>codellama</code>, <code>llama3.1:8b</code>)</small>
                 </label>
-                <input type="text" id="cfg-ollama-model" class="input-styled" placeholder="qwen2.5-coder:7b">
+                <div class="ai-custom-input-row" style="display: flex; gap: 10px; align-items: center;">
+                  <input type="text" id="cfg-ollama-model" class="input-styled" placeholder="qwen2.5-coder:7b" oninput="onCustomModelInputChanged(this.value)">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-custom-model-check" onclick="checkCustomModelInput()" style="white-space: nowrap;">
+                    <span>🔍</span> Tester
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm hidden" id="btn-custom-model-dl" onclick="downloadCustomModelInput()" style="white-space: nowrap;">
+                    <span>⬇️</span> Télécharger
+                  </button>
+                </div>
+                <div id="ai-custom-model-feedback" class="ai-custom-feedback hidden" style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                  <span id="ai-custom-feedback-badge" class="ai-pill checking"></span>
+                  <span id="ai-custom-feedback-text" style="font-size: 0.85rem; color: var(--subtext0);"></span>
+                </div>
               </div>
             </div>
 
@@ -3749,6 +3804,96 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeSftpModals()">Annuler</button>
         <button type="button" class="btn btn-primary" onclick="submitSaveSftpUser()">Enregistrer l'Utilisateur</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL : TÉLÉCHARGEMENT MODÈLE OLLAMA ==================== -->
+  <div id="modal-ollama-download" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 620px; width: 92vw;">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="modal-icon">🦙</span>
+          <div>
+            <h3 id="ollama-dl-modal-title">Téléchargement du Modèle IA</h3>
+            <p class="modal-subtitle" id="ollama-dl-modal-subtitle">Téléchargement interactif depuis le catalogue Ollama</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeOllamaDownloadModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- Carte info modèle cible -->
+        <div class="ai-dl-info-card">
+          <div class="ai-dl-info-row">
+            <span class="ai-dl-label">Modèle cible :</span>
+            <strong id="ollama-dl-target-name" class="ai-dl-target-name">qwen2.5-coder:7b</strong>
+          </div>
+          <div class="ai-dl-info-row">
+            <span class="ai-dl-label">Serveur Ollama :</span>
+            <span id="ollama-dl-server-info" class="ai-dl-server-tag">http://127.0.0.1:11434</span>
+          </div>
+        </div>
+
+        <!-- Section Progression Graphique -->
+        <div class="ai-dl-progress-section">
+          <div class="ai-dl-status-header">
+            <span id="ollama-dl-status-text" class="ai-dl-status-text">Initialisation du téléchargement...</span>
+            <strong id="ollama-dl-percent" class="ai-dl-percent">0%</strong>
+          </div>
+          
+          <div class="ai-dl-progress-track">
+            <div id="ollama-dl-progress-bar" class="ai-dl-progress-bar" style="width: 0%;"></div>
+          </div>
+
+          <div class="ai-dl-stats-row">
+            <span id="ollama-dl-bytes" class="ai-dl-subtext">Connexion au serveur...</span>
+            <span id="ollama-dl-digest" class="ai-dl-subtext ai-dl-digest-subtext"></span>
+          </div>
+        </div>
+
+        <!-- Console Stream en direct -->
+        <div class="ai-dl-console-container">
+          <div class="ai-dl-console-header">
+            <span>Flux d'événements Ollama</span>
+            <span id="ollama-dl-console-indicator" class="pulse-indicator online"></span>
+          </div>
+          <pre id="ollama-dl-console-output" class="ai-dl-console-pre">Initialisation du flux...</pre>
+        </div>
+
+        <!-- Bannières Résultat -->
+        <div id="ollama-dl-success-banner" class="ai-dl-banner success hidden">
+          <span class="ai-dl-banner-icon">🎉</span>
+          <div class="ai-dl-banner-content">
+            <strong>Modèle téléchargé et installé avec succès !</strong>
+            <p>Le modèle est maintenant disponible localement sur le système et prêt pour Neovim.</p>
+          </div>
+        </div>
+
+        <div id="ollama-dl-error-banner" class="ai-dl-banner error hidden">
+          <span class="ai-dl-banner-icon">⚠️</span>
+          <div class="ai-dl-banner-content">
+            <strong id="ollama-dl-error-title">Échec du téléchargement</strong>
+            <p id="ollama-dl-error-desc">Une erreur s'est produite lors de l'opération.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" id="ollama-dl-cancel-btn" class="btn btn-outline" onclick="cancelOllamaDownload()">
+          <span>🛑</span> Interrompre
+        </button>
+        <div class="ai-dl-footer-actions" style="display: flex; gap: 8px;">
+          <button type="button" id="ollama-dl-preload-btn" class="btn btn-secondary hidden" onclick="preloadDownloadedModel()">
+            <span>⚡</span> Précharger en VRAM
+          </button>
+          <button type="button" id="ollama-dl-close-btn" class="btn btn-primary hidden" onclick="closeOllamaDownloadModal()">
+            <span>✓</span> Terminer
+          </button>
+        </div>
       </div>
     </div>
   </div>

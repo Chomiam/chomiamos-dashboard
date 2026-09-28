@@ -1240,9 +1240,16 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
-async function loadStorageDevices() {
+let missingMountsDismissedThisSession = false;
+let isCheckingMissingMounts = false;
+
+async function loadStorageDevices(manualRefresh = false) {
   const container = document.getElementById("storage-devices-container");
   if (!container) return;
+
+  if (manualRefresh) {
+    missingMountsDismissedThisSession = false;
+  }
 
   try {
     try {
@@ -1260,10 +1267,136 @@ async function loadStorageDevices() {
         <span style="font-size: 32px; display: block; margin-bottom: 8px;">⚠️</span>
         <strong>Erreur de détection des disques</strong>
         <p style="color: var(--subtext0); margin-top: 6px; font-size: 13px;">${err}</p>
-        <button class="btn btn-outline" onclick="loadStorageDevices()" style="margin-top: 14px;">Réessayer</button>
+        <button class="btn btn-outline" onclick="loadStorageDevices(true)" style="margin-top: 14px;">Réessayer</button>
       </div>
     `;
   }
+
+  // Vérification asynchrone non-bloquante des disques déclarés dans mount.nix
+  setTimeout(() => {
+    checkMissingPersistentMounts(manualRefresh);
+  }, 120);
+}
+
+async function checkMissingPersistentMounts(forcePrompt = false) {
+  if (isCheckingMissingMounts) return;
+  isCheckingMissingMounts = true;
+
+  try {
+    const missing = await invoke("check_missing_storage_devices");
+    const banner = document.getElementById("storage-orphan-banner");
+    const badge = document.getElementById("disks-orphan-badge");
+
+    if (!missing || missing.length === 0) {
+      if (banner) {
+        banner.style.display = "none";
+        banner.innerHTML = "";
+      }
+      if (badge) {
+        badge.classList.add("hidden");
+      }
+      return;
+    }
+
+    // Alerte visuelle : badge sur l'onglet Gestion des Disques
+    if (badge) {
+      badge.classList.remove("hidden");
+    }
+
+    // Bannière d'avertissement dans l'onglet des disques
+    if (banner) {
+      const count = missing.length;
+      const title = count === 1
+        ? `Disque déclaré dans mount.nix introuvable : ${escapeHtml(missing[0].mount_point)}`
+        : `${count} disques déclarés dans mount.nix sont introuvables`;
+
+      const desc = count === 1
+        ? `Le point de montage <code>${escapeHtml(missing[0].mount_point)}</code> (UUID : <code>${escapeHtml(missing[0].uuid)}</code>) est déclaré dans votre configuration NixOS mais n'est plus détecté (disque débranché, retiré ou reformaté).`
+        : missing.map(m => `<code>${escapeHtml(m.mount_point)}</code>`).join(", ") + " sont déclarés dans mount.nix mais absents du système.";
+
+      banner.style.display = "block";
+      banner.innerHTML = `
+        <div class="card" style="border: 1px solid var(--red); background: rgba(243, 139, 168, 0.08); padding: 16px 20px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 280px;">
+            <span style="font-size: 26px;">⚠️</span>
+            <div>
+              <strong style="color: var(--red); font-size: 14.5px; display: block; margin-bottom: 3px;">${title}</strong>
+              <span style="color: var(--subtext0); font-size: 13px; line-height: 1.4;">${desc}</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-danger" onclick="promptRemoveMissingMountsModal()" style="white-space: nowrap;">
+              <span>🗑️</span> Retirer de mount.nix
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Ouvrir la popup modale si l'onglet Gestion des Disques est actif (ou si demandé manuellement)
+    const isDisksTabActive = document.getElementById("tab-disks")?.classList.contains("active");
+
+    if ((isDisksTabActive || forcePrompt) && (!missingMountsDismissedThisSession || forcePrompt)) {
+      await promptRemoveMissingMountsModal(missing);
+    }
+  } catch (err) {
+    console.warn("Erreur vérification disques orphelins :", err);
+  } finally {
+    isCheckingMissingMounts = false;
+  }
+}
+
+async function promptRemoveMissingMountsModal(missingList = null) {
+  if (!missingList) {
+    try {
+      missingList = await invoke("check_missing_storage_devices");
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+  }
+
+  if (!missingList || missingList.length === 0) {
+    showToast("Tous les disques déclarés dans mount.nix sont bien détectés.", "success");
+    return;
+  }
+
+  for (const item of missingList) {
+    const confirmed = await showConfirmModal({
+      title: "Disque manquant dans mount.nix",
+      subtitle: "Périphérique introuvable ou reformaté",
+      icon: "⚠️",
+      message: `Le point de montage "${item.mount_point}" est déclaré dans votre configuration persistante (mount.nix), mais son UUID (${item.uuid}) n'est plus détecté sur la machine.`,
+      details: `Point de montage : ${item.mount_point}
+Type de partition : ${item.fs_type}
+UUID attendu : ${item.uuid}
+
+Cause probable : disque débranché, retiré ou partition reformatée.`,
+      warning: "Si ce disque n'est plus utilisé, retirer sa déclaration évitera les ralentissements et timeouts au démarrage système.",
+      confirmText: "Retirer de mount.nix",
+      confirmIcon: "🗑️",
+      confirmClass: "btn-danger",
+      cancelText: "Conserver pour l'instant",
+      isDanger: true,
+    });
+
+    if (confirmed) {
+      try {
+        const res = await invoke("remove_missing_persistent_mount", {
+          mountPoint: item.mount_point,
+          uuid: item.uuid,
+        });
+        showToast(res || `Montage ${item.mount_point} retiré avec succès`, "success");
+      } catch (err) {
+        showToast(`Erreur lors du retrait : ${err}`, "error");
+      }
+    } else {
+      missingMountsDismissedThisSession = true;
+    }
+  }
+
+  // Recharger l'état des disques et rafraîchir la bannière
+  await loadStorageDevices();
 }
 
 function renderStorageDevices(devices) {
@@ -1724,6 +1857,8 @@ window.selectFormatFs = selectFormatFs;
 window.toggleFormatSubmitButton = toggleFormatSubmitButton;
 window.submitFormat = submitFormat;
 window.openFileManager = openFileManager;
+window.checkMissingPersistentMounts = checkMissingPersistentMounts;
+window.promptRemoveMissingMountsModal = promptRemoveMissingMountsModal;
 
 // ==========================================================================
 // 3b. Generations Selection & Management

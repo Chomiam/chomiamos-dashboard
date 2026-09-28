@@ -45,6 +45,7 @@
         <button class="tab-btn" data-tab="tab-disks">
           <span class="tab-icon">💾</span>
           <span class="tab-label">Gestion des Disques</span>
+          <span id="disks-orphan-badge" class="badge-dot hidden" style="background-color: var(--red);" title="Disque déclaré dans mount.nix non détecté"></span>
         </button>
         <button class="tab-btn" data-tab="tab-generations">
           <span class="tab-icon">❄️</span>
@@ -439,10 +440,13 @@
             <h2>Gestion des Disques & Montages Permanents</h2>
             <p>Détection du matériel, formatage (Ext4 / Btrfs) et montage permanent dans NixOS (protégé contre les mises à jour GitHub).</p>
           </div>
-          <button class="btn btn-outline" onclick="loadStorageDevices()">
+          <button class="btn btn-outline" onclick="loadStorageDevices(true)">
             <span>🔄</span> Rafraîchir les disques
           </button>
         </div>
+
+        <!-- Missing/Orphan Mounts Warning Banner -->
+        <div id="storage-orphan-banner" style="display: none; margin-bottom: 20px;"></div>
 
         <!-- Storage Disks Container -->
         <div id="storage-devices-container" class="storage-devices-container">

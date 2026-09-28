@@ -38,6 +38,13 @@ pub struct PersistentMountConfig {
     pub options: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MissingMountInfo {
+    pub mount_point: String,
+    pub uuid: String,
+    pub fs_type: String,
+}
+
 const MOUNT_NIX_PATH: &str = "/etc/nixos/hosts/desktop/mount.nix";
 
 fn format_bytes(bytes: u64) -> String {
@@ -178,8 +185,23 @@ pub fn write_persistent_mounts(mounts: &[PersistentMountConfig]) -> Result<(), S
         let _ = fs::create_dir_all(parent);
     }
 
-    fs::write(path, generated)
-        .map_err(|e| format!("Impossible d'écrire dans {} : {}", MOUNT_NIX_PATH, e))
+    if let Err(e) = fs::write(path, &generated) {
+        // Fallback avec pkexec si la permission utilisateur est insuffisante
+        let script = format!("cat << 'EOF' > {}
+{}
+EOF", MOUNT_NIX_PATH, generated);
+        let output = Command::new("pkexec")
+            .args(["sh", "-c", &script])
+            .output()
+            .map_err(|pk_err| format!("Impossible d'écrire dans {} (fs: {}, pkexec: {})", MOUNT_NIX_PATH, e, pk_err))?;
+
+        if !output.status.success() {
+            let err_msg = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Impossible d'écrire dans {} : {}", MOUNT_NIX_PATH, err_msg.trim()));
+        }
+    }
+
+    Ok(())
 }
 
 
@@ -538,6 +560,84 @@ pub fn format_storage_device(
     Ok(format!("Partition {} formatée en {} (Label: {})", device_path, fs_type, clean_label))
 }
 
+/// Filtre les points de montage déclarés dans mount.nix dont l'UUID n'est pas présent dans la liste des UUIDs actifs.
+pub fn filter_missing_mounts(
+    mounts: &[PersistentMountConfig],
+    active_uuids: &std::collections::HashSet<String>,
+) -> Vec<MissingMountInfo> {
+    let mut missing = Vec::new();
+    for pm in mounts {
+        let clean_uuid = pm.uuid.trim().to_lowercase();
+        if !active_uuids.contains(&clean_uuid) {
+            missing.push(MissingMountInfo {
+                mount_point: pm.mount_point.clone(),
+                uuid: pm.uuid.clone(),
+                fs_type: pm.fs_type.clone(),
+            });
+        }
+    }
+    missing
+}
+
+/// Vérifie si les disques déclarés dans mount.nix sont encore physiquement présents dans /dev/disk/by-uuid.
+/// Retourne la liste des montages orphelins (disques retirés ou reformatés avec un nouvel UUID).
+pub fn check_missing_persistent_mounts() -> Vec<MissingMountInfo> {
+    let persistent_mounts = read_persistent_mounts();
+    if persistent_mounts.is_empty() {
+        return Vec::new();
+    }
+
+    let mut active_uuids = std::collections::HashSet::new();
+    if let Ok(entries) = fs::read_dir("/dev/disk/by-uuid") {
+        for entry in entries.flatten() {
+            if let Ok(name) = entry.file_name().into_string() {
+                // S'assurer que le lien symbolique pointe bien vers un block device existant
+                if entry.path().exists() {
+                    active_uuids.insert(name.to_lowercase());
+                }
+            }
+        }
+    }
+
+    filter_missing_mounts(&persistent_mounts, &active_uuids)
+}
+
+/// Supprime la déclaration d'un disque manquant dans mount.nix et nettoie le point de montage.
+pub fn remove_persistent_mount(mount_point: &str, uuid: &str) -> Result<String, String> {
+    let clean_mount = mount_point.trim().trim_end_matches('/');
+
+    let forbidden = ["/", "/boot", "/efi", "/nix", "/nix/store"];
+    if forbidden.contains(&clean_mount) {
+        return Err(format!("Impossible de retirer le point de montage système '{}'.", clean_mount));
+    }
+
+    // 1. Retirer de mount.nix
+    let mut mounts = read_persistent_mounts();
+    let initial_count = mounts.len();
+    mounts.retain(|m| {
+        let m_clean = m.mount_point.trim().trim_end_matches('/');
+        !m.uuid.eq_ignore_ascii_case(uuid) && m_clean != clean_mount
+    });
+
+    if mounts.len() == initial_count {
+        // Fallback si correspondance seulement sur le point de montage ou sur l'UUID
+        mounts.retain(|m| {
+            let m_clean = m.mount_point.trim().trim_end_matches('/');
+            !m.uuid.eq_ignore_ascii_case(uuid) && m_clean != clean_mount
+        });
+    }
+
+    write_persistent_mounts(&mounts)?;
+
+    // 2. Tenter un démontage paresseux (lazy) non bloquant au cas où un reliquat existerait
+    let script = format!("umount -l '{mnt}' 2>/dev/null || true", mnt = clean_mount);
+    let _ = Command::new("pkexec")
+        .args(["sh", "-c", &script])
+        .output();
+
+    Ok(format!("La déclaration du point de montage '{}' a été retirée de mount.nix.", clean_mount))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -567,5 +667,30 @@ mod tests {
         assert!(generated.contains(r#"fileSystems."/mnt/hdd4to""#));
         assert!(generated.contains(r#"fileSystems."/mnt/Emulation""#));
         assert!(generated.contains(r#"options = ["#));
+    }
+    #[test]
+    fn test_filter_missing_mounts() {
+        let dummy_mounts = vec![
+            PersistentMountConfig {
+                mount_point: "/mnt/Existing".to_string(),
+                uuid: "1111-2222".to_string(),
+                fs_type: "ext4".to_string(),
+                options: vec!["defaults".to_string()],
+            },
+            PersistentMountConfig {
+                mount_point: "/mnt/MissingDisk".to_string(),
+                uuid: "3333-4444".to_string(),
+                fs_type: "btrfs".to_string(),
+                options: vec!["defaults".to_string()],
+            },
+        ];
+
+        let mut active = std::collections::HashSet::new();
+        active.insert("1111-2222".to_string());
+
+        let missing = filter_missing_mounts(&dummy_mounts, &active);
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].mount_point, "/mnt/MissingDisk");
+        assert_eq!(missing[0].uuid, "3333-4444");
     }
 }

@@ -569,6 +569,20 @@ fn format_storage_device(device_path: String, fs_type: String, label: String) ->
 }
 
 #[tauri::command]
+async fn check_missing_storage_devices() -> Result<Vec<disks::MissingMountInfo>, String> {
+    tokio::task::spawn_blocking(disks::check_missing_persistent_mounts)
+        .await
+        .map_err(|e| format!("Erreur tâche asynchrone : {}", e))
+}
+
+#[tauri::command]
+async fn remove_missing_persistent_mount(mount_point: String, uuid: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || disks::remove_persistent_mount(&mount_point, &uuid))
+        .await
+        .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
 fn get_current_user() -> String {
     std::env::var("USER").unwrap_or_else(|_| "chomiam".to_string())
 }
@@ -1108,6 +1122,8 @@ fn main() {
             mount_storage_device,
             unmount_storage_device,
             format_storage_device,
+            check_missing_storage_devices,
+            remove_missing_persistent_mount,
             open_in_file_manager,
             get_current_user,
             get_dashboard_version,

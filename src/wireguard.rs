@@ -260,8 +260,10 @@ fn parse_wireguard_conf(content: &str) -> (String, String, String, String) {
     (address, dns, endpoint, pubkey)
 }
 
+#[derive(Clone)]
 struct InterfaceLiveStats {
     latest_handshake: String,
+    hs_epoch: u64,
     rx_bytes: u64,
     tx_bytes: u64,
 }
@@ -287,7 +289,9 @@ fn get_proc_net_dev_stats() -> HashMap<String, (u64, u64)> {
 pub const EXEC_PATH: &str = "/run/current-system/sw/bin:/etc/profiles/per-user/chomiam/bin:/run/wrappers/bin:/bin:/usr/bin";
 
 pub fn get_wg_bin() -> &'static str {
-    if std::path::Path::new("/run/current-system/sw/bin/wg").exists() {
+    if std::path::Path::new("/run/wrappers/bin/wg").exists() {
+        "/run/wrappers/bin/wg"
+    } else if std::path::Path::new("/run/current-system/sw/bin/wg").exists() {
         "/run/current-system/sw/bin/wg"
     } else if std::path::Path::new("/etc/profiles/per-user/chomiam/bin/wg").exists() {
         "/etc/profiles/per-user/chomiam/bin/wg"
@@ -332,7 +336,8 @@ fn get_live_interfaces() -> HashMap<String, InterfaceLiveStats> {
                     let (rx, tx) = proc_stats.get(&dev).or_else(|| proc_stats.get(&name)).copied().unwrap_or((0, 0));
 
                     map.insert(name, InterfaceLiveStats {
-                        latest_handshake: if rx > 0 || tx > 0 { "Trafic actif".into() } else { "En ligne".into() },
+                        latest_handshake: if rx > 0 { "Trafic actif".into() } else { "En attente (0 O reçu)".into() },
+                        hs_epoch: 0,
                         rx_bytes: rx,
                         tx_bytes: tx,
                     });
@@ -351,7 +356,8 @@ fn get_live_interfaces() -> HashMap<String, InterfaceLiveStats> {
                 if let Some(iface) = parts.get(0) {
                     let (rx, tx) = proc_stats.get(*iface).copied().unwrap_or((0, 0));
                     map.entry(iface.to_string()).or_insert(InterfaceLiveStats {
-                        latest_handshake: if rx > 0 || tx > 0 { "Trafic actif".into() } else { "En ligne".into() },
+                        latest_handshake: if rx > 0 { "Trafic actif".into() } else { "En attente (0 O reçu)".into() },
+                        hs_epoch: 0,
                         rx_bytes: rx,
                         tx_bytes: tx,
                     });
@@ -360,21 +366,47 @@ fn get_live_interfaces() -> HashMap<String, InterfaceLiveStats> {
         }
     }
 
-    // 3. Query wg show if accessible
-    let out = Command::new(get_wg_bin()).env("PATH", EXEC_PATH).args(["show", "all", "dump"]).output();
-    if let Ok(o) = out {
-        if o.status.success() {
-            let text = String::from_utf8_lossy(&o.stdout);
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 8 {
-                    let iface = parts[0].to_string();
-                    if let Ok(hs) = parts[5].parse::<u64>() {
-                        if hs > 0 {
-                            if let Some(stats) = map.get_mut(&iface) {
-                                stats.latest_handshake = format_handshake_secs(hs);
-                            }
-                        }
+    // 3. Query wg show if accessible (try wrappers first, then get_wg_bin, then sudo -n)
+    let wg_bins = [
+        "/run/wrappers/bin/wg",
+        get_wg_bin(),
+        "wg",
+    ];
+    let mut wg_output = None;
+    for bin in wg_bins {
+        if let Ok(o) = Command::new(bin).env("PATH", EXEC_PATH).args(["show", "all", "dump"]).output() {
+            if o.status.success() {
+                wg_output = Some(o);
+                break;
+            }
+        }
+    }
+    if wg_output.is_none() {
+        if let Ok(o) = Command::new("sudo").env("PATH", EXEC_PATH).args(["-n", get_wg_bin(), "show", "all", "dump"]).output() {
+            if o.status.success() {
+                wg_output = Some(o);
+            }
+        }
+    }
+
+    if let Some(o) = wg_output {
+        let text = String::from_utf8_lossy(&o.stdout);
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 8 {
+                let iface = parts[0].to_string();
+                let hs = parts[5].parse::<u64>().unwrap_or(0);
+                let wg_rx = parts[6].parse::<u64>().unwrap_or(0);
+                let wg_tx = parts[7].parse::<u64>().unwrap_or(0);
+
+                if let Some(stats) = map.get_mut(&iface) {
+                    if hs > 0 {
+                        stats.hs_epoch = hs;
+                        stats.latest_handshake = format_handshake_secs(hs);
+                    }
+                    if wg_rx > 0 || wg_tx > 0 {
+                        stats.rx_bytes = wg_rx;
+                        stats.tx_bytes = wg_tx;
                     }
                 }
             }
@@ -602,7 +634,22 @@ pub fn get_wireguard_overview() -> Result<WireguardOverview, String> {
             active_id = Some(meta.id.clone());
         }
 
-        let hs = iface_stats.map(|s| s.latest_handshake.clone()).unwrap_or_else(|| "Déconnecté".into());
+        let hs = iface_stats.map(|s| {
+            if !is_act {
+                "Déconnecté".into()
+            } else if s.hs_epoch > 0 {
+                let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                if now.saturating_sub(s.hs_epoch) < 180 {
+                    format!("Connecté ({})", s.latest_handshake)
+                } else {
+                    format!("Inactif ({})", s.latest_handshake)
+                }
+            } else if s.rx_bytes > 0 {
+                "Trafic reçu".into()
+            } else {
+                "En attente du serveur (0 O reçu)".into()
+            }
+        }).unwrap_or_else(|| "Déconnecté".into());
         let rx = iface_stats.map(|s| format_bytes(s.rx_bytes)).unwrap_or_else(|| "0 O".into());
         let tx = iface_stats.map(|s| format_bytes(s.tx_bytes)).unwrap_or_else(|| "0 O".into());
 
@@ -659,7 +706,14 @@ pub fn get_wireguard_overview() -> Result<WireguardOverview, String> {
         srv_meta.listen_port
     );
 
-    let f_connected = srv_stats.map(|s| s.rx_bytes > 0 || s.tx_bytes > 0 || s.latest_handshake != "En ligne").unwrap_or(false);
+    let f_connected = srv_stats.map(|s| {
+        if s.hs_epoch > 0 {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+            now.saturating_sub(s.hs_epoch) < 180
+        } else {
+            s.rx_bytes > 0
+        }
+    }).unwrap_or(false);
 
     let server_state = WireguardServerState {
         is_active: srv_is_active,
@@ -929,10 +983,10 @@ pub fn stop_friend_server() -> Result<WireguardServerState, String> {
 
 #[tauri::command]
 pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
-    let live = get_live_interfaces();
-    let srv_stats = live.get("wg-chomiam");
+    let live_before = get_live_interfaces();
+    let srv_stats_before = live_before.get("wg-chomiam");
 
-    if srv_stats.is_none() {
+    if srv_stats_before.is_none() {
         return Ok(TunnelTestResult {
             success: false,
             latency_ms: None,
@@ -944,15 +998,28 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
         });
     }
 
-    let stats = srv_stats.unwrap();
+    let stats_b = srv_stats_before.unwrap();
+    let rx_before = stats_b.rx_bytes;
+
+    // ICMP ping to friend's IP (10.100.0.2)
+    // 3 paquets, 2 secondes de timeout
+    let ping_out = Command::new("ping")
+        .env("PATH", EXEC_PATH)
+        .args(["-c", "3", "-W", "2", "-i", "0.3", "10.100.0.2"])
+        .output();
+
+    // Réinterrogation des interfaces après l'émission de la requête Ping
+    let live_after = get_live_interfaces();
+    let stats = live_after.get("wg-chomiam").cloned().unwrap_or_else(|| stats_b.clone());
     let rx_str = format_bytes(stats.rx_bytes);
     let tx_str = format_bytes(stats.tx_bytes);
 
-    // ICMP ping to friend's IP (10.100.0.2)
-    let ping_out = Command::new("ping")
-        .env("PATH", EXEC_PATH)
-        .args(["-c", "2", "-W", "1", "-i", "0.2", "10.100.0.2"])
-        .output();
+    let has_recent_hs = if stats.hs_epoch > 0 {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        now.saturating_sub(stats.hs_epoch) < 180
+    } else {
+        false
+    };
 
     if let Ok(po) = ping_out {
         if po.status.success() {
@@ -972,37 +1039,51 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
             }
 
             let lat_display = latency.map(|l| format!("{:.1} ms", l)).unwrap_or_else(|| "1 ms".into());
+            let hs_status = if has_recent_hs {
+                stats.latest_handshake.clone()
+            } else {
+                "Ping réussi".into()
+            };
+
             return Ok(TunnelTestResult {
                 success: true,
                 latency_ms: latency,
-                handshake_status: stats.latest_handshake.clone(),
+                handshake_status: hs_status,
                 bytes_received: rx_str,
                 bytes_sent: tx_str,
                 message: format!("⚡ Tunnel actif et ami en ligne ! Latence : {}", lat_display),
-                details: "La communication bidirectionnelle WireGuard fonctionne parfaitement.".into(),
+                details: "La communication bidirectionnelle WireGuard fonctionne parfaitement (échange Ping ICMP réussi).".into(),
             });
         }
     }
 
-    if stats.rx_bytes > 0 || stats.tx_bytes > 0 || stats.latest_handshake.contains("s") || stats.latest_handshake.contains("m") {
+    // Le ping a échoué (timeout ou bloqué par le pare-feu de l'ami).
+    // Vérifier si des paquets ont réellement été reçus (RX) ou si un handshake a eu lieu.
+    if has_recent_hs || stats.rx_bytes > rx_before || stats.rx_bytes > 0 {
+        let hs_status = if has_recent_hs {
+            stats.latest_handshake.clone()
+        } else {
+            "Trafic reçu (RX)".into()
+        };
+
         Ok(TunnelTestResult {
             success: true,
             latency_ms: None,
-            handshake_status: stats.latest_handshake.clone(),
+            handshake_status: hs_status,
             bytes_received: rx_str,
             bytes_sent: tx_str,
-            message: "🤝 Tunnel WireGuard actif avec trafic détecté.".into(),
-            details: "L'ami est connecté et échange des données avec l'hôte (le pare-feu de l'ami bloque peut-être les requêtes ICMP ping).".into(),
+            message: "🤝 Tunnel WireGuard actif avec trafic reçu de l'ami.".into(),
+            details: "Des données chiffrées sont bien reçues de votre ami (RX actif). Son pare-feu local (ex: pare-feu Windows) bloque simplement les réponses aux requêtes Ping ICMP.".into(),
         })
     } else {
         Ok(TunnelTestResult {
             success: false,
             latency_ms: None,
-            handshake_status: "En attente de connexion".into(),
+            handshake_status: "Aucun paquet reçu".into(),
             bytes_received: rx_str,
             bytes_sent: tx_str,
-            message: "⏳ En attente de connexion de l'ami.".into(),
-            details: "L'hôte écoute sur le port UDP 51820. Transmettez la configuration ou le QR Code à votre ami, et vérifiez que votre box internet redirige le port UDP 51820 vers ce PC.".into(),
+            message: "⏳ Aucun paquet reçu de l'ami (0 O reçu).".into(),
+            details: "L'interface écoute sur le port UDP 51820 mais aucun paquet n'est arrivé. Vérifiez impérativement : 1) La redirection du port UDP 51820 dans votre Box Internet (Port Forwarding / NAT vers ce PC), 2) Que l'ami a bien démarré la connexion sur son appareil.".into(),
         })
     }
 }

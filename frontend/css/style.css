@@ -9868,6 +9868,8 @@ body {
 
 /* Éditeur Texte Brut */
 .wg-editor-wrapper {
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(203, 166, 247, 0.25);
   border-radius: 14px;
   overflow: hidden;
@@ -9890,6 +9892,10 @@ body {
 }
 
 .wg-textarea-conf {
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  min-height: 150px;
   font-family: var(--font-mono, monospace) !important;
   font-size: 0.85rem !important;
   line-height: 1.5 !important;
@@ -9899,6 +9905,7 @@ body {
   color: #cdd6f4 !important;
   padding: 12px 14px !important;
   resize: vertical !important;
+  outline: none !important;
 }
 
 .wg-textarea-conf:focus {

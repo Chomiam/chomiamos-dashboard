@@ -543,61 +543,70 @@ pub fn save_sftp_user(user: SftpUser, password: Option<String>) -> Result<String
         return Err(format!("Le nom d'utilisateur '{}' est réservé au système.", username));
     }
 
-    let _ = Command::new("pkexec").args(["groupadd", "-f", "sftp-users"]).output();
-
-    let user_exists = Command::new("id")
-        .arg(&username)
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    if !user_exists {
-        let nologin_shell = if Path::new("/run/current-system/sw/bin/nologin").exists() {
-            "/run/current-system/sw/bin/nologin"
-        } else {
-            "/bin/false"
-        };
-
-        let create_out = Command::new("pkexec")
-            .args(["useradd", "-M", "-s", nologin_shell, "-g", "sftp-users", &username])
-            .output()
-            .map_err(|e| format!("Erreur création utilisateur via pkexec: {}", e))?;
-
-        if !create_out.status.success() {
-            let err = String::from_utf8_lossy(&create_out.stderr);
-            return Err(format!("Échec de la création de l'utilisateur '{}': {}", username, err));
-        }
-    }
-
-    if let Some(ref pwd) = password {
-        if !pwd.is_empty() {
-            let mut child = Command::new("pkexec")
-                .args(["chpasswd"])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(|e| format!("Erreur exécution chpasswd: {}", e))?;
-
-            if let Some(mut stdin) = child.stdin.take() {
-                let input = format!("{}:{}\n", username, pwd);
-                let _ = stdin.write_all(input.as_bytes());
-            }
-
-            let output = child.wait_with_output()
-                .map_err(|e| format!("Erreur attente chpasswd: {}", e))?;
-
-            if !output.status.success() {
-                let err = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("Échec de l'application du mot de passe pour '{}': {}", username, err));
-            }
-        }
-    }
-
-    if !user.enabled {
-        let _ = Command::new("pkexec").args(["usermod", "-L", &username]).output();
+    let nologin_shell = if Path::new("/run/current-system/sw/bin/nologin").exists() {
+        "/run/current-system/sw/bin/nologin"
     } else {
-        let _ = Command::new("pkexec").args(["usermod", "-U", &username]).output();
+        "/bin/false"
+    };
+
+    let script = r#"
+set -e
+USER="$1"
+SHELL_PATH="$2"
+ENABLED="$3"
+HAS_PWD="$4"
+
+# 1. Création du groupe sftp-users si inexistant
+groupadd -f sftp-users
+
+# 2. Création de l'utilisateur sans home (-M) avec shell nologin si inexistant
+if ! id -u "$USER" >/dev/null 2>&1; then
+    useradd -M -s "$SHELL_PATH" -g sftp-users "$USER"
+fi
+
+# 3. Application du mot de passe s'il a été transmis via stdin
+if [ "$HAS_PWD" = "1" ]; then
+    chpasswd
+fi
+
+# 4. Activation ou verrouillage du compte
+if [ "$ENABLED" = "1" ]; then
+    usermod -U "$USER" 2>/dev/null || true
+else
+    usermod -L "$USER" 2>/dev/null || true
+fi
+"#;
+
+    let has_pwd = password.as_ref().map(|p| !p.is_empty()).unwrap_or(false);
+    let has_pwd_flag = if has_pwd { "1" } else { "0" };
+    let enabled_flag = if user.enabled { "1" } else { "0" };
+
+    let mut child = Command::new("pkexec")
+        .args(["bash", "-c", script, "sftp_setup", &username, nologin_shell, enabled_flag, has_pwd_flag])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Impossible d'exécuter l'élévation de privilèges (pkexec) : {}", e))?;
+
+    if has_pwd {
+        if let Some(ref pwd) = password {
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = writeln!(stdin, "{}:{}", username, pwd);
+            }
+        }
+    }
+
+    let output = child.wait_with_output()
+        .map_err(|e| format!("Erreur lors de la configuration du compte système : {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        let err_trim = err.trim();
+        if err_trim.contains("Not authorized") || err_trim.contains("dismissed") || output.status.code() == Some(126) || output.status.code() == Some(127) {
+            return Err("Action annulée ou autorisation administrateur refusée.".to_string());
+        }
+        return Err(format!("Échec de la configuration système pour '{}' : {}", username, err_trim));
     }
 
     let mut cfg = load_sftp_config();
@@ -643,7 +652,18 @@ pub fn delete_sftp_user(username: String) -> Result<String, String> {
         return Err("Nom d'utilisateur invalide".to_string());
     }
 
-    let _ = Command::new("pkexec").args(["userdel", &username]).output();
+    let del_out = Command::new("pkexec")
+        .args(["userdel", "-f", &username])
+        .output();
+
+    if let Ok(ref out) = del_out {
+        if !out.status.success() {
+            let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            if err.contains("Not authorized") || out.status.code() == Some(126) {
+                return Err("Suppression annulée : autorisation administrateur requise.".to_string());
+            }
+        }
+    }
 
     let mut cfg = load_sftp_config();
     cfg.users.retain(|u| u.username != username);

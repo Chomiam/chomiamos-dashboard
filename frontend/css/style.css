@@ -6519,21 +6519,251 @@ body {
   border: 1px solid rgba(203, 166, 247, 0.3);
 }
 
+/* ==========================================================================
+   sFTP User Creation Modal - Ultra-Modern Catppuccin Styling
+   ========================================================================== */
+
+.modal-card-sftp {
+  background: linear-gradient(180deg, #1e1e2e 0%, #181825 100%) !important;
+  border: 1px solid rgba(137, 180, 250, 0.28) !important;
+  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65), 0 0 25px rgba(137, 180, 250, 0.12) !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+}
+
+.sftp-modal-icon-badge {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 1.45rem;
+  background: linear-gradient(135deg, rgba(137, 180, 250, 0.22), rgba(203, 166, 247, 0.18));
+  border: 1px solid rgba(137, 180, 250, 0.4);
+  box-shadow: 0 4px 12px rgba(137, 180, 250, 0.15);
+}
+
+.sftp-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px !important;
+}
+
+.sftp-field-card {
+  background: rgba(24, 24, 37, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 15px;
+  transition: all 0.2s ease;
+}
+
+.sftp-field-card:focus-within {
+  border-color: rgba(137, 180, 250, 0.45);
+  background: rgba(30, 30, 46, 0.6);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.sftp-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 7px;
+}
+
+.sftp-field-header .form-label {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #cdd6f4;
+  display: flex;
+  align-items: center;
+}
+
+.sftp-field-icon {
+  margin-right: 6px;
+  font-size: 1rem;
+}
+
+.sftp-field-badge {
+  font-size: 0.70rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #bac2de;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sftp-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: #11111b;
+  border: 1px solid #313244;
+  border-radius: 9px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.sftp-input-wrapper:focus-within {
+  border-color: #89b4fa;
+  box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2);
+}
+
+.sftp-input-prefix {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: #89b4fa;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: rgba(137, 180, 250, 0.08);
+  border-right: 1px solid #313244;
+}
+
+.sftp-input-text,
+.sftp-input-password {
+  flex: 1;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 9px 12px;
+  color: #cdd6f4 !important;
+  font-size: 0.93rem;
+  width: 100%;
+}
+
+.sftp-input-text::placeholder,
+.sftp-input-password::placeholder {
+  color: #6c7086 !important;
+}
+
+.sftp-input-password {
+  font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace !important;
+  letter-spacing: 0.5px;
+}
+
+.sftp-password-box {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sftp-password-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sftp-btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-radius: 8px;
+  background: rgba(49, 50, 68, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cdd6f4;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.sftp-btn-action:hover {
+  background: rgba(137, 180, 250, 0.2);
+  border-color: #89b4fa;
+  color: #89b4fa;
+}
+
+.sftp-btn-inside-toggle {
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  opacity: 0.65;
+  transition: opacity 0.2s ease;
+}
+
+.sftp-btn-inside-toggle:hover {
+  opacity: 1;
+}
+
+.sftp-field-hint {
+  font-size: 0.78rem;
+  color: #a6adc8;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.sftp-select-wrapper {
+  width: 100%;
+}
+
+.sftp-select-styled {
+  width: 100%;
+  background: #11111b !important;
+  border: 1px solid #313244 !important;
+  border-radius: 9px !important;
+  padding: 10px 12px !important;
+  color: #cdd6f4 !important;
+  font-size: 0.92rem;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.sftp-select-styled:focus {
+  border-color: #89b4fa !important;
+  box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.2) !important;
+}
+
+.sftp-chroot-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(137, 180, 250, 0.08);
+  border: 1px solid rgba(137, 180, 250, 0.22);
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 0.81rem;
+  color: #bac2de;
+  line-height: 1.4;
+}
+
+.sftp-chroot-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.sftp-chroot-text strong {
+  color: #89b4fa;
+  display: block;
+  margin-bottom: 2px;
+}
+
 /* Radio permission cards in modal */
 .sftp-permission-selector {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .sftp-perm-card {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: rgba(17, 17, 27, 0.6);
+  background: rgba(17, 17, 27, 0.65);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 10px 13px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -6543,39 +6773,89 @@ body {
   background: rgba(30, 30, 46, 0.6);
 }
 
-.sftp-perm-card input[type="radio"]:checked + .sftp-perm-card-body {
-  color: #cdd6f4;
-}
-
 .sftp-perm-card:has(input[type="radio"]:checked) {
   border-color: #89b4fa;
-  background: rgba(137, 180, 250, 0.1);
-  box-shadow: 0 0 12px rgba(137, 180, 250, 0.15);
+  background: rgba(137, 180, 250, 0.12);
+  box-shadow: 0 0 14px rgba(137, 180, 250, 0.18);
 }
 
 .sftp-perm-card-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
 }
 
-.sftp-perm-card-body strong {
-  font-size: 0.92rem;
+.sftp-perm-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sftp-perm-title strong {
+  font-size: 0.90rem;
   color: #cdd6f4;
 }
 
+.sftp-perm-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.perm-tag-ro {
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  border: 1px solid rgba(166, 227, 161, 0.3);
+}
+
+.perm-tag-rw {
+  background: rgba(137, 180, 250, 0.15);
+  color: #89b4fa;
+  border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+.perm-tag-full {
+  background: rgba(203, 166, 247, 0.15);
+  color: #cba6f7;
+  border: 1px solid rgba(203, 166, 247, 0.3);
+}
+
 .sftp-perm-card-body small {
-  font-size: 0.8rem;
+  font-size: 0.79rem;
   color: #a6adc8;
 }
 
-.input-password-wrap {
-  display: flex;
-  gap: 6px;
+.sftp-status-switch-card {
+  background: rgba(24, 24, 37, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 10px 14px;
 }
 
-.input-password-wrap input {
-  flex: 1;
+.sftp-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.sftp-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sftp-status-info strong {
+  font-size: 0.88rem;
+  color: #cdd6f4;
+}
+
+.sftp-status-info small {
+  font-size: 0.78rem;
+  color: #a6adc8;
 }
 
 .sftp-empty-placeholder {

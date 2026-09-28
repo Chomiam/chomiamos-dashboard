@@ -4295,86 +4295,152 @@
 
   <!-- MODAL : CRÉER / ÉDITER UN UTILISATEUR sFTP -->
   <div id="modal-sftp-user" class="modal-overlay hidden">
-    <div class="modal-card" style="max-width: 580px;">
+    <div class="modal-card modal-card-sftp" style="max-width: 600px; width: 94vw;">
       <div class="modal-header">
         <div class="modal-title-box">
-          <span class="modal-icon">👤</span>
+          <div class="sftp-modal-icon-badge">👤</div>
           <div>
             <h3 id="modal-sftp-user-title">Nouvel Utilisateur sFTP</h3>
-            <p class="modal-subtitle">Accès sécurisé isolé avec permissions granulaires</p>
+            <p class="modal-subtitle">Accès sécurisé chroot avec permissions granulaires</p>
           </div>
         </div>
         <button type="button" class="modal-close-btn" onclick="closeSftpModals()">✕</button>
       </div>
-      <div class="modal-body">
-        <div class="form-group" style="margin-bottom: 14px;">
-          <label class="form-label" for="sftp-user-name">Identifiant de Connexion (Username) <span class="text-danger">*</span></label>
-          <input type="text" id="sftp-user-name" class="form-control" placeholder="ex: invité, client, partenaire">
-          <small class="text-muted" style="display:block; margin-top:4px;">Lettres, chiffres, tirets et underscores uniquement.</small>
-        </div>
-        <div class="form-group" style="margin-bottom: 14px;">
-          <label class="form-label" for="sftp-user-password" id="lbl-sftp-user-password">Mot de Passe <span class="text-danger">*</span></label>
-          <div class="input-password-wrap" style="display:flex; gap:8px;">
-            <input type="password" id="sftp-user-password" class="form-control" placeholder="Définir un mot de passe sécurisé">
-            <button type="button" class="btn btn-outline btn-sm" onclick="toggleSftpPasswordVisibility()">👁️</button>
-            <button type="button" class="btn btn-outline btn-sm" onclick="generateSftpRandomPassword()">🎲 Générer</button>
+
+      <div class="modal-body sftp-modal-body">
+        <!-- 1. IDENTIFIANT -->
+        <div class="sftp-field-card">
+          <div class="sftp-field-header">
+            <label class="form-label" for="sftp-user-name">
+              <span class="sftp-field-icon">👤</span> Identifiant de Connexion (Username) <span class="text-danger">*</span>
+            </label>
+            <span class="sftp-field-badge">Compte Linux</span>
           </div>
-          <small id="sftp-user-password-hint" class="text-muted" style="display:block; margin-top:4px;">La connexion sFTP se fera avec ce mot de passe sans nécessiter de clé SSH.</small>
+          <div class="sftp-input-wrapper">
+            <span class="sftp-input-prefix">@</span>
+            <input type="text" id="sftp-user-name" class="form-control sftp-input-text" placeholder="ex: fanfan, client, backup" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="sftp-field-hint">
+            <span>ℹ️ Caractères autorisés : minuscules (a-z), chiffres (0-9), tirets (-) et underscores (_). Max 32 caractères.</span>
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom: 14px;">
-          <label class="form-label" for="sftp-user-share">Dossier Racine Assigné <span class="text-danger">*</span></label>
-          <select id="sftp-user-share" class="fw-select" style="width:100%;">
-            <!-- Rempli dynamiquement avec les partages -->
-          </select>
-          <small class="text-muted" style="display:block; margin-top:4px;">L'utilisateur sera confiné dans ce dossier (environnement sFTP isolé).</small>
+
+        <!-- 2. MOT DE PASSE -->
+        <div class="sftp-field-card">
+          <div class="sftp-field-header">
+            <label class="form-label" for="sftp-user-password" id="lbl-sftp-user-password">
+              <span class="sftp-field-icon">🔑</span> Mot de Passe sFTP <span class="text-danger">*</span>
+            </label>
+            <span class="sftp-field-badge">Chiffré PAM / SSH</span>
+          </div>
+          <div class="sftp-password-box">
+            <div class="sftp-input-wrapper flex-grow">
+              <span class="sftp-input-prefix">🔒</span>
+              <input type="password" id="sftp-user-password" class="form-control sftp-input-password" placeholder="Définir ou générer un mot de passe" autocomplete="new-password">
+              <button type="button" class="sftp-btn-inside-toggle" onclick="toggleSftpPasswordVisibility()" title="Afficher/Masquer le mot de passe">👁️</button>
+            </div>
+            <div class="sftp-password-actions">
+              <button type="button" class="btn btn-outline btn-sm sftp-btn-action" onclick="generateSftpRandomPassword()" title="Générer un mot de passe robuste aléatoire">
+                🎲 Générer
+              </button>
+              <button type="button" class="btn btn-outline btn-sm sftp-btn-action" onclick="copySftpPasswordToClipboard()" title="Copier le mot de passe dans le presse-papier">
+                📋 Copier
+              </button>
+            </div>
+          </div>
+          <div class="sftp-field-hint">
+            <span id="sftp-user-password-hint">Ce mot de passe permettra à l'utilisateur de se connecter via FileZilla, Cyberduck ou WinSCP sans nécessiter de clé SSH.</span>
+          </div>
         </div>
-        
-        <div class="form-group" style="margin-bottom: 14px;">
-          <label class="form-label">Niveau de Permissions <span class="text-danger">*</span></label>
+
+        <!-- 3. DOSSIER RACINE PARTAGÉ -->
+        <div class="sftp-field-card">
+          <div class="sftp-field-header">
+            <label class="form-label" for="sftp-user-share">
+              <span class="sftp-field-icon">📁</span> Dossier Racine Assigné <span class="text-danger">*</span>
+            </label>
+            <span class="sftp-field-badge">Environnement Chroot</span>
+          </div>
+          <div class="sftp-select-wrapper">
+            <select id="sftp-user-share" class="fw-select sftp-select-styled">
+              <!-- Rempli dynamiquement avec les partages -->
+            </select>
+          </div>
+          <div class="sftp-chroot-callout">
+            <span class="sftp-chroot-icon">🛡️</span>
+            <div class="sftp-chroot-text">
+              <strong>Confinement de sécurité chroot :</strong>
+              <span>L'utilisateur sera strictement cloisonné dans ce répertoire. Tout le reste du système (vos fichiers personnels, système NixOS, etc.) lui sera invisible et strictement inaccessible.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. PERMISSIONS -->
+        <div class="sftp-field-card">
+          <div class="sftp-field-header">
+            <label class="form-label">
+              <span class="sftp-field-icon">🛡️</span> Droits d'Accès & Permissions <span class="text-danger">*</span>
+            </label>
+          </div>
           <div class="sftp-permission-selector">
             <label class="sftp-perm-card">
               <input type="radio" name="sftp-user-perm" value="ro" checked>
               <div class="sftp-perm-card-body">
-                <span class="sftp-perm-icon">👁️</span>
-                <strong>Lecture Seule</strong>
-                <small>Consultation & téléchargement uniquement. Écriture et suppression impossibles (-R).</small>
+                <div class="sftp-perm-title">
+                  <span class="sftp-perm-icon">👁️</span>
+                  <strong>Lecture Seule</strong>
+                  <span class="sftp-perm-tag perm-tag-ro">-R</span>
+                </div>
+                <small>Consultation & téléchargement uniquement. Écriture, modification et suppression impossibles.</small>
               </div>
             </label>
             <label class="sftp-perm-card">
               <input type="radio" name="sftp-user-perm" value="rw">
               <div class="sftp-perm-card-body">
-                <span class="sftp-perm-icon">✍️</span>
-                <strong>Écriture sans Suppression</strong>
-                <small>Téléversement et consultation autorisés. Suppression de fichiers interdite (-P remove,rmdir).</small>
+                <div class="sftp-perm-title">
+                  <span class="sftp-perm-icon">✍️</span>
+                  <strong>Dépôt / Écriture sans Suppression</strong>
+                  <span class="sftp-perm-tag perm-tag-rw">-P rm</span>
+                </div>
+                <small>Téléversement et consultation autorisés. Suppression et écrasement de fichiers interdits.</small>
               </div>
             </label>
             <label class="sftp-perm-card">
               <input type="radio" name="sftp-user-perm" value="full">
               <div class="sftp-perm-card-body">
-                <span class="sftp-perm-icon">⚡</span>
-                <strong>Contrôle Total</strong>
-                <small>Lecture, téléversement, renommage et suppression sans restriction.</small>
+                <div class="sftp-perm-title">
+                  <span class="sftp-perm-icon">⚡</span>
+                  <strong>Contrôle Total</strong>
+                  <span class="sftp-perm-tag perm-tag-full">Complet</span>
+                </div>
+                <small>Lecture, téléversement, renommage et suppression de fichiers sans restriction.</small>
               </div>
             </label>
           </div>
         </div>
 
-        <div class="form-group form-check" style="margin-bottom: 8px;">
-          <label class="checkbox-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <!-- 5. STATUT DU COMPTE -->
+        <div class="sftp-status-switch-card">
+          <label class="checkbox-label sftp-checkbox-label">
             <input type="checkbox" id="sftp-user-enabled" checked>
-            <span>Compte actif et autorisé à se connecter</span>
+            <div class="sftp-status-info">
+              <strong>Compte Actif</strong>
+              <small>L'utilisateur est immédiatement autorisé à établir des sessions sFTP.</small>
+            </div>
           </label>
         </div>
       </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeSftpModals()">Annuler</button>
-        <button type="button" class="btn btn-primary" onclick="submitSaveSftpUser()">Enregistrer l'Utilisateur</button>
+        <button type="button" class="btn btn-primary" onclick="submitSaveSftpUser()">
+          <span>💾 Enregistrer l'Utilisateur</span>
+        </button>
       </div>
     </div>
   </div>
 
-
-  <!-- ==================== MODAL : TÉLÉCHARGEMENT MODÈLE OLLAMA ==================== -->
+    <!-- ==================== MODAL : TÉLÉCHARGEMENT MODÈLE OLLAMA ==================== -->
   <div id="modal-ollama-download" class="modal-overlay hidden">
     <div class="modal-card" style="max-width: 620px; width: 92vw;">
       <div class="modal-header">

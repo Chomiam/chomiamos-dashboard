@@ -6261,6 +6261,20 @@ window.deleteSftpUserUI = deleteSftpUserUI;
 window.toggleSftpPasswordVisibility = toggleSftpPasswordVisibility;
 window.generateSftpRandomPassword = generateSftpRandomPassword;
 
+function copySftpPasswordToClipboard() {
+  const pwdInput = document.getElementById("sftp-user-password");
+  if (!pwdInput || !pwdInput.value) {
+    showToast("Aucun mot de passe à copier. Saisissez ou générez d'abord un mot de passe.", "warning");
+    return;
+  }
+  navigator.clipboard.writeText(pwdInput.value).then(() => {
+    showToast("Mot de passe copié dans le presse-papier !", "success");
+  }).catch(e => {
+    showToast("Erreur copie : " + e, "error");
+  });
+}
+window.copySftpPasswordToClipboard = copySftpPasswordToClipboard;
+
 function copyToClipboard(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     if (btn) {
@@ -8773,7 +8787,43 @@ async function testFriendTunnel() {
   try {
     const res = await invoke("test_friend_tunnel");
     if (box && msg && details) {
-      if (res.success) {
+      if (res.diagnostic_code === "LOCAL_FIREWALL_BLOCKED") {
+        box.className = "wg-test-result-box error";
+        if (icon) icon.textContent = "🛡️";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = "Pare-feu PC";
+          latBadge.className = "badge badge-danger";
+        }
+      } else if (res.diagnostic_code === "BOX_NAT_BLOCKED") {
+        box.className = "wg-test-result-box error";
+        if (icon) icon.textContent = "🌐";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = "Port Box (NAT)";
+          latBadge.className = "badge badge-danger";
+        }
+      } else if (res.diagnostic_code === "REMOTE_FIREWALL_ICMP") {
+        box.className = "wg-test-result-box warning";
+        if (icon) icon.textContent = "🤝";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = "Pare-feu Ami";
+          latBadge.className = "badge badge-warning";
+        }
+      } else if (res.diagnostic_code === "SERVER_INACTIVE") {
+        box.className = "wg-test-result-box error";
+        if (icon) icon.textContent = "❌";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = "Inactif";
+          latBadge.className = "badge badge-neutral";
+        }
+      } else if (res.success) {
         box.className = "wg-test-result-box success";
         if (icon) icon.textContent = "🟢";
         msg.textContent = res.message;

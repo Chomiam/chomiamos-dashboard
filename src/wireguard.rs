@@ -62,6 +62,8 @@ pub struct TunnelTestResult {
     pub bytes_sent: String,
     pub message: String,
     pub details: String,
+    #[serde(default)]
+    pub diagnostic_code: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -993,8 +995,25 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
             handshake_status: "Serveur inactif".into(),
             bytes_received: "0 O".into(),
             bytes_sent: "0 O".into(),
-            message: "Le serveur privé WireGuard n'est pas encore démarré.".into(),
-            details: "Cliquez d'abord sur « Démarrer le Réseau Privé » pour initialiser l'interface hôte.".into(),
+            message: "❌ Serveur WireGuard inactif.".into(),
+            details: "Le serveur privé WireGuard local n'est pas encore démarré. Cliquez d'abord sur « Démarrer le Réseau Privé ».".into(),
+            diagnostic_code: Some("SERVER_INACTIVE".into()),
+        });
+    }
+
+    // 1. Vérification du pare-feu NixOS local (UDP 51820)
+    let fw_open = is_firewall_udp_51820_open();
+    if !fw_open {
+        let stats_b = srv_stats_before.unwrap();
+        return Ok(TunnelTestResult {
+            success: false,
+            latency_ms: None,
+            handshake_status: "Pare-feu PC Bloqué".into(),
+            bytes_received: format_bytes(stats_b.rx_bytes),
+            bytes_sent: format_bytes(stats_b.tx_bytes),
+            message: "🛡️ Problème détecté : Pare-feu local (PC NixOS) fermé.".into(),
+            details: "Le port UDP 51820 n'est pas ouvert dans le pare-feu local NixOS de ce PC. Votre machine bloque les paquets entrants. Cliquez sur « Ouvrir le port pare-feu » dans le dashboard pour l'autoriser.".into(),
+            diagnostic_code: Some("LOCAL_FIREWALL_BLOCKED".into()),
         });
     }
 
@@ -1053,6 +1072,7 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
                 bytes_sent: tx_str,
                 message: format!("⚡ Tunnel actif et ami en ligne ! Latence : {}", lat_display),
                 details: "La communication bidirectionnelle WireGuard fonctionne parfaitement (échange Ping ICMP réussi).".into(),
+                diagnostic_code: Some("SUCCESS".into()),
             });
         }
     }
@@ -1072,18 +1092,20 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
             handshake_status: hs_status,
             bytes_received: rx_str,
             bytes_sent: tx_str,
-            message: "🤝 Tunnel WireGuard actif avec trafic reçu de l'ami.".into(),
-            details: "Des données chiffrées sont bien reçues de votre ami (RX actif). Son pare-feu local (ex: pare-feu Windows) bloque simplement les réponses aux requêtes Ping ICMP.".into(),
+            message: "🤝 Tunnel actif (Le pare-feu de votre ami bloque le Ping).".into(),
+            details: "Bonne nouvelle : votre Box Internet et votre pare-feu local fonctionnent parfaitement ! Le tunnel WireGuard est bien établi et reçoit des données chiffrées de votre ami (Handshake & RX actifs). Son pare-feu local (ex: Windows Defender) bloque simplement les réponses aux requêtes Ping ICMP. Vos jeux ou partages fonctionneront sans souci.".into(),
+            diagnostic_code: Some("REMOTE_FIREWALL_ICMP".into()),
         })
     } else {
         Ok(TunnelTestResult {
             success: false,
             latency_ms: None,
-            handshake_status: "Aucun paquet reçu".into(),
+            handshake_status: "Aucun paquet reçu (0 O)".into(),
             bytes_received: rx_str,
             bytes_sent: tx_str,
-            message: "⏳ Aucun paquet reçu de l'ami (0 O reçu).".into(),
-            details: "L'interface écoute sur le port UDP 51820 mais aucun paquet n'est arrivé. Vérifiez impérativement : 1) La redirection du port UDP 51820 dans votre Box Internet (Port Forwarding / NAT vers ce PC), 2) Que l'ami a bien démarré la connexion sur son appareil.".into(),
+            message: "🌐 Problème détecté : Redirection Port Box Internet (NAT).".into(),
+            details: "Votre pare-feu local PC autorise le port 51820, mais AUCUN paquet n'atteint votre machine depuis l'extérieur (0 octet reçu). Vérifiez impérativement : 1) La règle de redirection du port UDP 51820 dans l'interface de votre Box Internet (Livebox/Freebox...) vers l'adresse IP locale de ce PC, et 2) Que votre ami a bien démarré la connexion dans son client WireGuard.".into(),
+            diagnostic_code: Some("BOX_NAT_BLOCKED".into()),
         })
     }
 }

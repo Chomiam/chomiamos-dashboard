@@ -346,21 +346,21 @@ fn start_terminal_task(
 
                 # 1. Vérification de la connectivité avec le cache binaire Cachix
                 echo -e "🔍 Vérification de l'infrastructure de cache Cachix..."
-                CACHIX_URL="https://chomiamos-dashboard.cachix.org"
                 CACHIX_CHOMIAM="https://chomiamos.cachix.org"
+                CACHIX_LEGACY="https://chomiamos-dashboard.cachix.org"
 
-                if curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_URL/nix-cache-info"; then
-                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix : $CACHIX_URL"
-                elif curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_CHOMIAM/nix-cache-info"; then
-                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix principal : $CACHIX_CHOMIAM"
+                if curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_CHOMIAM/nix-cache-info"; then
+                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix officiel : $CACHIX_CHOMIAM"
+                elif curl -s --connect-timeout 3 -f -o /dev/null "$CACHIX_LEGACY/nix-cache-info"; then
+                    echo -e "  \033[32m[✓]\033[0m Connecté au cache Cachix secondaire : $CACHIX_LEGACY"
                 else
                     echo -e "  \033[31m[✗]\033[0m Attention : Impossible de joindre les serveurs Cachix (hors-ligne ou réseau instable)"
                 fi
 
-                if nix config show 2>/dev/null | grep -q "chomiamos-dashboard.cachix.org"; then
-                    echo -e "  \033[32m[✓]\033[0m Substituter chomiamos-dashboard actif dans la configuration Nix locale"
-                elif nix config show 2>/dev/null | grep -q "chomiamos.cachix.org"; then
+                if nix config show 2>/dev/null | grep -q "chomiamos.cachix.org"; then
                     echo -e "  \033[32m[✓]\033[0m Substituter chomiamos actif dans la configuration Nix locale"
+                elif nix config show 2>/dev/null | grep -q "chomiamos-dashboard.cachix.org"; then
+                    echo -e "  \033[32m[✓]\033[0m Substituter chomiamos-dashboard actif dans la configuration Nix locale"
                 else
                     echo -e "  \033[33m[!]\033[0m Aucun substituter Cachix Chomiam détecté dans nix.conf"
                 fi
@@ -379,7 +379,15 @@ fn start_terminal_task(
 
                 if [ -n "$OUT_PATH" ]; then
                     STORE_HASH=$(basename "$OUT_PATH" | cut -d"-" -f1)
-                    HTTP_STATUS=$(curl -s --connect-timeout 4 -o /dev/null -w "%{{http_code}}" "$CACHIX_URL/${{STORE_HASH}}.narinfo")
+                    HTTP_STATUS=$(curl -s --connect-timeout 4 -o /dev/null -w "%{{http_code}}" "$CACHIX_CHOMIAM/${{STORE_HASH}}.narinfo")
+                    ACTIVE_CACHE="$CACHIX_CHOMIAM"
+                    if [ "$HTTP_STATUS" != "200" ]; then
+                        HTTP_STATUS_LEGACY=$(curl -s --connect-timeout 4 -o /dev/null -w "%{{http_code}}" "$CACHIX_LEGACY/${{STORE_HASH}}.narinfo")
+                        if [ "$HTTP_STATUS_LEGACY" = "200" ]; then
+                            HTTP_STATUS="200"
+                            ACTIVE_CACHE="$CACHIX_LEGACY"
+                        fi
+                    fi
                     if [ "$HTTP_STATUS" = "200" ]; then
                         echo -e "  \033[32m[✓]\033[0m Binaire pré-compilé disponible sur Cachix : \033[1m${{STORE_HASH}}\033[0m"
                         echo -e "  \033[32m⚡ Téléchargement et activation instantanés (sans compilation locale)...\033[0m\n"

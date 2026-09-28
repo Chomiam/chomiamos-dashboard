@@ -93,6 +93,7 @@ const APP_ICONS = {
   "desktop_env:cosmic": "cosmic.svg",
   "desktop_env:cinnamon": "cinnamon.svg",
   "desktop_env:kde": "kde.svg",
+  "desktop_env:budgie": "budgie.svg",
 
   // Gaming
   "cfg-steam": "steam.svg",

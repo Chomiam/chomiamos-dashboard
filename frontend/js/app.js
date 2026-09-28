@@ -8371,10 +8371,24 @@ function filterWgProfiles() {
 function openWgImportModal() {
   const modal = document.getElementById("wg-import-modal");
   if (!modal) return;
+
+  // Reset inputs
   document.getElementById("wg-import-name").value = "";
   document.getElementById("wg-import-country").value = "";
   document.getElementById("wg-import-file-input").value = "";
   document.getElementById("wg-import-text-content").value = "";
+
+  // Reset dropzone state
+  document.getElementById("wg-dropzone-empty")?.classList.remove("hidden");
+  document.getElementById("wg-dropzone-loaded")?.classList.add("hidden");
+  document.getElementById("wg-import-preview-box")?.classList.add("hidden");
+
+  // Default to file tab
+  switchWgImportMode("file");
+
+  // Init drag and drop listeners once
+  initWgDropzoneListeners();
+
   modal.classList.remove("hidden");
 }
 
@@ -8384,28 +8398,211 @@ function closeWgImportModal() {
 
 function openWgPasteModal() {
   openWgImportModal();
+  switchWgImportMode("paste");
   setTimeout(() => {
     document.getElementById("wg-import-text-content")?.focus();
   }, 100);
 }
 
+function switchWgImportMode(mode) {
+  const fileTab = document.getElementById("wg-tab-btn-file");
+  const pasteTab = document.getElementById("wg-tab-btn-paste");
+  const fileZone = document.getElementById("wg-import-zone-file");
+  const pasteZone = document.getElementById("wg-import-zone-paste");
+
+  if (mode === "file") {
+    fileTab?.classList.add("active");
+    pasteTab?.classList.remove("active");
+    fileZone?.classList.remove("hidden");
+    pasteZone?.classList.add("hidden");
+  } else {
+    pasteTab?.classList.add("active");
+    fileTab?.classList.remove("active");
+    pasteZone?.classList.remove("hidden");
+    fileZone?.classList.add("hidden");
+    document.getElementById("wg-import-text-content")?.focus();
+  }
+}
+
+let wgDropzoneInit = false;
+function initWgDropzoneListeners() {
+  if (wgDropzoneInit) return;
+  const dropzone = document.getElementById("wg-dropzone");
+  if (!dropzone) return;
+
+  ["dragenter", "dragover"].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add("dragover");
+    }, false);
+  });
+
+  ["dragleave", "drop"].forEach(eventName => {
+    dropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove("dragover");
+    }, false);
+  });
+
+  dropzone.addEventListener("drop", (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      processWgFile(files[0]);
+    }
+  }, false);
+
+  wgDropzoneInit = true;
+}
+
 function handleWgFileSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
+  processWgFile(file);
+}
 
+function processWgFile(file) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const text = e.target.result;
     document.getElementById("wg-import-text-content").value = text;
+
+    // Show loaded card in dropzone
+    const emptyBox = document.getElementById("wg-dropzone-empty");
+    const loadedBox = document.getElementById("wg-dropzone-loaded");
+    const nameEl = document.getElementById("wg-loaded-file-name");
+    const metaEl = document.getElementById("wg-loaded-file-meta");
+
+    if (emptyBox && loadedBox && nameEl) {
+      emptyBox.classList.add("hidden");
+      loadedBox.classList.remove("hidden");
+      nameEl.textContent = file.name;
+      const sizeKb = (file.size / 1024).toFixed(1);
+      if (metaEl) metaEl.textContent = `✓ Fichier de configuration valide (${sizeKb} Ko)`;
+    }
+
+    // Auto-fill profile name if empty
     const nameField = document.getElementById("wg-import-name");
     if (nameField && !nameField.value.trim()) {
-      // Nettoyer le nom du fichier pour pré-remplir
       let base = file.name.replace(/\.conf$/i, "").replace(/[-_]/g, " ");
       base = base.charAt(0).toUpperCase() + base.slice(1);
       nameField.value = base;
     }
+
+    // Update real-time preview & auto-country detection
+    parseAndShowWgPreview(text, file.name);
   };
   reader.readAsText(file);
+}
+
+function onWgTextContentInput() {
+  const text = document.getElementById("wg-import-text-content")?.value || "";
+  parseAndShowWgPreview(text, "");
+}
+
+function pasteFromClipboard() {
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then(text => {
+      const textarea = document.getElementById("wg-import-text-content");
+      if (textarea) {
+        textarea.value = text;
+        onWgTextContentInput();
+        showToast("Configuration collée depuis le presse-papier !", "info");
+      }
+    }).catch(err => {
+      showToast("Impossible d'accéder au presse-papier : " + err, "warning");
+    });
+  }
+}
+
+function parseAndShowWgPreview(content, hintName) {
+  const previewBox = document.getElementById("wg-import-preview-box");
+  const epEl = document.getElementById("wg-preview-endpoint");
+  const addrEl = document.getElementById("wg-preview-address");
+  const dnsEl = document.getElementById("wg-preview-dns");
+  const countryBadge = document.getElementById("wg-preview-country-badge");
+  const countrySelect = document.getElementById("wg-import-country");
+
+  if (!content || !content.trim()) {
+    previewBox?.classList.add("hidden");
+    return;
+  }
+
+  // Parse fields
+  let endpoint = "-";
+  let address = "-";
+  let dns = "-";
+
+  const epMatch = content.match(/Endpoint\s*=\s*([^\r\n#]+)/i);
+  if (epMatch) endpoint = epMatch[1].trim();
+
+  const addrMatch = content.match(/Address\s*=\s*([^\r\n#]+)/i);
+  if (addrMatch) address = addrMatch[1].trim();
+
+  const dnsMatch = content.match(/DNS\s*=\s*([^\r\n#]+)/i);
+  if (dnsMatch) dns = dnsMatch[1].trim();
+
+  if (epEl) epEl.textContent = endpoint;
+  if (addrEl) addrEl.textContent = address;
+  if (dnsEl) dnsEl.textContent = dns;
+
+  // Auto-detect country code from hintName or content or endpoint
+  const targetStr = (hintName + " " + endpoint + " " + content).toLowerCase();
+  const countryMap = [
+    { code: "FR", flag: "🇫🇷", name: "France", keys: ["fr", "france", "paris", "mrs", "lyon"] },
+    { code: "CH", flag: "🇨🇭", name: "Suisse", keys: ["ch", "swiss", "switzerland", "zurich", "zrh", "geneva", "gva"] },
+    { code: "US", flag: "🇺🇸", name: "États-Unis", keys: ["us", "usa", "united states", "new york", "los angeles", "chicago", "miami"] },
+    { code: "DE", flag: "🇩🇪", name: "Allemagne", keys: ["de", "germany", "frankfurt", "fra", "berlin"] },
+    { code: "NL", flag: "🇳🇱", name: "Pays-Bas", keys: ["nl", "netherlands", "amsterdam", "ams"] },
+    { code: "GB", flag: "🇬🇧", name: "Royaume-Uni", keys: ["uk", "gb", "london", "manchester"] },
+    { code: "JP", flag: "🇯🇵", name: "Japon", keys: ["jp", "japan", "tokyo", "osaka"] },
+    { code: "SE", flag: "🇸🇪", name: "Suède", keys: ["se", "sweden", "stockholm"] },
+    { code: "CA", flag: "🇨🇦", name: "Canada", keys: ["ca", "canada", "montreal", "toronto", "vancouver"] },
+    { code: "ES", flag: "🇪🇸", name: "Espagne", keys: ["es", "spain", "madrid", "barcelona"] },
+    { code: "IT", flag: "🇮🇹", name: "Italie", keys: ["it", "italy", "milan", "rome"] },
+    { code: "BE", flag: "🇧🇪", name: "Belgique", keys: ["be", "belgium", "brussels"] },
+    { code: "NO", flag: "🇳🇴", name: "Norvège", keys: ["no", "norway", "oslo"] },
+    { code: "FI", flag: "🇫🇮", name: "Finlande", keys: ["fi", "finland", "helsinki"] },
+    { code: "DK", flag: "🇩🇰", name: "Danemark", keys: ["dk", "denmark", "copenhagen"] },
+    { code: "IS", flag: "🇮🇸", name: "Islande", keys: ["is", "iceland", "reykjavik"] },
+    { code: "SG", flag: "🇸🇬", name: "Singapour", keys: ["sg", "singapore"] },
+    { code: "AU", flag: "🇦🇺", name: "Australie", keys: ["au", "australia", "sydney", "melbourne"] },
+  ];
+
+  let detected = null;
+  for (const c of countryMap) {
+    if (c.keys.some(k => new RegExp(`(^|[^a-z])${k}([^a-z]|$)`, 'i').test(targetStr))) {
+      detected = c;
+      break;
+    }
+  }
+
+  if (countrySelect && !countrySelect.value && detected) {
+    countrySelect.value = detected.code;
+  }
+
+  if (countryBadge) {
+    if (detected) {
+      countryBadge.textContent = `${detected.flag} ${detected.name}`;
+      countryBadge.className = "badge badge-accent";
+    } else {
+      countryBadge.textContent = "🌐 Détection auto";
+      countryBadge.className = "badge badge-secondary";
+    }
+  }
+
+  previewBox?.classList.remove("hidden");
+}
+
+function onWgCountrySelectChange() {
+  const sel = document.getElementById("wg-import-country");
+  const badge = document.getElementById("wg-preview-country-badge");
+  if (sel && badge && sel.selectedIndex >= 0) {
+    const text = sel.options[sel.selectedIndex].text;
+    badge.textContent = text;
+  }
 }
 
 async function submitWgImport() {

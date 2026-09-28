@@ -3795,6 +3795,7 @@
                           <li><strong>Windows / Mac :</strong> Installer WireGuard ➔ Importer le tunnel <code>.conf</code> ➔ Activer.</li>
                           <li><strong>Smartphone :</strong> Scanner ce QR Code dans l'app WireGuard ➔ Activer.</li>
                           <li><strong>Linux :</strong> <code>wg-quick up ./chomiamos-friend.conf</code> ou via NetworkManager.</li>
+                          <li><strong>🌐 Split-Tunneling :</strong> Votre ami conserve 100% de son propre réseau internet (seul le trafic privé <code>10.100.0.0/24</code> passe par le tunnel).</li>
                         </ul>
                       </div>
                     </div>
@@ -4464,75 +4465,161 @@
 
 
     <!-- ==================== MODAL IMPORT WIREGUARD ==================== -->
-    <div id="wg-import-modal" class="modal-overlay hidden">
-      <div class="modal-card">
-        <div class="modal-header">
+    <div id="wg-import-modal" class="modal-overlay wg-import-modal-overlay hidden">
+      <div class="modal-card wg-import-modal-card">
+        <!-- En-tête Moderne Glassmorphism -->
+        <div class="modal-header wg-modal-header">
           <div class="modal-title-box">
-            <span class="modal-icon">🔏</span>
+            <div class="wg-modal-icon-badge">
+              <span class="wg-modal-icon">🛡️</span>
+            </div>
             <div>
-              <h3>Importer un Profil WireGuard</h3>
+              <h3 class="wg-modal-title">Importer un Profil WireGuard</h3>
               <p class="modal-subtitle">Ajoutez un tunnel VPN client avec détection automatique du pays</p>
             </div>
           </div>
-          <button class="modal-close-btn" onclick="closeWgImportModal()">✕</button>
+          <button class="modal-close-btn wg-modal-close" onclick="closeWgImportModal()" title="Fermer">✕</button>
         </div>
 
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Nom personnalisé du VPN :</label>
-            <input type="text" id="wg-import-name" class="form-control" placeholder="Ex: Proton VPN Paris, Mullvad Suisse, VPN Bureau...">
+        <div class="modal-body wg-modal-body">
+          <!-- Sélecteur d'Onglets : Fichier .conf / Saisie Manuelle -->
+          <div class="wg-import-mode-tabs">
+            <button type="button" id="wg-tab-btn-file" class="wg-mode-tab-btn active" onclick="switchWgImportMode('file')">
+              <span class="wg-tab-icon">📁</span> Fichier de configuration (.conf)
+            </button>
+            <button type="button" id="wg-tab-btn-paste" class="wg-mode-tab-btn" onclick="switchWgImportMode('paste')">
+              <span class="wg-tab-icon">📋</span> Saisie manuelle / Coller
+            </button>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Pays du VPN (Drapeau affiché) :</label>
-            <select id="wg-import-country" class="form-control">
-              <option value="" selected>🔍 Détection Automatique (selon fichier/endpoint)</option>
-              <option value="FR">🇫🇷 France</option>
-              <option value="CH">🇨🇭 Suisse</option>
-              <option value="US">🇺🇸 États-Unis</option>
-              <option value="DE">🇩🇪 Allemagne</option>
-              <option value="NL">🇳🇱 Pays-Bas</option>
-              <option value="GB">🇬🇧 Royaume-Uni</option>
-              <option value="JP">🇯🇵 Japon</option>
-              <option value="SE">🇸🇪 Suède</option>
-              <option value="CA">🇨🇦 Canada</option>
-              <option value="ES">🇪🇸 Espagne</option>
-              <option value="IT">🇮🇹 Italie</option>
-              <option value="BE">🇧🇪 Belgique</option>
-              <option value="NO">🇳🇴 Norvège</option>
-              <option value="FI">🇫🇮 Finlande</option>
-              <option value="DK">🇩🇰 Danemark</option>
-              <option value="IS">🇮🇸 Islande</option>
-              <option value="AT">🇦🇹 Autriche</option>
-              <option value="PT">🇵🇹 Portugal</option>
-              <option value="PL">🇵🇱 Pologne</option>
-              <option value="RO">🇷🇴 Roumanie</option>
-              <option value="IE">🇮🇪 Irlande</option>
-              <option value="AU">🇦🇺 Australie</option>
-              <option value="SG">🇸🇬 Singapour</option>
-              <option value="KR">🇰🇷 Corée du Sud</option>
-              <option value="BR">🇧🇷 Brésil</option>
-              <option value="UA">🇺🇦 Ukraine</option>
-              <option value="UN">🌐 Réseau Privé / Autre</option>
-            </select>
+          <!-- Zone 1 : Drag & Drop de fichier -->
+          <div id="wg-import-zone-file" class="wg-import-zone">
+            <div id="wg-dropzone" class="wg-dropzone" onclick="document.getElementById('wg-import-file-input').click()">
+              <input type="file" id="wg-import-file-input" accept=".conf,.txt" class="hidden-file-input" onchange="handleWgFileSelected(event)">
+              
+              <div id="wg-dropzone-empty" class="wg-dropzone-inner">
+                <div class="wg-dropzone-icon-wrap">
+                  <span class="wg-dropzone-icon">⚡</span>
+                </div>
+                <div class="wg-dropzone-text">
+                  <span class="wg-dropzone-primary">Glissez & déposez votre fichier <strong>.conf</strong> ici</span>
+                  <span class="wg-dropzone-secondary">ou <span class="wg-dropzone-browse">parcourez vos dossiers</span></span>
+                </div>
+                <div class="wg-dropzone-badges">
+                  <span class="wg-format-chip">Fichiers .conf</span>
+                  <span class="wg-format-chip">Fichiers .txt</span>
+                  <span class="wg-format-chip">Auto-détection</span>
+                </div>
+              </div>
+
+              <!-- État : Fichier chargé avec succès -->
+              <div id="wg-dropzone-loaded" class="wg-dropzone-loaded hidden">
+                <div class="wg-loaded-file-icon">📄</div>
+                <div class="wg-loaded-file-info">
+                  <div class="wg-loaded-file-name" id="wg-loaded-file-name">profil.conf</div>
+                  <div class="wg-loaded-file-meta" id="wg-loaded-file-meta">Fichier prêt à être importé</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline wg-change-file-btn" onclick="event.stopPropagation(); document.getElementById('wg-import-file-input').click()">
+                  Changer
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Sélectionnez le fichier <code>.conf</code> :</label>
-            <input type="file" id="wg-import-file-input" accept=".conf,.txt" class="form-control" onchange="handleWgFileSelected(event)">
+          <!-- Zone 2 : Zone Coller le texte brut -->
+          <div id="wg-import-zone-paste" class="wg-import-zone hidden">
+            <div class="wg-editor-wrapper">
+              <div class="wg-editor-header">
+                <span class="wg-editor-title">📝 Configuration WireGuard brute</span>
+                <button type="button" class="btn btn-sm btn-ghost" onclick="pasteFromClipboard()">Coller du presse-papier</button>
+              </div>
+              <textarea id="wg-import-text-content" class="form-control wg-textarea-conf" rows="6" 
+                placeholder="[Interface]&#10;PrivateKey = aaaaaa...&#10;Address = 10.2.0.2/32&#10;DNS = 1.1.1.1&#10;&#10;[Peer]&#10;PublicKey = bbbbbb...&#10;Endpoint = vpn.example.com:51820&#10;AllowedIPs = 0.0.0.0/0"
+                oninput="onWgTextContentInput()"></textarea>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Ou collez directement la configuration WireGuard :</label>
-            <textarea id="wg-import-text-content" class="form-control wg-textarea-conf" rows="7" placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = ...&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = ..."></textarea>
+          <!-- Aperçu en direct des paramètres détectés (apparaît dès qu'une conf est chargée) -->
+          <div id="wg-import-preview-box" class="wg-import-preview-box hidden">
+            <div class="wg-preview-header">
+              <span class="wg-preview-badge">🔍 Analyse en direct du tunnel</span>
+              <span id="wg-preview-country-badge" class="badge badge-accent">🌐 Pays détecté</span>
+            </div>
+            <div class="wg-preview-grid">
+              <div class="wg-preview-item">
+                <span class="wg-preview-label">Endpoint :</span>
+                <span id="wg-preview-endpoint" class="wg-preview-val">-</span>
+              </div>
+              <div class="wg-preview-item">
+                <span class="wg-preview-label">Adresse IP :</span>
+                <span id="wg-preview-address" class="wg-preview-val">-</span>
+              </div>
+              <div class="wg-preview-item">
+                <span class="wg-preview-label">DNS :</span>
+                <span id="wg-preview-dns" class="wg-preview-val">-</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paramètres du profil utilisateur (2 colonnes) -->
+          <div class="wg-import-fields-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="wg-import-name">
+                <span>🏷️</span> Nom personnalisé du VPN :
+              </label>
+              <input type="text" id="wg-import-name" class="form-control wg-input-modern" placeholder="Ex: Proton Paris, Mullvad Suisse, VPN Bureau...">
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="wg-import-country">
+                <span>🏳️</span> Pays du VPN (Drapeau) :
+              </label>
+              <select id="wg-import-country" class="form-control wg-select-modern" onchange="onWgCountrySelectChange()">
+                <option value="" selected>🔍 Détection Automatique</option>
+                <option value="FR">🇫🇷 France</option>
+                <option value="CH">🇨🇭 Suisse</option>
+                <option value="US">🇺🇸 États-Unis</option>
+                <option value="DE">🇩🇪 Allemagne</option>
+                <option value="NL">🇳🇱 Pays-Bas</option>
+                <option value="GB">🇬🇧 Royaume-Uni</option>
+                <option value="JP">🇯🇵 Japon</option>
+                <option value="SE">🇸🇪 Suède</option>
+                <option value="CA">🇨🇦 Canada</option>
+                <option value="ES">🇪🇸 Espagne</option>
+                <option value="IT">🇮🇹 Italie</option>
+                <option value="BE">🇧🇪 Belgique</option>
+                <option value="NO">🇳🇴 Norvège</option>
+                <option value="FI">🇫🇮 Finlande</option>
+                <option value="DK">🇩🇰 Danemark</option>
+                <option value="IS">🇮🇸 Islande</option>
+                <option value="AT">🇦🇹 Autriche</option>
+                <option value="PT">🇵🇹 Portugal</option>
+                <option value="PL">🇵🇱 Pologne</option>
+                <option value="RO">🇷🇴 Roumanie</option>
+                <option value="IE">🇮🇪 Irlande</option>
+                <option value="AU">🇦🇺 Australie</option>
+                <option value="SG">🇸🇬 Singapour</option>
+                <option value="KR">🇰🇷 Corée du Sud</option>
+                <option value="BR">🇧🇷 Brésil</option>
+                <option value="UA">🇺🇦 Ukraine</option>
+                <option value="UN">🌐 Réseau Privé / Autre</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="closeWgImportModal()">Annuler</button>
-          <button type="button" class="btn btn-primary" onclick="submitWgImport()">
-            <span>➕</span> Importer & Enregistrer
-          </button>
+        <div class="modal-footer wg-modal-footer">
+          <div class="wg-modal-security-hint">
+            <span>🔒</span>
+            <span>Profil sécurisé dans NetworkManager</span>
+          </div>
+          <div class="wg-modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeWgImportModal()">Annuler</button>
+            <button type="button" id="wg-submit-import-btn" class="btn btn-primary wg-import-submit-btn" onclick="submitWgImport()">
+              <span class="wg-btn-glow"></span>
+              <span>➕</span> Importer le Profil
+            </button>
+          </div>
         </div>
       </div>
     </div>

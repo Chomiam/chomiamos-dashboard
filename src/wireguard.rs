@@ -651,7 +651,7 @@ pub fn get_wireguard_overview() -> Result<WireguardOverview, String> {
     let pub_ip = srv_meta.custom_endpoint.clone().unwrap_or_else(detect_public_ip);
 
     let friend_conf = format!(
-        "[Interface]\n# Clé privée de l'ami invité sur votre réseau privé ChomiamOS\nPrivateKey = {}\nAddress = 10.100.0.2/24\nDNS = 1.1.1.1\n\n[Peer]\n# Votre machine ChomiamOS (Serveur Hôte)\nPublicKey = {}\nPresharedKey = {}\nEndpoint = {}:{}\nAllowedIPs = 10.100.0.0/24\nPersistentKeepalive = 25\n",
+        "[Interface]\n# Clé privée de l'ami invité sur votre réseau privé ChomiamOS (Split-Tunneling LAN)\nPrivateKey = {}\nAddress = 10.100.0.2/24\n\n[Peer]\n# Votre machine ChomiamOS (Serveur Hôte)\nPublicKey = {}\nPresharedKey = {}\nEndpoint = {}:{}\nAllowedIPs = 10.100.0.0/24\nPersistentKeepalive = 25\n",
         srv_meta.friend_private_key,
         srv_meta.server_public_key,
         srv_meta.preshared_key,

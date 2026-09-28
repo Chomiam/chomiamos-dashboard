@@ -9597,3 +9597,449 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   ✨ WIREGUARD IMPORT MODAL - ULTRA PREMIUM REDESIGN (v0.5.8)
+   ========================================================================== */
+
+.wg-import-modal-card {
+  max-width: 660px;
+  width: 94%;
+  background: linear-gradient(155deg, rgba(30, 30, 46, 0.98), rgba(24, 24, 37, 0.98)) !important;
+  border: 1px solid rgba(203, 166, 247, 0.28) !important;
+  box-shadow: 0 24px 65px rgba(0, 0, 0, 0.7), 0 0 40px rgba(203, 166, 247, 0.12) !important;
+  border-radius: 20px !important;
+  overflow: hidden;
+  animation: wgModalScaleIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes wgModalScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.wg-modal-header {
+  padding: 22px 26px 18px 26px !important;
+  background: rgba(17, 17, 27, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wg-modal-icon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.22), rgba(137, 180, 250, 0.18));
+  border: 1px solid rgba(203, 166, 247, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 6px 20px rgba(203, 166, 247, 0.18);
+  flex-shrink: 0;
+}
+
+.wg-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text, #cdd6f4);
+  margin: 0 0 3px 0;
+  letter-spacing: -0.3px;
+}
+
+.wg-modal-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--subtext-0, #a6adc8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  font-size: 15px;
+}
+
+.wg-modal-close:hover {
+  background: rgba(243, 139, 168, 0.22);
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.45);
+  transform: rotate(90deg);
+}
+
+.wg-modal-body {
+  padding: 24px 26px !important;
+}
+
+/* Onglets Fichier / Texte */
+.wg-import-mode-tabs {
+  display: flex;
+  gap: 8px;
+  background: rgba(17, 17, 27, 0.65);
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 20px;
+}
+
+.wg-mode-tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--subtext-0, #a6adc8);
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.wg-mode-tab-btn:hover {
+  color: var(--text, #cdd6f4);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.wg-mode-tab-btn.active {
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.22), rgba(137, 180, 250, 0.16));
+  color: #cba6f7;
+  border-color: rgba(203, 166, 247, 0.35);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* Dropzone */
+.hidden-file-input {
+  display: none !important;
+}
+
+.wg-dropzone {
+  border: 2px dashed rgba(203, 166, 247, 0.35);
+  border-radius: 16px;
+  background: rgba(30, 30, 46, 0.45);
+  padding: 34px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.wg-dropzone::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, rgba(203, 166, 247, 0.08) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.wg-dropzone:hover,
+.wg-dropzone.dragover {
+  border-color: #cba6f7;
+  background: rgba(203, 166, 247, 0.06);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(203, 166, 247, 0.14);
+}
+
+.wg-dropzone:hover::before,
+.wg-dropzone.dragover::before {
+  opacity: 1;
+}
+
+.wg-dropzone-icon-wrap {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.2), rgba(137, 180, 250, 0.15));
+  border: 1px solid rgba(203, 166, 247, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px auto;
+  font-size: 26px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s ease;
+}
+
+.wg-dropzone:hover .wg-dropzone-icon-wrap {
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 6px 20px rgba(203, 166, 247, 0.3);
+}
+
+.wg-dropzone-primary {
+  display: block;
+  font-size: 1rem;
+  color: var(--text, #cdd6f4);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.wg-dropzone-secondary {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--subtext-0, #a6adc8);
+  margin-bottom: 16px;
+}
+
+.wg-dropzone-browse {
+  color: #89b4fa;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.wg-dropzone-badges {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wg-format-chip {
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--subtext-1, #bac2de);
+}
+
+/* Fichier chargé dans Dropzone */
+.wg-dropzone-loaded {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: rgba(166, 227, 161, 0.08);
+  border: 1px solid rgba(166, 227, 161, 0.35);
+  border-radius: 14px;
+  text-align: left;
+}
+
+.wg-loaded-file-icon {
+  font-size: 34px;
+  flex-shrink: 0;
+}
+
+.wg-loaded-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wg-loaded-file-name {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #a6e3a1;
+  word-break: break-all;
+  margin-bottom: 2px;
+}
+
+.wg-loaded-file-meta {
+  font-size: 0.8rem;
+  color: var(--subtext-0, #a6adc8);
+}
+
+.wg-change-file-btn {
+  padding: 6px 14px !important;
+  font-size: 0.8rem !important;
+  border-radius: 8px !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Éditeur Texte Brut */
+.wg-editor-wrapper {
+  border: 1px solid rgba(203, 166, 247, 0.25);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(17, 17, 27, 0.7);
+}
+
+.wg-editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(17, 17, 27, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wg-editor-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--subtext-0, #a6adc8);
+}
+
+.wg-textarea-conf {
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 0.85rem !important;
+  line-height: 1.5 !important;
+  background: rgba(17, 17, 27, 0.5) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  color: #cdd6f4 !important;
+  padding: 12px 14px !important;
+  resize: vertical !important;
+}
+
+.wg-textarea-conf:focus {
+  box-shadow: none !important;
+}
+
+/* Aperçu en direct des paramètres */
+.wg-import-preview-box {
+  margin-top: 18px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(17, 17, 27, 0.7);
+  border: 1px solid rgba(203, 166, 247, 0.22);
+  animation: wgFadeIn 0.25s ease forwards;
+}
+
+.wg-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.wg-preview-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #cba6f7;
+}
+
+.wg-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.wg-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(30, 30, 46, 0.5);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.wg-preview-label {
+  font-size: 0.72rem;
+  color: var(--subtext-0, #a6adc8);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.wg-preview-val {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.84rem;
+  color: #89b4fa;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Deux colonnes Nom & Pays */
+.wg-import-fields-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.wg-input-modern,
+.wg-select-modern {
+  background: rgba(17, 17, 27, 0.7) !important;
+  border: 1px solid rgba(203, 166, 247, 0.25) !important;
+  border-radius: 10px !important;
+  color: var(--text, #cdd6f4) !important;
+  padding: 10px 14px !important;
+  font-size: 0.9rem !important;
+  transition: all 0.2s ease !important;
+}
+
+.wg-input-modern:focus,
+.wg-select-modern:focus {
+  border-color: #cba6f7 !important;
+  box-shadow: 0 0 0 3px rgba(203, 166, 247, 0.18) !important;
+  outline: none !important;
+}
+
+/* Pied de Modal */
+.wg-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 26px !important;
+  background: rgba(17, 17, 27, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.wg-modal-security-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  color: var(--subtext-0, #a6adc8);
+}
+
+.wg-modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.wg-import-submit-btn {
+  background: linear-gradient(135deg, #cba6f7, #89b4fa) !important;
+  color: #11111b !important;
+  font-weight: 700 !important;
+  border: none !important;
+  padding: 10px 22px !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 18px rgba(203, 166, 247, 0.35) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wg-import-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 26px rgba(203, 166, 247, 0.5) !important;
+}
+
+@media (max-width: 600px) {
+  .wg-import-fields-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .wg-modal-footer {
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .wg-modal-actions {
+    justify-content: flex-end;
+  }
+}

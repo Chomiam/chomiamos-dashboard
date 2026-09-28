@@ -604,6 +604,9 @@ function populateConfigUI(c) {
     setCheck("cfg-ollama-aichat", c.ollama.aichat);
     updateAichatStatusUI(c.ollama.aichat);
 
+    setCheck("cfg-ollama-lmstudio", c.ollama.lmstudio);
+    updateLmstudioStatusUI(c.ollama.lmstudio);
+
     updateAiPresetUI(c.ollama.model || "qwen2.5-coder:7b");
     updateAiStatusUI(c.ollama.enable);
     if (c.ollama.enable) checkAllOllamaModels(false);
@@ -741,6 +744,9 @@ function readConfigFromUI() {
 
   currentConfig.ollama.aichat = isChecked("cfg-ollama-aichat");
   updateAichatStatusUI(currentConfig.ollama.aichat);
+
+  currentConfig.ollama.lmstudio = isChecked("cfg-ollama-lmstudio");
+  updateLmstudioStatusUI(currentConfig.ollama.lmstudio);
 
   updateAiStatusUI(currentConfig.ollama.enable);
 
@@ -7818,6 +7824,23 @@ function updateAichatStatusUI(enabled) {
     if (enabled) {
       pill.className = "badge-status-pill online";
       pill.textContent = "Actif • Shells intégrés";
+    } else {
+      pill.className = "badge-status-pill offline";
+      pill.textContent = "Désactivé";
+    }
+  }
+}
+
+function updateLmstudioStatusUI(enabled) {
+  const sw = document.getElementById("cfg-ollama-lmstudio");
+  if (sw && sw.checked !== !!enabled) {
+    sw.checked = !!enabled;
+  }
+  const pill = document.getElementById("lmstudio-status-pill");
+  if (pill) {
+    if (enabled) {
+      pill.className = "badge-status-pill online";
+      pill.textContent = "Actif • GUI Desktop";
     } else {
       pill.className = "badge-status-pill offline";
       pill.textContent = "Désactivé";

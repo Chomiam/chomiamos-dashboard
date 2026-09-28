@@ -2696,6 +2696,47 @@
               </div>
             </div>
 
+            <!-- 8. LM Studio (Interface GUI pour LLMs) -->
+            <div class="card config-card lmstudio-card">
+              <div class="card-header">
+                <div class="card-title-wrap">
+                  <span class="card-icon">🖥️</span>
+                  <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <h3>LM Studio</h3>
+                      <span class="badge badge-info" style="font-size: 0.72rem;">GUI • Desktop</span>
+                    </div>
+                    <p class="card-subtitle">Interface graphique pour exécuter des modèles de langage en local avec accélération GPU automatique (ROCm / CUDA)</p>
+                  </div>
+                </div>
+                <div class="ai-header-controls">
+                  <span id="lmstudio-status-pill" class="badge-status-pill">Désactivé</span>
+                  <label class="switch" title="Activer ou désactiver LM Studio">
+                    <input type="checkbox" id="cfg-ollama-lmstudio">
+                  </label>
+                </div>
+              </div>
+
+              <!-- Bannière info LM Studio -->
+              <div class="lmstudio-info-banner" style="padding: 16px 20px; background: var(--surface0); border-radius: 12px; margin: 12px 20px 16px;">
+                <div style="display: flex; align-items: flex-start; gap: 14px;">
+                  <span style="font-size: 1.6rem;">🧪</span>
+                  <div>
+                    <strong style="color: var(--text); font-size: 0.95rem;">Application de bureau pour l'IA locale</strong>
+                    <p style="color: var(--subtext0); font-size: 0.84rem; margin-top: 4px; line-height: 1.5;">
+                      LM Studio permet de télécharger, gérer et exécuter des modèles de langage (LLM) via une interface graphique intuitive.
+                      Compatible avec l'API OpenAI, il peut servir de backend alternatif à Ollama pour vos outils de développement et agents IA.
+                    </p>
+                    <div class="ai-quick-tags" style="margin-top: 10px;">
+                      <span class="ai-tag-chip" style="pointer-events: none; opacity: 0.85;">🎮 Accélération GPU auto</span>
+                      <span class="ai-tag-chip" style="pointer-events: none; opacity: 0.85;">🔌 API OpenAI compatible</span>
+                      <span class="ai-tag-chip" style="pointer-events: none; opacity: 0.85;">📦 Catalogue de modèles intégré</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>

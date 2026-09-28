@@ -94,6 +94,8 @@ pub struct OllamaConfig {
     pub system_prompt: Option<String>,
     #[serde(default)]
     pub aichat: bool,
+    #[serde(default)]
+    pub lmstudio: bool,
 }
 
 fn default_true() -> bool { true }
@@ -111,6 +113,7 @@ impl Default for OllamaConfig {
             rocm_override_gfx: None,
             system_prompt: None,
             aichat: false,
+            lmstudio: false,
         }
     }
 }
@@ -436,6 +439,9 @@ pub fn read_vars_nix(path: &Path) -> Result<ChomiamConfig, String> {
     cfg.ollama.aichat = extract_bool_var_in_block(&content, "ollama", "aichat")
         .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "ollama", "aichat")))
         .unwrap_or(false);
+    cfg.ollama.lmstudio = extract_bool_var_in_block(&content, "ollama", "lmstudio")
+        .or_else(|| defaults_content.as_ref().and_then(|d| extract_bool_var_in_block(d, "ollama", "lmstudio")))
+        .unwrap_or(false);
 
     Ok(cfg)
 }
@@ -619,6 +625,7 @@ r#"{{
     model = "{ollama_model}";
     port = {ollama_port};
 {ollama_rocm_override}{ollama_system_prompt}    aichat = {ollama_aichat};
+    lmstudio = {ollama_lmstudio};
   }};
 }}
 "#,
@@ -698,6 +705,7 @@ r#"{{
             "".to_string()
         },
         ollama_aichat = c.ollama.aichat,
+        ollama_lmstudio = c.ollama.lmstudio,
         ollama_system_prompt = if let Some(ref prompt) = c.ollama.system_prompt {
             let trimmed = prompt.trim();
             if !trimmed.is_empty() {
@@ -1087,6 +1095,7 @@ mod tests {
         cfg.ollama.rocm_override_gfx = Some("12.0.1".to_string());
         cfg.ollama.system_prompt = Some("Tu es un assistant concis.".to_string());
         cfg.ollama.aichat = true;
+        cfg.ollama.lmstudio = true;
 
         let generated = generate_vars_nix_content(&cfg);
         assert!(generated.contains("ollama = {"));
@@ -1094,6 +1103,7 @@ mod tests {
         assert!(generated.contains(r#"rocmOverrideGfx = "12.0.1";"#));
         assert!(generated.contains(r#"systemPrompt = "Tu es un assistant concis.";"#));
         assert!(generated.contains("aichat = true;"));
+        assert!(generated.contains("lmstudio = true;"));
     }
 
     #[test]

@@ -114,6 +114,18 @@ pub fn generate_mount_nix_content(mounts: &[PersistentMountConfig]) -> String {
         ));
 
         let mut opts = m.options.clone();
+        if !opts.iter().any(|o| o == "defaults") {
+            opts.insert(0, "defaults".to_string());
+        }
+        if !opts.iter().any(|o| o == "nofail") {
+            opts.push("nofail".to_string());
+        }
+        if !opts.iter().any(|o| o.starts_with("x-systemd.device-timeout")) {
+            opts.push("x-systemd.device-timeout=5s".to_string());
+        }
+        if !opts.iter().any(|o| o.starts_with("x-systemd.mount-timeout")) {
+            opts.push("x-systemd.mount-timeout=5s".to_string());
+        }
         if !opts.iter().any(|o| o == "x-gvfs-show") {
             opts.push("x-gvfs-show".to_string());
         }
@@ -221,11 +233,15 @@ pub fn list_storage_devices() -> Result<Vec<DiskDevice>, String> {
 
     let persistent_mounts = read_persistent_mounts();
 
-    // Auto-migration GNOME / Nautilus : injecter x-gvfs-show si absent dans mount.nix
+    // Auto-migration : fiabiliser mount.nix en injectant les options système anti-blocage au boot
+    // (nofail, x-systemd.device-timeout=5s, x-systemd.mount-timeout=5s et x-gvfs-show)
     if !persistent_mounts.is_empty()
-        && persistent_mounts
-            .iter()
-            .any(|m| !m.options.iter().any(|o| o == "x-gvfs-show"))
+        && persistent_mounts.iter().any(|m| {
+            !m.options.iter().any(|o| o == "nofail")
+                || !m.options.iter().any(|o| o.starts_with("x-systemd.device-timeout"))
+                || !m.options.iter().any(|o| o.starts_with("x-systemd.mount-timeout"))
+                || !m.options.iter().any(|o| o == "x-gvfs-show")
+        })
     {
         let _ = write_persistent_mounts(&persistent_mounts);
     }
@@ -368,17 +384,23 @@ pub fn mount_storage_device(
         "btrfs" => vec![
             "defaults".into(),
             "nofail".into(),
+            "x-systemd.device-timeout=5s".into(),
+            "x-systemd.mount-timeout=5s".into(),
             "compress=zstd".into(),
             "x-gvfs-show".into(),
         ],
         "ext4" => vec![
             "defaults".into(),
             "nofail".into(),
+            "x-systemd.device-timeout=5s".into(),
+            "x-systemd.mount-timeout=5s".into(),
             "x-gvfs-show".into(),
         ],
         "ntfs" | "vfat" | "exfat" => vec![
             "defaults".into(),
             "nofail".into(),
+            "x-systemd.device-timeout=5s".into(),
+            "x-systemd.mount-timeout=5s".into(),
             "uid=1000".into(),
             "gid=100".into(),
             "dmask=022".into(),
@@ -388,6 +410,8 @@ pub fn mount_storage_device(
         _ => vec![
             "defaults".into(),
             "nofail".into(),
+            "x-systemd.device-timeout=5s".into(),
+            "x-systemd.mount-timeout=5s".into(),
             "x-gvfs-show".into(),
         ],
     };
@@ -537,6 +561,9 @@ mod tests {
 
         let generated = generate_mount_nix_content(&dummy_mounts);
         assert!(generated.contains(r#""x-gvfs-show""#));
+        assert!(generated.contains(r#""nofail""#));
+        assert!(generated.contains(r#""x-systemd.device-timeout=5s""#));
+        assert!(generated.contains(r#""x-systemd.mount-timeout=5s""#));
         assert!(generated.contains(r#"fileSystems."/mnt/hdd4to""#));
         assert!(generated.contains(r#"fileSystems."/mnt/Emulation""#));
         assert!(generated.contains(r#"options = ["#));

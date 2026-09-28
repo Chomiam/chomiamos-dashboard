@@ -16,6 +16,8 @@ mod ollama;
 use ollama::*;
 mod systemd;
 use systemd::{list_systemd_services, control_systemd_service as do_control_systemd_service, get_systemd_logs, SystemdOverview};
+mod wireguard;
+use wireguard::*;
 
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, State};
@@ -1191,7 +1193,17 @@ fn main() {
             load_ollama_model,
             unload_ollama_model,
             pull_ollama_model,
-            cancel_ollama_pull
+            cancel_ollama_pull,
+            get_wireguard_overview,
+            import_wireguard_profile,
+            update_wireguard_profile,
+            delete_wireguard_profile,
+            toggle_wireguard_profile,
+            start_friend_server,
+            stop_friend_server,
+            test_friend_tunnel,
+            regenerate_friend_keys,
+            open_wireguard_firewall_port
         ])
         .run(tauri::generate_context!())
         .expect("Erreur lors de l'exécution de l'application ChomiamOS Dashboard");

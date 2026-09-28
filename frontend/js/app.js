@@ -4377,6 +4377,7 @@ function initNetworkCenter() {
   loadDnsCatalog(false);
   loadPodmanOverview(false);
   loadSftpOverview(false);
+  loadWireguardOverview(false);
 }
 
 function switchNetworkSubtab(subtabId) {
@@ -4407,6 +4408,8 @@ function switchNetworkSubtab(subtabId) {
     loadPodmanOverview(false);
   } else if (subtabId === "net-subtab-sftp") {
     loadSftpOverview(false);
+  } else if (subtabId === "net-subtab-wireguard") {
+    loadWireguardOverview(false);
   }
 }
 
@@ -8000,3 +8003,748 @@ function copyAichatCmd(text, btn) {
     console.error("Erreur copie clipboard :", err);
   });
 }
+
+
+
+// =========================================================================
+// 🔏 CENTRE WIREGUARD : PROFILS CLIENTS & RÉSEAU PRIVÉ AMI (v0.5.8)
+// =========================================================================
+
+let currentWireguardOverview = null;
+let currentWgTab = "clients";
+let currentViewingConfText = "";
+let currentViewingConfName = "";
+
+async function loadWireguardOverview(forceToast = false) {
+  try {
+    const overview = await invoke("get_wireguard_overview");
+    currentWireguardOverview = overview;
+
+    // 1. Mettre à jour les pastilles du Hero Card
+    const profilesCount = overview.profiles ? overview.profiles.length : 0;
+    const statProfiles = document.getElementById("wg-stat-profiles-count");
+    if (statProfiles) statProfiles.textContent = `${profilesCount} profil${profilesCount > 1 ? 's' : ''}`;
+
+    const badgeCount = document.getElementById("wg-badge-client-count");
+    if (badgeCount) badgeCount.textContent = profilesCount;
+
+    const navBadge = document.getElementById("wg-nav-badge");
+    if (navBadge) {
+      if (overview.active_profile_id) {
+        navBadge.textContent = "Actif";
+        navBadge.className = "net-subnav-pill sftp-pill-ok";
+      } else if (overview.server && overview.server.is_active) {
+        navBadge.textContent = "Serveur";
+        navBadge.className = "net-subnav-pill sftp-pill-ok";
+      } else {
+        navBadge.textContent = profilesCount.toString();
+        navBadge.className = "net-subnav-pill";
+      }
+    }
+
+    const activeProfile = overview.profiles ? overview.profiles.find(p => p.is_active) : null;
+    const statActive = document.getElementById("wg-stat-active-client");
+    const globalPill = document.getElementById("wg-global-status-pill");
+
+    if (activeProfile) {
+      if (statActive) statActive.innerHTML = `<span class="text-green">${activeProfile.country_flag} ${escapeHtml(activeProfile.name)}</span>`;
+      if (globalPill) {
+        globalPill.className = "badge badge-success";
+        globalPill.textContent = `Connecté : ${activeProfile.name}`;
+      }
+    } else {
+      if (statActive) statActive.textContent = "Déconnecté";
+      if (globalPill) {
+        if (overview.server && overview.server.is_active) {
+          globalPill.className = "badge badge-accent";
+          globalPill.textContent = "Serveur Privé Actif";
+        } else {
+          globalPill.className = "badge badge-neutral";
+          globalPill.textContent = "Inactif";
+        }
+      }
+    }
+
+    const statServer = document.getElementById("wg-stat-server-status");
+    if (statServer) {
+      if (overview.server && overview.server.is_active) {
+        statServer.innerHTML = `<span class="text-green">En ligne (Port ${overview.server.listen_port})</span>`;
+      } else {
+        statServer.textContent = "Arrêté";
+      }
+    }
+
+    const statIp = document.getElementById("wg-stat-public-ip");
+    if (statIp && overview.server) {
+      statIp.textContent = overview.server.public_ip || "Non détectée";
+    }
+
+    // 2. Rendu des Profils Clients
+    renderWgProfiles(overview.profiles || []);
+
+    // 3. Rendu du Serveur Privé Ami
+    if (overview.server) {
+      renderWgServerState(overview.server);
+    }
+
+    if (forceToast) {
+      showToast("Statut WireGuard actualisé avec succès", "success");
+    }
+  } catch (err) {
+    console.error("Échec loadWireguardOverview :", err);
+    if (forceToast) {
+      showToast(`Erreur WireGuard : ${err}`, "error");
+    }
+  }
+}
+
+function renderWgProfiles(profiles) {
+  const container = document.getElementById("wg-profiles-grid");
+  if (!container) return;
+
+  if (!profiles || profiles.length === 0) {
+    container.innerHTML = `
+      <div class="wg-empty-placeholder">
+        <div class="wg-empty-icon">🌐</div>
+        <h3>Aucune configuration VPN WireGuard</h3>
+        <p>Importez vos fichiers <code>.conf</code> (Mullvad, Proton, AzireVPN, OPNsense, etc.) pour vous connecter en 1 clic avec détection de pays.</p>
+        <button type="button" class="btn btn-primary" onclick="openWgImportModal()" style="margin-top: 14px;">
+          <span>➕</span> Importer un premier profil
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  const query = (document.getElementById("wg-search-input")?.value || "").toLowerCase().trim();
+
+  const filtered = profiles.filter(p => {
+    if (!query) return true;
+    return p.name.toLowerCase().includes(query) ||
+           p.country_name.toLowerCase().includes(query) ||
+           p.country_code.toLowerCase().includes(query) ||
+           p.endpoint.toLowerCase().includes(query);
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="wg-empty-placeholder">
+        <div class="wg-empty-icon">🔍</div>
+        <h3>Aucun VPN ne correspond à votre recherche « ${escapeHtml(query)} »</h3>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('wg-search-input').value=''; filterWgProfiles();" style="margin-top: 12px;">
+          Effacer la recherche
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(p => {
+    const isAct = !!p.is_active;
+    const cardClass = isAct ? "wg-profile-card active-vpn" : "wg-profile-card";
+    const statusPill = isAct
+      ? `<span class="wg-status-dot online">Connecté</span>`
+      : `<span class="wg-status-dot offline">Déconnecté</span>`;
+
+    const toggleBtn = isAct
+      ? `<button type="button" class="wg-toggle-btn btn-disconnect" onclick="toggleWgProfile('${escapeHtml(p.id)}')"><span>🛑</span> Déconnecter</button>`
+      : `<button type="button" class="wg-toggle-btn btn-connect" onclick="toggleWgProfile('${escapeHtml(p.id)}')"><span>⚡</span> Connecter</button>`;
+
+    const epHost = p.endpoint ? p.endpoint.split(':')[0] : "Endpoint inconnu";
+
+    return `
+      <div class="${cardClass}" id="wg-card-${escapeHtml(p.id)}">
+        <div class="wg-card-header">
+          <div class="wg-card-flag-box" title="${escapeHtml(p.country_name)}">
+            ${p.country_flag || '🌐'}
+          </div>
+          <div class="wg-card-title-group">
+            <h4 class="wg-card-title">${escapeHtml(p.name)}</h4>
+            <span class="wg-card-country-name">${p.country_flag || ''} ${escapeHtml(p.country_name)} (${escapeHtml(p.country_code.toUpperCase())})</span>
+          </div>
+          <div>
+            ${statusPill}
+          </div>
+        </div>
+
+        <!-- Mini Schéma Visuel de Routage -->
+        <div class="wg-route-schema">
+          <div class="wg-route-node">
+            <span>🖥️</span> <strong>Local</strong>
+          </div>
+          <span class="wg-route-arrow">──►</span>
+          <div class="wg-route-node">
+            <span>${p.country_flag || '🌐'}</span> <span>${escapeHtml(epHost)}</span>
+          </div>
+          <span class="wg-route-arrow">──►</span>
+          <div class="wg-route-node">
+            <span>🌐</span> <strong>Internet</strong>
+          </div>
+        </div>
+
+        <div class="wg-card-meta">
+          <div class="wg-meta-item">
+            <span>Serveur Endpoint :</span>
+            <strong title="${escapeHtml(p.endpoint)}">${escapeHtml(p.endpoint || 'N/A')}</strong>
+          </div>
+          <div class="wg-meta-item">
+            <span>IP Assignée :</span>
+            <strong title="${escapeHtml(p.local_address)}">${escapeHtml(p.local_address || 'N/A')}</strong>
+          </div>
+          <div class="wg-meta-item">
+            <span>Transfert Reçu (RX) :</span>
+            <strong>${escapeHtml(p.transfer_rx)}</strong>
+          </div>
+          <div class="wg-meta-item">
+            <span>Transfert Émis (TX) :</span>
+            <strong>${escapeHtml(p.transfer_tx)}</strong>
+          </div>
+          <div class="wg-meta-item" style="grid-column: span 2;">
+            <span>Dernier Handshake :</span>
+            <strong style="color: ${isAct ? 'var(--green)' : 'var(--subtext0)'};">${escapeHtml(p.latest_handshake)}</strong>
+          </div>
+        </div>
+
+        <div class="wg-card-actions">
+          ${toggleBtn}
+          <div class="wg-card-btn-group">
+            <button type="button" class="btn btn-outline btn-sm" onclick="viewWgConfig('${escapeHtml(p.id)}')" title="Afficher le fichier de configuration">
+              👁️ Config
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteWgProfile('${escapeHtml(p.id)}')" title="Supprimer ce profil">
+              🗑️
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderWgServerState(server) {
+  const isAct = !!server.is_active;
+
+  // 1. Boutons Démarrer / Arrêter
+  const btnStart = document.getElementById("wg-btn-start-server");
+  const btnStop = document.getElementById("wg-btn-stop-server");
+  if (btnStart && btnStop) {
+    if (isAct) {
+      btnStart.classList.add("hidden");
+      btnStop.classList.remove("hidden");
+    } else {
+      btnStart.classList.remove("hidden");
+      btnStop.classList.add("hidden");
+    }
+  }
+
+  // 2. Nœud Hôte
+  const nodeHost = document.getElementById("wg-node-host");
+  const hostTag = document.getElementById("wg-host-status-tag");
+  if (nodeHost && hostTag) {
+    if (isAct) {
+      nodeHost.classList.add("active-node");
+      hostTag.className = "wg-status-dot online";
+      hostTag.textContent = `En ligne (${server.listen_port})`;
+    } else {
+      nodeHost.classList.remove("active-node");
+      hostTag.className = "wg-status-dot offline";
+      hostTag.textContent = "Arrêté";
+    }
+  }
+
+  // 3. Liaison Câblée / Faisceau lumineux
+  const wireBeam = document.getElementById("wg-wire-beam");
+  const statsText = document.getElementById("wg-tunnel-stats-text");
+  if (wireBeam && statsText) {
+    if (isAct) {
+      wireBeam.classList.add("active");
+      statsText.textContent = `RX: ${server.friend_transfer_rx} | TX: ${server.friend_transfer_tx}`;
+    } else {
+      wireBeam.classList.remove("active");
+      statsText.textContent = "En attente de démarrage";
+    }
+  }
+
+  // 4. Nœud Ami
+  const nodeFriend = document.getElementById("wg-node-friend");
+  const friendTag = document.getElementById("wg-friend-status-tag");
+  const friendInput = document.getElementById("wg-friend-name-input");
+
+  if (friendInput && server.friend_name) {
+    if (document.activeElement !== friendInput) {
+      friendInput.value = server.friend_name;
+    }
+  }
+
+  if (nodeFriend && friendTag) {
+    if (server.friend_connected) {
+      nodeFriend.classList.add("active-node");
+      friendTag.className = "wg-status-dot online";
+      friendTag.textContent = "Connecté (10.100.0.2)";
+    } else if (isAct) {
+      nodeFriend.classList.remove("active-node");
+      friendTag.className = "wg-status-dot offline";
+      friendTag.textContent = "En attente...";
+    } else {
+      nodeFriend.classList.remove("active-node");
+      friendTag.className = "wg-status-dot offline";
+      friendTag.textContent = "Hors-ligne";
+    }
+  }
+
+  // 5. Bannière Pare-feu
+  const fwBanner = document.getElementById("wg-firewall-banner");
+  if (fwBanner) {
+    if (!server.firewall_port_open) {
+      fwBanner.classList.remove("hidden");
+    } else {
+      fwBanner.classList.add("hidden");
+    }
+  }
+
+  // 6. Fiche de configuration de l'ami
+  const confPreview = document.getElementById("wg-friend-conf-preview");
+  if (confPreview) {
+    confPreview.textContent = server.friend_config || "# Démarrez le serveur pour générer la configuration...";
+  }
+
+  // 7. Inputs paramètres
+  const portInput = document.getElementById("wg-input-server-port");
+  if (portInput && document.activeElement !== portInput) {
+    portInput.value = server.listen_port || 51820;
+  }
+
+  const endpointInput = document.getElementById("wg-input-custom-endpoint");
+  if (endpointInput && document.activeElement !== endpointInput) {
+    endpointInput.value = server.public_ip || "";
+  }
+
+  // 8. Génération Inline du QR Code
+  const qrTarget = document.getElementById("wg-inline-qr-target");
+  if (qrTarget && server.friend_config && typeof QRCode !== "undefined") {
+    qrTarget.innerHTML = "";
+    try {
+      new QRCode(qrTarget, {
+        text: server.friend_config,
+        width: 140,
+        height: 140,
+        colorDark: "#11111b",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    } catch (e) {
+      console.warn("Échec génération QRCode inline :", e);
+    }
+  }
+}
+
+function switchWgTab(tab) {
+  currentWgTab = tab;
+  const btnClients = document.getElementById("wg-segment-btn-clients");
+  const btnServer = document.getElementById("wg-segment-btn-server");
+  const viewClients = document.getElementById("wg-tab-clients-view");
+  const viewServer = document.getElementById("wg-tab-server-view");
+
+  if (tab === "clients") {
+    btnClients?.classList.add("active");
+    btnServer?.classList.remove("active");
+    viewClients?.classList.remove("hidden");
+    viewServer?.classList.add("hidden");
+  } else {
+    btnClients?.classList.remove("active");
+    btnServer?.classList.add("active");
+    viewClients?.classList.add("hidden");
+    viewServer?.classList.remove("hidden");
+  }
+}
+
+function filterWgProfiles() {
+  if (currentWireguardOverview && currentWireguardOverview.profiles) {
+    renderWgProfiles(currentWireguardOverview.profiles);
+  }
+}
+
+// -------------------------------------------------------------------------
+// MODALES & ACTIONS CLIENTS
+// -------------------------------------------------------------------------
+
+function openWgImportModal() {
+  const modal = document.getElementById("wg-import-modal");
+  if (!modal) return;
+  document.getElementById("wg-import-name").value = "";
+  document.getElementById("wg-import-country").value = "";
+  document.getElementById("wg-import-file-input").value = "";
+  document.getElementById("wg-import-text-content").value = "";
+  modal.classList.remove("hidden");
+}
+
+function closeWgImportModal() {
+  document.getElementById("wg-import-modal")?.classList.add("hidden");
+}
+
+function openWgPasteModal() {
+  openWgImportModal();
+  setTimeout(() => {
+    document.getElementById("wg-import-text-content")?.focus();
+  }, 100);
+}
+
+function handleWgFileSelected(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    document.getElementById("wg-import-text-content").value = text;
+    const nameField = document.getElementById("wg-import-name");
+    if (nameField && !nameField.value.trim()) {
+      // Nettoyer le nom du fichier pour pré-remplir
+      let base = file.name.replace(/\.conf$/i, "").replace(/[-_]/g, " ");
+      base = base.charAt(0).toUpperCase() + base.slice(1);
+      nameField.value = base;
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function submitWgImport() {
+  const name = document.getElementById("wg-import-name")?.value.trim() || "";
+  const country = document.getElementById("wg-import-country")?.value || null;
+  const content = document.getElementById("wg-import-text-content")?.value.trim() || "";
+
+  if (!content) {
+    showToast("Veuillez sélectionner un fichier .conf ou coller la configuration.", "warning");
+    return;
+  }
+
+  try {
+    const profile = await invoke("import_wireguard_profile", {
+      name: name,
+      content: content,
+      countryCode: country
+    });
+
+    closeWgImportModal();
+    showToast(`Profil « ${profile.name} » importé avec succès !`, "success");
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur import WireGuard :", err);
+    showToast(`Erreur d'import : ${err}`, "error");
+  }
+}
+
+async function toggleWgProfile(id) {
+  const profile = currentWireguardOverview?.profiles?.find(p => p.id === id);
+  const willActivate = !profile?.is_active;
+
+  const card = document.getElementById(`wg-card-${id}`);
+  if (card) {
+    card.style.opacity = "0.6";
+    card.style.pointerEvents = "none";
+  }
+
+  try {
+    const active = await invoke("toggle_wireguard_profile", {
+      id: id,
+      activate: willActivate
+    });
+
+    if (active) {
+      showToast(`Tunnel « ${profile?.name || id} » connecté !`, "success");
+    } else {
+      showToast(`Tunnel « ${profile?.name || id} » déconnecté.`, "info");
+    }
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur toggle WireGuard :", err);
+    showToast(`Échec d'activation : ${err}`, "error");
+    await loadWireguardOverview(false);
+  } finally {
+    if (card) {
+      card.style.opacity = "";
+      card.style.pointerEvents = "";
+    }
+  }
+}
+
+async function deleteWgProfile(id) {
+  const profile = currentWireguardOverview?.profiles?.find(p => p.id === id);
+  const name = profile?.name || id;
+
+  if (!confirm(`Voulez-vous vraiment supprimer la configuration « ${name} » ?`)) {
+    return;
+  }
+
+  try {
+    await invoke("delete_wireguard_profile", { id: id });
+    showToast(`Profil « ${name} » supprimé avec succès.`, "success");
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur suppression profil :", err);
+    showToast(`Erreur de suppression : ${err}`, "error");
+  }
+}
+
+function viewWgConfig(id) {
+  const profile = currentWireguardOverview?.profiles?.find(p => p.id === id);
+  if (!profile) return;
+
+  currentViewingConfText = profile.raw_config || "";
+  currentViewingConfName = profile.name || "Configuration WireGuard";
+
+  const modal = document.getElementById("wg-view-conf-modal");
+  const title = document.getElementById("wg-view-conf-title");
+  const flag = document.getElementById("wg-view-conf-flag");
+  const subtitle = document.getElementById("wg-view-conf-subtitle");
+  const body = document.getElementById("wg-view-conf-body");
+
+  if (modal && body) {
+    if (title) title.textContent = profile.name;
+    if (flag) flag.textContent = profile.country_flag || "🌐";
+    if (subtitle) subtitle.textContent = `${profile.country_name} (${profile.interface_name}.conf)`;
+    body.textContent = profile.raw_config;
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeWgViewConfModal() {
+  document.getElementById("wg-view-conf-modal")?.classList.add("hidden");
+}
+
+function copyCurrentViewConf() {
+  if (!currentViewingConfText) return;
+  navigator.clipboard.writeText(currentViewingConfText).then(() => {
+    showToast(`Configuration « ${currentViewingConfName} » copiée dans le presse-papier !`, "success");
+  }).catch(err => {
+    showToast(`Erreur copie : ${err}`, "error");
+  });
+}
+
+// -------------------------------------------------------------------------
+// ACTIONS SERVEUR PRIVÉ AMI
+// -------------------------------------------------------------------------
+
+async function startFriendServer() {
+  const port = parseInt(document.getElementById("wg-input-server-port")?.value || "51820", 10);
+  const friendName = document.getElementById("wg-friend-name-input")?.value || "Ami Invité";
+  const customEp = document.getElementById("wg-input-custom-endpoint")?.value || null;
+
+  try {
+    showToast("Démarrage du serveur WireGuard privé...", "info");
+    const srv = await invoke("start_friend_server", {
+      listenPort: port,
+      friendName: friendName,
+      customEndpoint: customEp
+    });
+    showToast("Serveur privé WireGuard démarré avec succès !", "success");
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur startFriendServer :", err);
+    showToast(`Échec du lancement : ${err}`, "error");
+  }
+}
+
+async function stopFriendServer() {
+  try {
+    showToast("Arrêt du serveur WireGuard privé...", "info");
+    await invoke("stop_friend_server");
+    showToast("Serveur privé WireGuard arrêté.", "info");
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur stopFriendServer :", err);
+    showToast(`Erreur lors de l'arrêt : ${err}`, "error");
+  }
+}
+
+async function testFriendTunnel() {
+  const box = document.getElementById("wg-test-result-box");
+  const icon = document.getElementById("wg-test-icon");
+  const msg = document.getElementById("wg-test-message");
+  const details = document.getElementById("wg-test-details");
+  const latBadge = document.getElementById("wg-test-latency-badge");
+
+  if (box && msg && details) {
+    box.className = "wg-test-result-box";
+    box.classList.remove("hidden");
+    if (icon) icon.textContent = "⏳";
+    msg.textContent = "Test du tunnel en cours (Handshake & Ping 10.100.0.2)...";
+    details.textContent = "Émission de paquets ICMP et interrogation de l'interface WireGuard.";
+    if (latBadge) latBadge.textContent = "...";
+  }
+
+  try {
+    const res = await invoke("test_friend_tunnel");
+    if (box && msg && details) {
+      if (res.success) {
+        box.className = "wg-test-result-box success";
+        if (icon) icon.textContent = "🟢";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = res.latency_ms ? `${res.latency_ms.toFixed(1)} ms` : "OK (Handshake)";
+          latBadge.className = "badge badge-success";
+        }
+      } else {
+        box.className = "wg-test-result-box warning";
+        if (icon) icon.textContent = "🟡";
+        msg.textContent = res.message;
+        details.textContent = res.details;
+        if (latBadge) {
+          latBadge.textContent = "Timeout";
+          latBadge.className = "badge badge-neutral";
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Erreur test tunnel :", err);
+    if (box && msg && details) {
+      box.className = "wg-test-result-box error";
+      if (icon) icon.textContent = "🔴";
+      msg.textContent = "Erreur lors de l'exécution du test de connexion.";
+      details.textContent = String(err);
+      if (latBadge) latBadge.textContent = "Erreur";
+    }
+  }
+}
+
+async function regenerateFriendKeys() {
+  if (!confirm("Voulez-vous vraiment générer de nouvelles clés cryptographiques ? L'ancienne configuration transmise à votre ami deviendra caduque.")) {
+    return;
+  }
+
+  const friendName = document.getElementById("wg-friend-name-input")?.value || "Ami Invité";
+  try {
+    await invoke("regenerate_friend_keys", { friendName: friendName });
+    showToast("Nouvelles clés WireGuard générées ! Transmettez la nouvelle configuration à votre ami.", "success");
+    await loadWireguardOverview(false);
+  } catch (err) {
+    console.error("Erreur regenerateFriendKeys :", err);
+    showToast(`Erreur : ${err}`, "error");
+  }
+}
+
+function updateFriendName() {
+  const friendName = document.getElementById("wg-friend-name-input")?.value || "Ami";
+  if (currentWireguardOverview && currentWireguardOverview.server) {
+    currentWireguardOverview.server.friend_name = friendName;
+    renderWgServerState(currentWireguardOverview.server);
+  }
+}
+
+function updateServerPort() {
+  // Pris en compte au prochain démarrage ou réactualisation
+  showToast("Port mis à jour. Cliquez sur Démarrer / Redémarrer pour appliquer.", "info");
+}
+
+function updateCustomEndpoint() {
+  showToast("Endpoint personnalisé enregistré.", "info");
+}
+
+function resetDefaultEndpoint() {
+  if (currentWireguardOverview && currentWireguardOverview.server) {
+    const input = document.getElementById("wg-input-custom-endpoint");
+    if (input) input.value = currentWireguardOverview.server.public_ip || "";
+    showToast("IP Publique WAN détectée réinitialisée.", "info");
+  }
+}
+
+function copyFriendConfig() {
+  const conf = currentWireguardOverview?.server?.friend_config;
+  if (!conf) {
+    showToast("Aucune configuration disponible. Démarrez d'abord le réseau privé.", "warning");
+    return;
+  }
+  navigator.clipboard.writeText(conf).then(() => {
+    showToast("Configuration ami « chomiamos-friend.conf » copiée dans le presse-papier !", "success");
+  }).catch(err => {
+    showToast(`Erreur copie : ${err}`, "error");
+  });
+}
+
+function downloadFriendConfig() {
+  const conf = currentWireguardOverview?.server?.friend_config;
+  if (!conf) {
+    showToast("Aucune configuration disponible.", "warning");
+    return;
+  }
+  const blob = new Blob([conf], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "chomiamos-friend.conf";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Fichier « chomiamos-friend.conf » téléchargé !", "success");
+}
+
+function showFriendQrCode() {
+  const conf = currentWireguardOverview?.server?.friend_config;
+  if (!conf) {
+    showToast("Veuillez d'abord initialiser le réseau privé.", "warning");
+    return;
+  }
+
+  const modal = document.getElementById("wg-qr-modal");
+  const target = document.getElementById("wg-modal-qr-target");
+  if (modal && target && typeof QRCode !== "undefined") {
+    target.innerHTML = "";
+    new QRCode(target, {
+      text: conf,
+      width: 256,
+      height: 256,
+      colorDark: "#11111b",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeWgQrModal() {
+  document.getElementById("wg-qr-modal")?.classList.add("hidden");
+}
+
+async function openWireguardFirewallPort() {
+  try {
+    const res = await invoke("open_wireguard_firewall_port");
+    showToast(res || "Port UDP 51820 autorisé dans le pare-feu NixOS !", "success");
+    document.getElementById("wg-firewall-banner")?.classList.add("hidden");
+    if (currentWireguardOverview && currentWireguardOverview.server) {
+      currentWireguardOverview.server.firewall_port_open = true;
+    }
+  } catch (err) {
+    console.error("Erreur ouverture port UDP 51820 :", err);
+    showToast(`Erreur pare-feu : ${err}`, "error");
+  }
+}
+
+// Exposer les fonctions globales WireGuard pour les événements HTML
+window.loadWireguardOverview = loadWireguardOverview;
+window.switchWgTab = switchWgTab;
+window.filterWgProfiles = filterWgProfiles;
+window.openWgImportModal = openWgImportModal;
+window.closeWgImportModal = closeWgImportModal;
+window.openWgPasteModal = openWgPasteModal;
+window.handleWgFileSelected = handleWgFileSelected;
+window.submitWgImport = submitWgImport;
+window.toggleWgProfile = toggleWgProfile;
+window.deleteWgProfile = deleteWgProfile;
+window.viewWgConfig = viewWgConfig;
+window.closeWgViewConfModal = closeWgViewConfModal;
+window.copyCurrentViewConf = copyCurrentViewConf;
+window.startFriendServer = startFriendServer;
+window.stopFriendServer = stopFriendServer;
+window.testFriendTunnel = testFriendTunnel;
+window.regenerateFriendKeys = regenerateFriendKeys;
+window.updateFriendName = updateFriendName;
+window.updateServerPort = updateServerPort;
+window.updateCustomEndpoint = updateCustomEndpoint;
+window.resetDefaultEndpoint = resetDefaultEndpoint;
+window.copyFriendConfig = copyFriendConfig;
+window.downloadFriendConfig = downloadFriendConfig;
+window.showFriendQrCode = showFriendQrCode;
+window.closeWgQrModal = closeWgQrModal;
+window.openWireguardFirewallPort = openWireguardFirewallPort;

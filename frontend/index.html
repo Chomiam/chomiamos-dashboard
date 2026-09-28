@@ -2931,6 +2931,14 @@
                 </div>
                 <span id="sftp-nav-badge" class="net-subnav-pill sftp-pill-ok">Actif</span>
               </button>
+              <button type="button" class="net-subnav-btn" data-subtab="net-subtab-wireguard" onclick="switchNetworkSubtab('net-subtab-wireguard')">
+                <span class="net-subnav-icon">🔏</span>
+                <div class="net-subnav-text">
+                  <strong>VPN WireGuard</strong>
+                  <small>Profils & Réseau Privé Ami</small>
+                </div>
+                <span id="wg-nav-badge" class="net-subnav-pill">0</span>
+              </button>
             </nav>
             <div class="net-sidebar-footer">
               <div class="net-sidebar-status">
@@ -3498,6 +3506,305 @@
 
             </div>
 
+            <!-- SOUS-ONGLET 5 : VPN WIREGUARD & RÉSEAU AMI -->
+            <div id="net-subtab-wireguard" class="net-subtab-pane">
+
+              <!-- Hero Card WireGuard -->
+              <div class="card wg-hero-card">
+                <div class="wg-hero-header">
+                  <div class="wg-shield-icon-box">🔏</div>
+                  <div class="wg-hero-title-wrap">
+                    <div class="wg-title-row">
+                      <h2>Centre VPN WireGuard & Réseau Privé</h2>
+                      <span id="wg-global-status-pill" class="badge badge-neutral">Inactif</span>
+                      <span class="badge badge-accent">v0.5.8</span>
+                    </div>
+                    <p class="wg-hero-desc">Importez et gérez vos profils WireGuard avec détection de pays, ou hébergez votre propre réseau privé chiffré pour inviter un ami (LAN gaming, partages, netplay).</p>
+                  </div>
+                </div>
+
+                <div class="wg-hero-pills">
+                  <div class="wg-stat-pill">
+                    <span class="wg-stat-icon">🛡️</span>
+                    <div>
+                      <small>VPNs Enregistrés</small>
+                      <strong id="wg-stat-profiles-count">0 profil</strong>
+                    </div>
+                  </div>
+                  <div class="wg-stat-pill">
+                    <span class="wg-stat-icon">⚡</span>
+                    <div>
+                      <small>Connexion Client</small>
+                      <strong id="wg-stat-active-client">Déconnecté</strong>
+                    </div>
+                  </div>
+                  <div class="wg-stat-pill">
+                    <span class="wg-stat-icon">👥</span>
+                    <div>
+                      <small>Serveur Privé Ami</small>
+                      <strong id="wg-stat-server-status">Arrêté</strong>
+                    </div>
+                  </div>
+                  <div class="wg-stat-pill">
+                    <span class="wg-stat-icon">🌐</span>
+                    <div>
+                      <small>IP Publique (WAN)</small>
+                      <strong id="wg-stat-public-ip">Détection...</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Onglets Internes WireGuard : Clients vs Serveur Ami -->
+              <div class="wg-segment-bar">
+                <button type="button" class="wg-segment-btn active" id="wg-segment-btn-clients" onclick="switchWgTab('clients')">
+                  <span>🌐</span> Profils VPN Clients (<span id="wg-badge-client-count">0</span>)
+                </button>
+                <button type="button" class="wg-segment-btn" id="wg-segment-btn-server" onclick="switchWgTab('server')">
+                  <span>👥</span> Héberger un Réseau Privé Ami (Serveur P2P)
+                </button>
+              </div>
+
+              <!-- ================= VUE 1 : PROFILS CLIENTS ================= -->
+              <div id="wg-tab-clients-view" class="wg-tab-view active">
+                <div class="wg-toolbar">
+                  <div class="wg-search-wrap">
+                    <span class="wg-search-icon">🔍</span>
+                    <input type="text" id="wg-search-input" class="wg-search-field" placeholder="Rechercher par nom ou pays (ex: France, Suisse, Proton, Mullvad)..." oninput="filterWgProfiles()">
+                  </div>
+                  <div class="wg-toolbar-actions">
+                    <button type="button" class="btn btn-secondary" onclick="openWgPasteModal()">
+                      <span>📝</span> Coller une Config
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="openWgImportModal()">
+                      <span>➕</span> Importer un fichier .conf
+                    </button>
+                    <button type="button" class="btn btn-outline btn-icon" onclick="loadWireguardOverview(true)" title="Actualiser le statut">
+                      🔄
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Grille des Cartes VPN Clients -->
+                <div id="wg-profiles-grid" class="wg-profiles-grid">
+                  <!-- Généré dynamiquement en JS -->
+                  <div class="wg-empty-placeholder">
+                    <div class="wg-empty-icon">🌐</div>
+                    <h3>Aucune configuration VPN WireGuard</h3>
+                    <p>Importez vos fichiers <code>.conf</code> (Mullvad, Proton, AzireVPN, OPNsense, serveur personnel) pour vous connecter en 1 clic avec détection de pays.</p>
+                    <button type="button" class="btn btn-primary" onclick="openWgImportModal()" style="margin-top: 14px;">
+                      <span>➕</span> Importer un premier profil
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- ================= VUE 2 : SERVEUR RÉSEAU PRIVÉ AMI ================= -->
+              <div id="wg-tab-server-view" class="wg-tab-view hidden">
+                
+                <!-- Avertissement Pare-feu si port fermé -->
+                <div id="wg-firewall-banner" class="wg-firewall-warning hidden">
+                  <div class="wg-fw-alert-content">
+                    <span class="wg-fw-alert-icon">⚠️</span>
+                    <div>
+                      <strong>Le port UDP 51820 n'est pas encore autorisé dans votre pare-feu NixOS</strong>
+                      <p>Pour que votre ami puisse se connecter à travers votre box internet, le port UDP 51820 doit être autorisé.</p>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-warning" onclick="openWireguardFirewallPort()">
+                    <span>🛡️</span> Autoriser le port UDP 51820
+                  </button>
+                </div>
+
+                <!-- Panneau de Contrôle & Commandes du Serveur -->
+                <div class="card wg-server-control-card">
+                  <div class="wg-srv-ctrl-header">
+                    <div>
+                      <h3>Hébergement Réseau Privé ChomiamOS</h3>
+                      <p class="card-subtitle">Tunnel WireGuard peer-to-peer chiffré en direct entre vous et votre ami (sans tiers ni abonnement)</p>
+                    </div>
+                    <div class="wg-srv-actions-group">
+                      <button type="button" id="wg-btn-start-server" class="btn btn-primary" onclick="startFriendServer()">
+                        <span>🚀</span> Démarrer le Réseau Privé
+                      </button>
+                      <button type="button" id="wg-btn-stop-server" class="btn btn-danger hidden" onclick="stopFriendServer()">
+                        <span>🛑</span> Arrêter le Réseau
+                      </button>
+                      <button type="button" class="btn btn-secondary" onclick="testFriendTunnel()">
+                        <span>⚡</span> Tester le tunnel (Ping)
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Résultat du Test en Direct (Banner) -->
+                  <div id="wg-test-result-box" class="wg-test-result-box hidden">
+                    <div class="wg-test-icon-box" id="wg-test-icon">⏳</div>
+                    <div class="wg-test-text">
+                      <strong id="wg-test-message">Test en cours...</strong>
+                      <p id="wg-test-details">Vérification de l'interface WireGuard et ping ICMP...</p>
+                    </div>
+                    <div class="wg-test-badge-wrap">
+                      <span id="wg-test-latency-badge" class="badge">-- ms</span>
+                    </div>
+                  </div>
+
+                  <!-- ================= LE SCHÉMA VISUEL DE TOPOLOGIE INTERACTIF ================= -->
+                  <div class="wg-topology-container">
+                    <div class="wg-topology-title">
+                      <span>📡</span> Schéma Visuel de la Liaison Privée
+                    </div>
+
+                    <div class="wg-topology-diagram">
+                      <!-- NŒUD GAUCHE : HÔTE (VOUS) -->
+                      <div class="wg-node-card wg-node-host" id="wg-node-host">
+                        <div class="wg-node-header">
+                          <span class="wg-node-avatar">🖥️</span>
+                          <div>
+                            <strong>Votre Machine</strong>
+                            <small>Hôte ChomiamOS</small>
+                          </div>
+                        </div>
+                        <div class="wg-node-meta">
+                          <div class="wg-node-row">
+                            <span>IP Privée :</span>
+                            <strong class="text-mauve">10.100.0.1/24</strong>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>Port UDP :</span>
+                            <strong>51820</strong>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>Interface :</span>
+                            <span class="badge badge-accent">wg-chomiam</span>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>Statut Hôte :</span>
+                            <span id="wg-host-status-tag" class="wg-status-dot offline">Arrêté</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- LIAISON CENTRALE : TUNNEL CHIFFRÉ -->
+                      <div class="wg-tunnel-connector">
+                        <div class="wg-wire-beam" id="wg-wire-beam"></div>
+                        <div class="wg-tunnel-badge-box">
+                          <div class="wg-tunnel-badge">
+                            <span id="wg-tunnel-shield">🔒</span>
+                            <span>WireGuard Tunnel</span>
+                          </div>
+                          <small class="wg-tunnel-crypto">ChaCha20-Poly1305</small>
+                          <div class="wg-tunnel-live-stats" id="wg-tunnel-live-stats">
+                            <span id="wg-tunnel-stats-text">En attente de démarrage</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- NŒUD DROIT : AMI INVITÉ -->
+                      <div class="wg-node-card wg-node-friend" id="wg-node-friend">
+                        <div class="wg-node-header">
+                          <span class="wg-node-avatar">🎮</span>
+                          <div class="wg-friend-name-input-wrap">
+                            <input type="text" id="wg-friend-name-input" value="Ami Invité" placeholder="Nom de l'ami" title="Cliquez pour renommer l'ami" onchange="updateFriendName()">
+                            <small>Client Invité (Peer)</small>
+                          </div>
+                        </div>
+                        <div class="wg-node-meta">
+                          <div class="wg-node-row">
+                            <span>IP Privée :</span>
+                            <strong class="text-teal">10.100.0.2/32</strong>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>AllowedIPs :</span>
+                            <span>10.100.0.0/24</span>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>Keepalive :</span>
+                            <span>25s (NAT Anti-drop)</span>
+                          </div>
+                          <div class="wg-node-row">
+                            <span>Statut Ami :</span>
+                            <span id="wg-friend-status-tag" class="wg-status-dot offline">Hors-ligne</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Paramètres Avancés : Endpoint Personnalisé & Port -->
+                  <div class="wg-server-settings-bar">
+                    <div class="form-group" style="flex: 1;">
+                      <label class="form-label" style="font-size: 0.82rem;">IP Publique ou Nom de Domaine (Endpoint fourni à l'ami) :</label>
+                      <div class="input-with-action">
+                        <input type="text" id="wg-input-custom-endpoint" placeholder="Ex: 82.64.x.x ou mon-pc.ddns.net" onchange="updateCustomEndpoint()">
+                        <button type="button" class="btn btn-outline btn-sm" onclick="resetDefaultEndpoint()" title="Détecter automatiquement l'IP WAN">Détecter</button>
+                      </div>
+                    </div>
+                    <div class="form-group" style="width: 140px;">
+                      <label class="form-label" style="font-size: 0.82rem;">Port UDP :</label>
+                      <input type="number" id="wg-input-server-port" value="51820" min="1024" max="65535" onchange="updateServerPort()">
+                    </div>
+                    <div style="align-self: flex-end; margin-bottom: 2px;">
+                      <button type="button" class="btn btn-outline btn-sm" onclick="regenerateFriendKeys()" title="Générer un nouveau couple de clés cryptographiques">
+                        🔄 Nouvelles Clés
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+
+                <!-- Fiche d'Invitation & Partage pour l'Ami -->
+                <div class="card wg-friend-invite-card">
+                  <div class="wg-invite-header">
+                    <div>
+                      <h3>Invitation & Configuration pour votre Ami</h3>
+                      <p class="card-subtitle">Transmettez ce fichier ou faites scanner le QR Code à votre ami pour qu'il rejoigne immédiatement votre réseau local</p>
+                    </div>
+                    <div class="wg-invite-actions">
+                      <button type="button" class="btn btn-secondary" onclick="copyFriendConfig()">
+                        <span>📋</span> Copier la Config
+                      </button>
+                      <button type="button" class="btn btn-secondary" onclick="downloadFriendConfig()">
+                        <span>💾</span> Télécharger .conf
+                      </button>
+                      <button type="button" class="btn btn-primary" onclick="showFriendQrCode()">
+                        <span>📱</span> Afficher le QR Code
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="wg-invite-layout">
+                    <!-- Zone Gauche : Aperçu du fichier de configuration -->
+                    <div class="wg-invite-code-wrap">
+                      <div class="wg-code-header">
+                        <span>chomiamos-friend.conf</span>
+                        <span class="badge badge-accent">Prêt à l'emploi</span>
+                      </div>
+                      <pre id="wg-friend-conf-preview" class="wg-code-block"></pre>
+                    </div>
+
+                    <!-- Zone Droite : Mini QR Code & Guide d'aide -->
+                    <div class="wg-invite-side">
+                      <div class="wg-qr-preview-box" onclick="showFriendQrCode()" title="Cliquez pour agrandir le QR Code">
+                        <div id="wg-inline-qr-target"></div>
+                        <small>📱 Scanner avec l'application WireGuard Mobile</small>
+                      </div>
+
+                      <div class="wg-friend-guide-box">
+                        <strong>📖 Comment votre ami se connecte :</strong>
+                        <ul>
+                          <li><strong>Windows / Mac :</strong> Installer WireGuard ➔ Importer le tunnel <code>.conf</code> ➔ Activer.</li>
+                          <li><strong>Smartphone :</strong> Scanner ce QR Code dans l'app WireGuard ➔ Activer.</li>
+                          <li><strong>Linux :</strong> <code>wg-quick up ./chomiamos-friend.conf</code> ou via NetworkManager.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+            </div>
+
             </div>
           </div>
         </div>
@@ -3946,6 +4253,7 @@
 
   <script src="js/xterm.js"></script>
   <script src="js/addon-fit.js"></script>
+  <script src="js/qrcode.min.js"></script>
   <script src="js/app.js"></script>
 
   <!-- MODAL : AJOUTER / ÉDITER UN DOSSIER PARTAGÉ sFTP -->
@@ -4153,6 +4461,135 @@
       </div>
     </div>
   </div>
+
+
+    <!-- ==================== MODAL IMPORT WIREGUARD ==================== -->
+    <div id="wg-import-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">🔏</span>
+            <div>
+              <h3>Importer un Profil WireGuard</h3>
+              <p class="modal-subtitle">Ajoutez un tunnel VPN client avec détection automatique du pays</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeWgImportModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Nom personnalisé du VPN :</label>
+            <input type="text" id="wg-import-name" class="form-control" placeholder="Ex: Proton VPN Paris, Mullvad Suisse, VPN Bureau...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pays du VPN (Drapeau affiché) :</label>
+            <select id="wg-import-country" class="form-control">
+              <option value="" selected>🔍 Détection Automatique (selon fichier/endpoint)</option>
+              <option value="FR">🇫🇷 France</option>
+              <option value="CH">🇨🇭 Suisse</option>
+              <option value="US">🇺🇸 États-Unis</option>
+              <option value="DE">🇩🇪 Allemagne</option>
+              <option value="NL">🇳🇱 Pays-Bas</option>
+              <option value="GB">🇬🇧 Royaume-Uni</option>
+              <option value="JP">🇯🇵 Japon</option>
+              <option value="SE">🇸🇪 Suède</option>
+              <option value="CA">🇨🇦 Canada</option>
+              <option value="ES">🇪🇸 Espagne</option>
+              <option value="IT">🇮🇹 Italie</option>
+              <option value="BE">🇧🇪 Belgique</option>
+              <option value="NO">🇳🇴 Norvège</option>
+              <option value="FI">🇫🇮 Finlande</option>
+              <option value="DK">🇩🇰 Danemark</option>
+              <option value="IS">🇮🇸 Islande</option>
+              <option value="AT">🇦🇹 Autriche</option>
+              <option value="PT">🇵🇹 Portugal</option>
+              <option value="PL">🇵🇱 Pologne</option>
+              <option value="RO">🇷🇴 Roumanie</option>
+              <option value="IE">🇮🇪 Irlande</option>
+              <option value="AU">🇦🇺 Australie</option>
+              <option value="SG">🇸🇬 Singapour</option>
+              <option value="KR">🇰🇷 Corée du Sud</option>
+              <option value="BR">🇧🇷 Brésil</option>
+              <option value="UA">🇺🇦 Ukraine</option>
+              <option value="UN">🌐 Réseau Privé / Autre</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Sélectionnez le fichier <code>.conf</code> :</label>
+            <input type="file" id="wg-import-file-input" accept=".conf,.txt" class="form-control" onchange="handleWgFileSelected(event)">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ou collez directement la configuration WireGuard :</label>
+            <textarea id="wg-import-text-content" class="form-control wg-textarea-conf" rows="7" placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = ...&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = ..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeWgImportModal()">Annuler</button>
+          <button type="button" class="btn btn-primary" onclick="submitWgImport()">
+            <span>➕</span> Importer & Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL VISUALISATION CONFIG ==================== -->
+    <div id="wg-view-conf-modal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon" id="wg-view-conf-flag">🌐</span>
+            <div>
+              <h3 id="wg-view-conf-title">Configuration WireGuard</h3>
+              <p class="modal-subtitle" id="wg-view-conf-subtitle">Fichier brut</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeWgViewConfModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <pre id="wg-view-conf-body" class="wg-code-block"></pre>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="copyCurrentViewConf()">
+            <span>📋</span> Copier la configuration
+          </button>
+          <button type="button" class="btn btn-primary" onclick="closeWgViewConfModal()">Fermer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MODAL QR CODE ==================== -->
+    <div id="wg-qr-modal" class="modal-overlay hidden">
+      <div class="modal-card modal-sm" style="text-align: center;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">📱</span>
+            <div>
+              <h3>QR Code WireGuard</h3>
+              <p class="modal-subtitle">Scannez avec l'application mobile</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeWgQrModal()">✕</button>
+        </div>
+
+        <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;">
+          <div id="wg-modal-qr-target" class="wg-qr-modal-box"></div>
+          <p style="margin-top: 14px; font-size: 0.88rem; color: var(--subtext0);">
+            Ouvrez <strong>WireGuard</strong> sur votre smartphone Android ou iPhone, appuyez sur <strong>« + »</strong> puis <strong>« Scanner un code QR »</strong>.
+          </p>
+        </div>
+
+        <div class="modal-footer" style="justify-content: center;">
+          <button type="button" class="btn btn-primary" onclick="closeWgQrModal()">Fermer</button>
+        </div>
+      </div>
+    </div>
 
 </body>
 </html>

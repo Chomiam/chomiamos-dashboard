@@ -261,62 +261,121 @@ fn parse_wireguard_conf(content: &str) -> (String, String, String, String) {
 }
 
 struct InterfaceLiveStats {
-    #[allow(dead_code)] pub active: bool,
     latest_handshake: String,
     rx_bytes: u64,
     tx_bytes: u64,
 }
 
+fn get_proc_net_dev_stats() -> HashMap<String, (u64, u64)> {
+    let mut map = HashMap::new();
+    if let Ok(content) = fs::read_to_string("/proc/net/dev") {
+        for line in content.lines().skip(2) {
+            if let Some((iface, data)) = line.split_once(':') {
+                let iface_name = iface.trim().to_string();
+                let nums: Vec<&str> = data.split_whitespace().collect();
+                if nums.len() >= 9 {
+                    let rx = nums[0].parse::<u64>().unwrap_or(0);
+                    let tx = nums[8].parse::<u64>().unwrap_or(0);
+                    map.insert(iface_name, (rx, tx));
+                }
+            }
+        }
+    }
+    map
+}
+
+pub const EXEC_PATH: &str = "/run/current-system/sw/bin:/etc/profiles/per-user/chomiam/bin:/run/wrappers/bin:/bin:/usr/bin";
+
+pub fn get_wg_bin() -> &'static str {
+    if std::path::Path::new("/run/current-system/sw/bin/wg").exists() {
+        "/run/current-system/sw/bin/wg"
+    } else if std::path::Path::new("/etc/profiles/per-user/chomiam/bin/wg").exists() {
+        "/etc/profiles/per-user/chomiam/bin/wg"
+    } else {
+        "wg"
+    }
+}
+
+pub fn get_nmcli_bin() -> &'static str {
+    if std::path::Path::new("/run/current-system/sw/bin/nmcli").exists() {
+        "/run/current-system/sw/bin/nmcli"
+    } else if std::path::Path::new("/etc/profiles/per-user/chomiam/bin/nmcli").exists() {
+        "/etc/profiles/per-user/chomiam/bin/nmcli"
+    } else {
+        "nmcli"
+    }
+}
+
 fn get_live_interfaces() -> HashMap<String, InterfaceLiveStats> {
     let mut map = HashMap::new();
+    let proc_stats = get_proc_net_dev_stats();
 
-    // Check with `wg show all dump`
-    let out = Command::new("wg").args(["show", "all", "dump"]).output();
-    if let Ok(o) = out {
+    // 1. Query NetworkManager for active wireguard connections (no root required)
+    let nm_out = Command::new(get_nmcli_bin())
+        .env("PATH", EXEC_PATH)
+        .args(["-t", "-f", "NAME,TYPE,STATE,DEVICE", "connection", "show", "--active"])
+        .output();
+
+    if let Ok(o) = nm_out {
         if o.status.success() {
             let text = String::from_utf8_lossy(&o.stdout);
             for line in text.lines() {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 4 {
-                    let iface = parts[0].to_string();
-                    let stats = map.entry(iface).or_insert(InterfaceLiveStats {
-                        active: true,
-                        latest_handshake: "Aucun".into(),
-                        rx_bytes: 0,
-                        tx_bytes: 0,
+                let parts: Vec<&str> = line.split(':').collect();
+                if parts.len() >= 3 && parts[1] == "wireguard" && (parts[2] == "activated" || parts[2] == "activating") {
+                    let name = parts[0].to_string();
+                    let dev = if parts.len() >= 4 && !parts[3].is_empty() {
+                        parts[3].to_string()
+                    } else {
+                        name.clone()
+                    };
+
+                    let (rx, tx) = proc_stats.get(&dev).or_else(|| proc_stats.get(&name)).copied().unwrap_or((0, 0));
+
+                    map.insert(name, InterfaceLiveStats {
+                        latest_handshake: if rx > 0 || tx > 0 { "Trafic actif".into() } else { "En ligne".into() },
+                        rx_bytes: rx,
+                        tx_bytes: tx,
                     });
-                    if parts.len() >= 8 {
-                        // Peer line: interface, public_key, preshared_key, endpoint, allowed_ips, latest_handshake, transfer_rx, transfer_tx, persistent_keepalive
-                        if let Ok(hs) = parts[5].parse::<u64>() {
-                            if hs > 0 {
-                                stats.latest_handshake = format_handshake_secs(hs);
-                            }
-                        }
-                        if let Ok(rx) = parts[6].parse::<u64>() {
-                            stats.rx_bytes += rx;
-                        }
-                        if let Ok(tx) = parts[7].parse::<u64>() {
-                            stats.tx_bytes += tx;
-                        }
-                    }
                 }
             }
         }
     }
 
-    // Also check `ip link show type wireguard` to catch any interface without active peers
-    let ip_out = Command::new("ip").args(["-br", "link", "show", "type", "wireguard"]).output();
+    // 2. Query ip link show type wireguard
+    let ip_out = Command::new("ip").env("PATH", EXEC_PATH).args(["-br", "link", "show", "type", "wireguard"]).output();
     if let Ok(o) = ip_out {
         if o.status.success() {
             let text = String::from_utf8_lossy(&o.stdout);
             for line in text.lines() {
-                if let Some(iface) = line.split_whitespace().next() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(iface) = parts.get(0) {
+                    let (rx, tx) = proc_stats.get(*iface).copied().unwrap_or((0, 0));
                     map.entry(iface.to_string()).or_insert(InterfaceLiveStats {
-                        active: true,
-                        latest_handshake: "En attente".into(),
-                        rx_bytes: 0,
-                        tx_bytes: 0,
+                        latest_handshake: if rx > 0 || tx > 0 { "Trafic actif".into() } else { "En ligne".into() },
+                        rx_bytes: rx,
+                        tx_bytes: tx,
                     });
+                }
+            }
+        }
+    }
+
+    // 3. Query wg show if accessible
+    let out = Command::new(get_wg_bin()).env("PATH", EXEC_PATH).args(["show", "all", "dump"]).output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            let text = String::from_utf8_lossy(&o.stdout);
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 8 {
+                    let iface = parts[0].to_string();
+                    if let Ok(hs) = parts[5].parse::<u64>() {
+                        if hs > 0 {
+                            if let Some(stats) = map.get_mut(&iface) {
+                                stats.latest_handshake = format_handshake_secs(hs);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -358,7 +417,8 @@ fn format_bytes(bytes: u64) -> String {
 }
 
 fn run_wg_genkey() -> Result<String, String> {
-    let out = Command::new("wg")
+    let out = Command::new(get_wg_bin())
+        .env("PATH", EXEC_PATH)
         .arg("genkey")
         .output()
         .map_err(|e| format!("Erreur wg genkey : {}", e))?;
@@ -371,7 +431,8 @@ fn run_wg_genkey() -> Result<String, String> {
 
 fn run_wg_pubkey(private_key: &str) -> Result<String, String> {
     use std::io::Write;
-    let mut child = Command::new("wg")
+    let mut child = Command::new(get_wg_bin())
+        .env("PATH", EXEC_PATH)
         .arg("pubkey")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -392,7 +453,8 @@ fn run_wg_pubkey(private_key: &str) -> Result<String, String> {
 }
 
 fn run_wg_genpsk() -> Result<String, String> {
-    let out = Command::new("wg")
+    let out = Command::new(get_wg_bin())
+        .env("PATH", EXEC_PATH)
         .arg("genpsk")
         .output()
         .map_err(|e| format!("Erreur wg genpsk : {}", e))?;
@@ -410,7 +472,7 @@ pub fn detect_public_ip() -> String {
         "https://icanhazip.com",
     ];
     for u in urls {
-        let out = Command::new("curl")
+        let out = Command::new("curl").env("PATH", EXEC_PATH)
             .args(["-s", "--connect-timeout", "2", "-m", "3", u])
             .output();
         if let Ok(o) = out {
@@ -448,13 +510,78 @@ fn is_firewall_udp_51820_open() -> bool {
     false
 }
 
+// =========================================================================
+// GESTION NATIVE SANS PRIVILÈGES ROOT VIA NETWORKMANAGER (NMCLI)
+// =========================================================================
+
+fn nm_up_wireguard(iface_name: &str, conf_path: &Path) -> Result<(), String> {
+    let nmcli = get_nmcli_bin();
+
+    // 1. Nettoyer toute ancienne connexion du même nom dans NetworkManager
+    let _ = Command::new(nmcli)
+        .env("PATH", EXEC_PATH)
+        .args(["connection", "delete", iface_name])
+        .output();
+
+    // 2. Importer la configuration WireGuard dans NetworkManager (natif D-Bus utilisateur)
+    let imp = Command::new(nmcli)
+        .env("PATH", EXEC_PATH)
+        .args(["connection", "import", "type", "wireguard", "file", conf_path.to_str().unwrap()])
+        .output()
+        .map_err(|e| format!("Erreur exécution nmcli import : {}", e))?;
+
+    if !imp.status.success() {
+        let err = String::from_utf8_lossy(&imp.stderr);
+        return Err(format!("Échec import nmcli : {}", err.trim()));
+    }
+
+    // 3. Activer la connexion
+    let up = Command::new(nmcli)
+        .env("PATH", EXEC_PATH)
+        .args(["connection", "up", iface_name])
+        .output()
+        .map_err(|e| format!("Erreur exécution nmcli up : {}", e))?;
+
+    if !up.status.success() {
+        let err = String::from_utf8_lossy(&up.stderr);
+        if !err.contains("already active") && !err.contains("déjà active") {
+            return Err(format!("Échec activation nmcli : {}", err.trim()));
+        }
+    }
+
+    Ok(())
+}
+
+fn nm_down_wireguard(iface_name: &str, _conf_path: &Path) -> Result<(), String> {
+    let nmcli = get_nmcli_bin();
+
+    // 1. Désactiver et supprimer de NetworkManager
+    let _ = Command::new(nmcli)
+        .env("PATH", EXEC_PATH)
+        .args(["connection", "down", iface_name])
+        .output();
+
+    let _ = Command::new(nmcli)
+        .env("PATH", EXEC_PATH)
+        .args(["connection", "delete", iface_name])
+        .output();
+
+    // 2. Nettoyage de sécurité
+    let _ = Command::new("ip")
+        .env("PATH", EXEC_PATH)
+        .args(["link", "delete", iface_name])
+        .output();
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_wireguard_overview() -> Result<WireguardOverview, String> {
     ensure_dirs();
     let store = load_store();
     let live = get_live_interfaces();
-    let is_installed = Command::new("wg").arg("--version").output().is_ok()
-        || Path::new("/etc/profiles/per-user/chomiam/bin/wg").exists();
+    let is_installed = Command::new(get_nmcli_bin()).env("PATH", EXEC_PATH).arg("--version").output().is_ok()
+        || Command::new(get_wg_bin()).env("PATH", EXEC_PATH).arg("--version").output().is_ok();
 
     let mut profiles = Vec::new();
     let mut active_id = None;
@@ -532,7 +659,7 @@ pub fn get_wireguard_overview() -> Result<WireguardOverview, String> {
         srv_meta.listen_port
     );
 
-    let f_connected = srv_stats.map(|s| s.latest_handshake != "Aucun" && s.latest_handshake != "En attente").unwrap_or(false);
+    let f_connected = srv_stats.map(|s| s.rx_bytes > 0 || s.tx_bytes > 0 || s.latest_handshake != "En ligne").unwrap_or(false);
 
     let server_state = WireguardServerState {
         is_active: srv_is_active,
@@ -575,7 +702,6 @@ pub fn import_wireguard_profile(name: String, content: String, country_code: Opt
     let mut store = load_store();
     let count = store.profiles.len() + 1;
     let id = format!("wgc_{:02}_{}", count, SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() % 1000);
-    // Keep interface name under 15 characters (e.g. wgc_01_123)
     let iface_name = if id.len() > 15 { id[..15].to_string() } else { id.clone() };
 
     let (address, dns, endpoint, _pubkey) = parse_wireguard_conf(trimmed);
@@ -689,12 +815,8 @@ pub fn delete_wireguard_profile(id: String) -> Result<(), String> {
         let meta = store.profiles.remove(pos);
         save_store(&store);
 
-        // Bring down if active
-        let _ = Command::new("pkexec")
-            .args(["sh", "-c", &format!("wg-quick down '{}' 2>/dev/null || ip link delete '{}' 2>/dev/null || true", meta.interface_name, meta.interface_name)])
-            .output();
-
         let conf_path = get_clients_dir().join(format!("{}.conf", id));
+        let _ = nm_down_wireguard(&meta.interface_name, &conf_path);
         let _ = fs::remove_file(conf_path);
         Ok(())
     } else {
@@ -714,36 +836,18 @@ pub fn toggle_wireguard_profile(id: String, activate: bool) -> Result<bool, Stri
     }
 
     if activate {
-        // Disconnect other active client profiles to avoid route conflicts
+        // Disconnect other active client profiles to prevent routing collisions
         for other in &store.profiles {
             if other.id != id {
-                let _ = Command::new("pkexec")
-                    .args(["sh", "-c", &format!("wg-quick down '{}' 2>/dev/null || true", other.interface_name)])
-                    .output();
+                let other_conf = get_clients_dir().join(format!("{}.conf", other.id));
+                let _ = nm_down_wireguard(&other.interface_name, &other_conf);
             }
         }
 
-        let cmd = format!(
-            "export PATH=$PATH:/etc/profiles/per-user/chomiam/bin:/run/current-system/sw/bin; wg-quick up '{}'",
-            conf_path.to_string_lossy()
-        );
-        let out = Command::new("pkexec")
-            .args(["sh", "-c", &cmd])
-            .output()
-            .map_err(|e| format!("Erreur exécution pkexec wg-quick up : {}", e))?;
-
-        if !out.status.success() {
-            let err = String::from_utf8_lossy(&out.stderr);
-            return Err(format!("Échec de l'activation du tunnel : {}", err));
-        }
+        nm_up_wireguard(&profile.interface_name, &conf_path)?;
         Ok(true)
     } else {
-        let cmd = format!(
-            "export PATH=$PATH:/etc/profiles/per-user/chomiam/bin:/run/current-system/sw/bin; wg-quick down '{}' || ip link delete '{}' || true",
-            conf_path.to_string_lossy(),
-            profile.interface_name
-        );
-        let _ = Command::new("pkexec").args(["sh", "-c", &cmd]).output();
+        nm_down_wireguard(&profile.interface_name, &conf_path)?;
         Ok(false)
     }
 }
@@ -806,21 +910,8 @@ pub fn start_friend_server(
     store.server = Some(srv_meta);
     save_store(&store);
 
-    // Bring up wg-chomiam
-    let cmd = format!(
-        "export PATH=$PATH:/etc/profiles/per-user/chomiam/bin:/run/current-system/sw/bin; wg-quick down wg-chomiam 2>/dev/null || true; wg-quick up '{}'",
-        srv_conf_path.to_string_lossy()
-    );
-
-    let out = Command::new("pkexec")
-        .args(["sh", "-c", &cmd])
-        .output()
-        .map_err(|e| format!("Erreur activation serveur WireGuard : {}", e))?;
-
-    if !out.status.success() {
-        let err = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("Échec du lancement du serveur : {}", err));
-    }
+    // Démarrer l'interface wg-chomiam via NetworkManager
+    nm_up_wireguard("wg-chomiam", &srv_conf_path)?;
 
     // Return fresh state
     let overview = get_wireguard_overview()?;
@@ -830,11 +921,7 @@ pub fn start_friend_server(
 #[tauri::command]
 pub fn stop_friend_server() -> Result<WireguardServerState, String> {
     let srv_conf_path = get_server_dir().join("wg-chomiam.conf");
-    let cmd = format!(
-        "export PATH=$PATH:/etc/profiles/per-user/chomiam/bin:/run/current-system/sw/bin; wg-quick down '{}' 2>/dev/null || ip link delete wg-chomiam 2>/dev/null || true",
-        srv_conf_path.to_string_lossy()
-    );
-    let _ = Command::new("pkexec").args(["sh", "-c", &cmd]).output();
+    let _ = nm_down_wireguard("wg-chomiam", &srv_conf_path);
 
     let overview = get_wireguard_overview()?;
     Ok(overview.server)
@@ -842,7 +929,6 @@ pub fn stop_friend_server() -> Result<WireguardServerState, String> {
 
 #[tauri::command]
 pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
-    // 1. Check if interface wg-chomiam is up
     let live = get_live_interfaces();
     let srv_stats = live.get("wg-chomiam");
 
@@ -862,8 +948,9 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
     let rx_str = format_bytes(stats.rx_bytes);
     let tx_str = format_bytes(stats.tx_bytes);
 
-    // 2. Perform ICMP ping to friend's IP (10.100.0.2)
+    // ICMP ping to friend's IP (10.100.0.2)
     let ping_out = Command::new("ping")
+        .env("PATH", EXEC_PATH)
         .args(["-c", "2", "-W", "1", "-i", "0.2", "10.100.0.2"])
         .output();
 
@@ -897,16 +984,15 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
         }
     }
 
-    // Ping failed: check if handshake exists
-    if stats.latest_handshake != "Aucun" && stats.latest_handshake != "En attente" {
+    if stats.rx_bytes > 0 || stats.tx_bytes > 0 || stats.latest_handshake.contains("s") || stats.latest_handshake.contains("m") {
         Ok(TunnelTestResult {
             success: true,
             latency_ms: None,
             handshake_status: stats.latest_handshake.clone(),
             bytes_received: rx_str,
             bytes_sent: tx_str,
-            message: "🤝 Handshake WireGuard validé avec l'ami (ping ICMP bloqué ou en attente).".into(),
-            details: "L'ami est bien connecté au tunnel, mais son pare-feu local bloque peut-être les requêtes Ping (ICMP). Le tunnel est opérationnel.".into(),
+            message: "🤝 Tunnel WireGuard actif avec trafic détecté.".into(),
+            details: "L'ami est connecté et échange des données avec l'hôte (le pare-feu de l'ami bloque peut-être les requêtes ICMP ping).".into(),
         })
     } else {
         Ok(TunnelTestResult {
@@ -916,7 +1002,7 @@ pub fn test_friend_tunnel() -> Result<TunnelTestResult, String> {
             bytes_received: rx_str,
             bytes_sent: tx_str,
             message: "⏳ En attente de connexion de l'ami.".into(),
-            details: "L'hôte écoute sur le port UDP 51820. Transmettez la configuration ou le QR Code à votre ami, et assurez-vous que le port UDP 51820 de votre box internet est redirigé vers ce PC.".into(),
+            details: "L'hôte écoute sur le port UDP 51820. Transmettez la configuration ou le QR Code à votre ami, et vérifiez que votre box internet redirige le port UDP 51820 vers ce PC.".into(),
         })
     }
 }

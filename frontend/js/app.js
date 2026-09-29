@@ -5723,12 +5723,8 @@ async function loadSftpOverview(showFeedback = false) {
       if (btnFixFirewall) btnFixFirewall.classList.remove("d-none");
     }
 
-    // 4. URL de connexion
-    const uriEl = document.getElementById("sftp-connection-uri");
-    if (uriEl) {
-      const defaultUser = overview.users && overview.users.length > 0 ? overview.users[0].username : "utilisateur";
-      uriEl.textContent = `sftp://${defaultUser}@${overview.status.local_ip}:22`;
-    }
+    // 4. URLs de connexion sFTP (LAN & WireGuard VPN contextuel)
+    updateSftpConnectionUrls(overview);
 
     // 5. Rendu des dossiers partagés
     renderSftpShares(overview.shares, overview.users);
@@ -5887,7 +5883,10 @@ function renderSftpUsers(users, shares) {
           ${statusBadge}
         </td>
         <td>
-          <div style="display:flex; gap:6px; justify-content:flex-end;">
+          <div style="display:flex; gap:6px; justify-content:flex-end; align-items:center;">
+            <button type="button" class="btn btn-xs btn-primary sftp-btn-copy-user" onclick="copyUserSftpUri('${escapeHtml(u.username)}')" title="Copier le lien sFTP direct pour cet utilisateur">
+              <span id="sftp-user-copy-icon-${escapeHtml(u.username)}">📋</span> Lien sFTP
+            </button>
             <button type="button" class="btn btn-xs btn-secondary" onclick="editSftpUser('${escapeHtml(u.username)}')" title="Modifier les permissions ou le mot de passe">
               <span>✏️</span> Modifier
             </button>
@@ -5962,6 +5961,222 @@ async function openSftpFirewallUI() {
   }
 }
 
+let currentSftpOverviewData = null;
+
+function updateSftpConnectionUrls(overview) {
+  currentSftpOverviewData = overview;
+  const defaultUser = overview.users && overview.users.length > 0 ? overview.users[0].username : "utilisateur";
+  const localIp = overview.status?.local_ip || "127.0.0.1";
+
+  // 1. URL Réseau Local LAN
+  const uriEl = document.getElementById("sftp-connection-uri");
+  if (uriEl) {
+    uriEl.textContent = `sftp://${defaultUser}@${localIp}:22`;
+  }
+
+  // 2. WireGuard VPN Context
+  const vpnContext = overview.vpn_context || {
+    server_is_active: false,
+    server_ip: "10.100.0.1",
+    friend_name: "Ami",
+    friend_connected: false,
+    friend_ip: "10.100.0.2",
+    client_is_active: false,
+    client_profile_name: null,
+    client_country_flag: null,
+    client_remote_ip: null,
+    client_local_ip: null
+  };
+
+  const pillVpn = document.getElementById("sftp-pill-vpn");
+  const vpnIcon = document.getElementById("sftp-vpn-icon");
+  const vpnLabel = document.getElementById("sftp-vpn-label");
+  const vpnBadge = document.getElementById("sftp-vpn-badge");
+  const vpnUriEl = document.getElementById("sftp-vpn-connection-uri");
+  const btnCopyVpn = document.getElementById("btn-copy-sftp-vpn");
+  const bannerContainer = document.getElementById("sftp-vpn-banner-container");
+
+  if (pillVpn) {
+    pillVpn.classList.remove("vpn-server-active", "vpn-client-active", "vpn-offline");
+  }
+
+  // Cas 1 : Client WireGuard actif (l'utilisateur est connecté au tunnel d'un pair distant)
+  if (vpnContext.client_is_active && vpnContext.client_remote_ip) {
+    const remoteIp = vpnContext.client_remote_ip;
+    const profileName = vpnContext.client_profile_name || "VPN Distant";
+    const flag = vpnContext.client_country_flag || "🌐";
+    const remoteUri = `sftp://<utilisateur_distant>@${remoteIp}:22`;
+
+    if (pillVpn) {
+      pillVpn.classList.add("vpn-client-active");
+      pillVpn.title = `Connecté au VPN distant (${profileName}). IP WireGuard de l'hôte distant : ${remoteIp}`;
+    }
+    if (vpnIcon) vpnIcon.textContent = flag || "🌐";
+    if (vpnLabel) vpnLabel.textContent = `Lien sFTP Distant (${profileName})`;
+    if (vpnBadge) {
+      vpnBadge.className = "sftp-vpn-badge badge-client-active";
+      vpnBadge.innerHTML = `🟢 Connecté à ${escapeHtml(profileName)}`;
+    }
+    if (vpnUriEl) {
+      vpnUriEl.textContent = remoteUri;
+    }
+    if (btnCopyVpn) {
+      btnCopyVpn.disabled = false;
+      btnCopyVpn.title = "Copier le lien sFTP de l'hôte distant";
+    }
+
+    if (bannerContainer) {
+      let extraServerHtml = "";
+      if (vpnContext.server_is_active) {
+        const srvIp = vpnContext.server_ip || "10.100.0.1";
+        const serverUri = `sftp://${defaultUser}@${srvIp}:22`;
+        extraServerHtml = `
+          <div class="sftp-vpn-banner-box server-banner" style="margin-top: 10px;">
+            <div class="sftp-vpn-banner-icon">🛡️</div>
+            <div class="sftp-vpn-banner-content">
+              <div class="sftp-vpn-banner-title">
+                <span>Votre serveur d'amis WireGuard est également actif</span>
+                <span class="badge badge-success" style="font-size:0.75rem;">IP hôte : ${srvIp}</span>
+              </div>
+              <div class="sftp-vpn-banner-desc">Lien pour les amis connectés à votre propre serveur :</div>
+              <div class="sftp-vpn-banner-link-row">
+                <code class="sftp-vpn-code-badge">${escapeHtml(serverUri)}</code>
+                <button type="button" class="btn btn-xs btn-secondary" onclick="copyToClipboard('${escapeHtml(serverUri)}', this)">
+                  📋 Copier lien de mon serveur
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      bannerContainer.innerHTML = `
+        <div class="sftp-vpn-banner-box client-banner">
+          <div class="sftp-vpn-banner-icon">${flag || "🌐"}</div>
+          <div class="sftp-vpn-banner-content">
+            <div class="sftp-vpn-banner-title">
+              <span>Connecté au VPN distant : <strong>${escapeHtml(profileName)}</strong></span>
+              <span class="badge badge-primary" style="font-size:0.75rem;">IP distante : ${escapeHtml(remoteIp)}</span>
+            </div>
+            <div class="sftp-vpn-banner-desc">
+              Pour vous connecter à l'espace sFTP partagé par votre hôte distant, utilisez son adresse IP WireGuard :
+            </div>
+            <div class="sftp-vpn-banner-link-row">
+              <code class="sftp-vpn-code-badge">${escapeHtml(remoteUri)}</code>
+              <button type="button" class="btn btn-xs btn-primary" onclick="copySftpVpnUri()">
+                <span id="sftp-banner-vpn-copy-icon">📋</span> Copier le lien distant
+              </button>
+              <span class="text-muted" style="font-size:0.8rem; margin-left:6px;">
+                (Votre IP locale sur ce tunnel : <code>${escapeHtml(vpnContext.client_local_ip || "Attribuée")}</code>)
+              </span>
+            </div>
+          </div>
+        </div>
+        ${extraServerHtml}
+      `;
+    }
+  }
+  // Cas 2 : Serveur WireGuard actif (Réseau privé d'amis hébergé)
+  else if (vpnContext.server_is_active) {
+    const srvIp = vpnContext.server_ip || "10.100.0.1";
+    const friendName = vpnContext.friend_name || "Ami";
+    const serverUri = `sftp://${defaultUser}@${srvIp}:22`;
+
+    if (pillVpn) {
+      pillVpn.classList.add("vpn-server-active");
+      pillVpn.title = `Serveur WireGuard actif (${srvIp}). Lien de partage pour vos amis connectés.`;
+    }
+    if (vpnIcon) vpnIcon.textContent = "🛡️";
+    if (vpnLabel) vpnLabel.textContent = "Lien sFTP WireGuard (Pour amis)";
+    if (vpnBadge) {
+      vpnBadge.className = "sftp-vpn-badge badge-server-active";
+      if (vpnContext.friend_connected) {
+        vpnBadge.innerHTML = `🟢 ${escapeHtml(friendName)} connecté`;
+      } else {
+        vpnBadge.innerHTML = `🟡 Serveur actif (${escapeHtml(friendName)} hors-ligne)`;
+      }
+    }
+    if (vpnUriEl) {
+      vpnUriEl.textContent = serverUri;
+    }
+    if (btnCopyVpn) {
+      btnCopyVpn.disabled = false;
+      btnCopyVpn.title = "Copier le lien sFTP WireGuard à partager avec vos amis";
+    }
+
+    if (bannerContainer) {
+      const friendBadge = vpnContext.friend_connected
+        ? `<span class="badge badge-success" style="font-size:0.75rem;">🟢 ${escapeHtml(friendName)} en ligne</span>`
+        : `<span class="badge badge-warning" style="font-size:0.75rem;">🟡 En attente de connexion de ${escapeHtml(friendName)}</span>`;
+
+      bannerContainer.innerHTML = `
+        <div class="sftp-vpn-banner-box server-banner">
+          <div class="sftp-vpn-banner-icon">🛡️</div>
+          <div class="sftp-vpn-banner-content">
+            <div class="sftp-vpn-banner-title">
+              <span>Réseau privé WireGuard actif (Serveur hôte)</span>
+              ${friendBadge}
+            </div>
+            <div class="sftp-vpn-banner-desc">
+              Les utilisateurs connectés à votre VPN WireGuard peuvent accéder à vos dossiers partagés avec ce lien :
+            </div>
+            <div class="sftp-vpn-banner-link-row">
+              <code class="sftp-vpn-code-badge">${escapeHtml(serverUri)}</code>
+              <button type="button" class="btn btn-xs btn-primary" onclick="copySftpVpnUri()">
+                <span id="sftp-banner-vpn-copy-icon">📋</span> Copier pour mon ami
+              </button>
+              <span class="text-muted" style="font-size:0.8rem; margin-left:6px;">
+                (IP WireGuard de votre ami : <code>${escapeHtml(vpnContext.friend_ip || "10.100.0.2")}</code>)
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+  // Cas 3 : WireGuard inactif
+  else {
+    if (pillVpn) {
+      pillVpn.classList.add("vpn-offline");
+      pillVpn.title = "WireGuard inactif. Activez le VPN pour partager vos fichiers hors réseau local.";
+    }
+    if (vpnIcon) vpnIcon.textContent = "🔒";
+    if (vpnLabel) vpnLabel.textContent = "Lien sFTP WireGuard VPN";
+    if (vpnBadge) {
+      vpnBadge.className = "sftp-vpn-badge";
+      vpnBadge.textContent = "⚪ Inactif";
+    }
+    if (vpnUriEl) {
+      vpnUriEl.textContent = "WireGuard inactif (hors-ligne)";
+    }
+    if (btnCopyVpn) {
+      btnCopyVpn.disabled = false;
+      btnCopyVpn.title = "Ouvrir l'onglet WireGuard pour activer le VPN";
+    }
+
+    if (bannerContainer) {
+      bannerContainer.innerHTML = `
+        <div class="sftp-vpn-banner-box offline-banner">
+          <div class="sftp-vpn-banner-icon">💡</div>
+          <div class="sftp-vpn-banner-content">
+            <div class="sftp-vpn-banner-title">
+              <span>Partage hors réseau local avec WireGuard VPN</span>
+            </div>
+            <div class="sftp-vpn-banner-desc">
+              Pour permettre à vos amis d'accéder à votre sFTP sans ouvrir de ports sur votre box Internet, activez votre serveur WireGuard ou connectez-vous au tunnel de votre ami.
+            </div>
+            <div class="sftp-vpn-banner-actions">
+              <button type="button" class="btn btn-xs btn-secondary" onclick="switchNetworkSubtab('net-subtab-wireguard')">
+                🛡️ Ouvrir la configuration WireGuard
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+}
+
 function copySftpConnectionUri() {
   const uriEl = document.getElementById("sftp-connection-uri");
   const icon = document.getElementById("sftp-copy-icon");
@@ -5969,7 +6184,61 @@ function copySftpConnectionUri() {
 
   navigator.clipboard.writeText(uriEl.textContent).then(() => {
     if (icon) icon.textContent = "✅";
-    showToast("URL sFTP copiée dans le presse-papier !", "success");
+    showToast("URL sFTP locale (LAN) copiée dans le presse-papier !", "success");
+    setTimeout(() => {
+      if (icon) icon.textContent = "📋";
+    }, 2000);
+  }).catch(err => {
+    showToast("Erreur copie : " + err, "error");
+  });
+}
+
+function copySftpVpnUri() {
+  const uriEl = document.getElementById("sftp-vpn-connection-uri");
+  const icon = document.getElementById("sftp-vpn-copy-icon");
+  const bannerIcon = document.getElementById("sftp-banner-vpn-copy-icon");
+  if (!uriEl) return;
+
+  const text = uriEl.textContent.trim();
+  if (text.includes("inactif")) {
+    showToast("Le VPN WireGuard n'est pas actif. Ouverture de la configuration WireGuard...", "warning");
+    switchNetworkSubtab("net-subtab-wireguard");
+    return;
+  }
+
+  navigator.clipboard.writeText(text).then(() => {
+    if (icon) icon.textContent = "✅";
+    if (bannerIcon) bannerIcon.textContent = "✅";
+    showToast("Lien sFTP WireGuard copié dans le presse-papier !", "success");
+    setTimeout(() => {
+      if (icon) icon.textContent = "📋";
+      if (bannerIcon) bannerIcon.textContent = "📋";
+    }, 2000);
+  }).catch(err => {
+    showToast("Erreur copie : " + err, "error");
+  });
+}
+
+function copyUserSftpUri(username) {
+  if (!currentSftpOverviewData) return;
+  const vpnContext = currentSftpOverviewData.vpn_context;
+  let targetIp = currentSftpOverviewData.status?.local_ip || "127.0.0.1";
+  let modeLabel = "LAN";
+
+  if (vpnContext?.server_is_active) {
+    targetIp = vpnContext.server_ip || "10.100.0.1";
+    modeLabel = "WireGuard (Serveur)";
+  } else if (vpnContext?.client_is_active && vpnContext?.client_remote_ip) {
+    targetIp = vpnContext.client_remote_ip;
+    modeLabel = "WireGuard (Distant)";
+  }
+
+  const uri = `sftp://${username}@${targetIp}:22`;
+  const icon = document.getElementById(`sftp-user-copy-icon-${username}`);
+
+  navigator.clipboard.writeText(uri).then(() => {
+    if (icon) icon.textContent = "✅";
+    showToast(`Lien sFTP [${modeLabel}] copié pour ${username} (${targetIp}) !`, "success");
     setTimeout(() => {
       if (icon) icon.textContent = "📋";
     }, 2000);
@@ -6248,6 +6517,8 @@ window.controlSftpServiceUI = controlSftpServiceUI;
 window.toggleSftpRunningState = toggleSftpRunningState;
 window.openSftpFirewallUI = openSftpFirewallUI;
 window.copySftpConnectionUri = copySftpConnectionUri;
+window.copySftpVpnUri = copySftpVpnUri;
+window.copyUserSftpUri = copyUserSftpUri;
 window.openFolderInDolphinUI = openFolderInDolphinUI;
 window.closeSftpModals = closeSftpModals;
 window.openAddShareModal = openAddShareModal;

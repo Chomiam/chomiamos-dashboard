@@ -6256,6 +6256,157 @@ body {
   border-left: 3px solid #89b4fa;
 }
 
+/* Metric Pill WireGuard VPN */
+.sftp-metric-vpn {
+  border-left: 3px solid #585b70;
+  transition: all 0.3s ease;
+}
+
+.sftp-metric-vpn.vpn-server-active {
+  border-left: 3px solid #a6e3a1;
+  background: linear-gradient(135deg, rgba(166, 227, 161, 0.08) 0%, rgba(17, 17, 27, 0.7) 100%);
+}
+
+.sftp-metric-vpn.vpn-client-active {
+  border-left: 3px solid #cba6f7;
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.08) 0%, rgba(17, 17, 27, 0.7) 100%);
+}
+
+.sftp-metric-vpn.vpn-offline {
+  border-left: 3px solid #585b70;
+  opacity: 0.85;
+}
+
+.sftp-vpn-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sftp-vpn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(108, 112, 134, 0.2);
+  color: #a6adc8;
+  border: 1px solid rgba(108, 112, 134, 0.35);
+  white-space: nowrap;
+}
+
+.sftp-vpn-badge.badge-server-active {
+  background: rgba(166, 227, 161, 0.15);
+  color: #a6e3a1;
+  border-color: rgba(166, 227, 161, 0.4);
+}
+
+.sftp-vpn-badge.badge-client-active {
+  background: rgba(203, 166, 247, 0.15);
+  color: #cba6f7;
+  border-color: rgba(203, 166, 247, 0.4);
+}
+
+/* Banner container */
+.sftp-vpn-banner-container {
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+.sftp-vpn-banner-box {
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.25s ease;
+}
+
+.sftp-vpn-banner-box.server-banner {
+  background: linear-gradient(135deg, rgba(166, 227, 161, 0.10) 0%, rgba(137, 180, 250, 0.06) 100%), #181825;
+  border: 1px solid rgba(166, 227, 161, 0.3);
+  color: #cdd6f4;
+}
+
+.sftp-vpn-banner-box.client-banner {
+  background: linear-gradient(135deg, rgba(203, 166, 247, 0.10) 0%, rgba(137, 180, 250, 0.06) 100%), #181825;
+  border: 1px solid rgba(203, 166, 247, 0.3);
+  color: #cdd6f4;
+}
+
+.sftp-vpn-banner-box.offline-banner {
+  background: rgba(24, 24, 37, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  color: #a6adc8;
+}
+
+.sftp-vpn-banner-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sftp-vpn-banner-content {
+  flex: 1;
+}
+
+.sftp-vpn-banner-title {
+  font-weight: 700;
+  font-size: 0.98rem;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sftp-vpn-banner-desc {
+  margin-bottom: 10px;
+  color: #bac2de;
+}
+
+.sftp-vpn-banner-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.sftp-vpn-code-badge {
+  background: rgba(17, 17, 27, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #89dceb;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  user-select: all;
+  letter-spacing: 0.02em;
+}
+
+.sftp-vpn-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.sftp-btn-copy-user {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
 /* Actions bar */
 .sftp-actions-bar {
   display: flex;

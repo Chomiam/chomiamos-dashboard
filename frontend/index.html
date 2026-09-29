@@ -3427,17 +3427,34 @@
                     </div>
                   </div>
 
-                  <div class="sftp-metric-pill sftp-metric-uri" title="Adresse de connexion pour vos clients sFTP (FileZilla, Cyberduck, etc.)">
-                    <span class="sftp-metric-icon">🌐</span>
+                  <div class="sftp-metric-pill sftp-metric-uri" title="Adresse de connexion locale sur le réseau LAN (Wi-Fi / Ethernet)">
+                    <span class="sftp-metric-icon">🏠</span>
                     <div class="sftp-metric-details">
-                      <span class="sftp-metric-label">URL de Connexion sFTP</span>
+                      <span class="sftp-metric-label">URL sFTP (Réseau Local LAN)</span>
                       <strong id="sftp-connection-uri">sftp://utilisateur@127.0.0.1:22</strong>
                     </div>
-                    <button type="button" class="btn btn-xs btn-secondary" onclick="copySftpConnectionUri()" title="Copier l'URL sFTP">
+                    <button type="button" class="btn btn-xs btn-secondary" onclick="copySftpConnectionUri()" title="Copier l'URL sFTP locale">
                       <span id="sftp-copy-icon">📋</span> Copier
                     </button>
                   </div>
+
+                  <div class="sftp-metric-pill sftp-metric-uri sftp-metric-vpn" id="sftp-pill-vpn" title="Adresse de connexion sécurisée via WireGuard VPN">
+                    <span class="sftp-metric-icon" id="sftp-vpn-icon">🔒</span>
+                    <div class="sftp-metric-details">
+                      <div class="sftp-vpn-title-row">
+                        <span class="sftp-metric-label" id="sftp-vpn-label">Lien sFTP (WireGuard VPN)</span>
+                        <span class="sftp-vpn-badge" id="sftp-vpn-badge">Vérification...</span>
+                      </div>
+                      <strong id="sftp-vpn-connection-uri">sftp://utilisateur@10.100.0.1:22</strong>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-primary" id="btn-copy-sftp-vpn" onclick="copySftpVpnUri()" title="Copier le lien sFTP WireGuard">
+                      <span id="sftp-vpn-copy-icon">📋</span> Copier
+                    </button>
+                  </div>
                 </div>
+
+                <!-- Bannière contextuelle WireGuard pour le partage sFTP -->
+                <div id="sftp-vpn-banner-container" class="sftp-vpn-banner-container"></div>
 
                 <!-- Barre d'actions rapides sur le service sshd -->
                 <div class="sftp-actions-bar">

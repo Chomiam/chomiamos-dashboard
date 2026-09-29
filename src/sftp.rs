@@ -74,10 +74,25 @@ pub struct SftpServiceStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SftpVpnContext {
+    pub server_is_active: bool,
+    pub server_ip: String,
+    pub friend_name: String,
+    pub friend_connected: bool,
+    pub friend_ip: String,
+    pub client_is_active: bool,
+    pub client_profile_name: Option<String>,
+    pub client_country_flag: Option<String>,
+    pub client_remote_ip: Option<String>,
+    pub client_local_ip: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SftpOverview {
     pub status: SftpServiceStatus,
     pub shares: Vec<SftpShare>,
     pub users: Vec<SftpUser>,
+    pub vpn_context: SftpVpnContext,
 }
 
 pub fn load_sftp_config() -> SftpConfigFile {
@@ -360,6 +375,8 @@ pub fn get_sftp_overview() -> Result<SftpOverview, String> {
         share.size_human = sz;
     }
 
+    let vpn_context = get_sftp_vpn_context();
+
     Ok(SftpOverview {
         status: SftpServiceStatus {
             sshd_active,
@@ -372,7 +389,99 @@ pub fn get_sftp_overview() -> Result<SftpOverview, String> {
         },
         shares: cfg.shares,
         users: cfg.users,
+        vpn_context,
     })
+}
+
+pub fn resolve_remote_wireguard_ip(local_addr: &str, raw_conf: &str) -> Option<String> {
+    // 1. Chercher un AllowedIPs spécifique dans [Peer] (ex: AllowedIPs = 10.100.0.1/32 ou /24)
+    for line in raw_conf.lines() {
+        let trimmed = line.trim();
+        if trimmed.to_lowercase().starts_with("allowedips") {
+            if let Some((_, val)) = trimmed.split_once('=') {
+                for item in val.split(',') {
+                    let cidr = item.trim();
+                    if let Some((ip, mask)) = cidr.split_once('/') {
+                        if mask == "32" && !ip.ends_with(".0") && !ip.ends_with(".255") {
+                            return Some(ip.to_string());
+                        } else if mask == "24" {
+                            let parts: Vec<&str> = ip.split('.').collect();
+                            if parts.len() == 4 {
+                                return Some(format!("{}.{}.{}.1", parts[0], parts[1], parts[2]));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Déduire depuis local_address (ex: 10.100.0.2/24 -> 10.100.0.1)
+    let clean_local = local_addr.split(',').next().unwrap_or("").trim();
+    if let Some((ip_part, _mask)) = clean_local.split_once('/') {
+        let parts: Vec<&str> = ip_part.split('.').collect();
+        if parts.len() == 4 {
+            if let Ok(last_octet) = parts[3].parse::<u8>() {
+                let peer_octet = if last_octet == 1 { 2 } else { 1 };
+                return Some(format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], peer_octet));
+            }
+        }
+    }
+
+    None
+}
+
+pub fn get_sftp_vpn_context() -> SftpVpnContext {
+    match crate::wireguard::get_wireguard_overview() {
+        Ok(wg) => {
+            let srv_act = wg.server.is_active;
+            let srv_ip = wg.server.server_address.split('/').next().unwrap_or("10.100.0.1").to_string();
+            let friend_ip = wg.server.friend_address.split('/').next().unwrap_or("10.100.0.2").to_string();
+            let friend_name = wg.server.friend_name;
+            let friend_conn = wg.server.friend_connected;
+
+            let mut client_act = false;
+            let mut client_prof_name = None;
+            let mut client_country_flag = None;
+            let mut client_remote_ip = None;
+            let mut client_local_ip = None;
+
+            if let Some(ref act_id) = wg.active_profile_id {
+                if let Some(prof) = wg.profiles.iter().find(|p| &p.id == act_id) {
+                    client_act = true;
+                    client_prof_name = Some(prof.name.clone());
+                    client_country_flag = Some(prof.country_flag.clone());
+                    client_local_ip = Some(prof.local_address.split('/').next().unwrap_or("").to_string());
+                    client_remote_ip = resolve_remote_wireguard_ip(&prof.local_address, &prof.raw_config);
+                }
+            }
+
+            SftpVpnContext {
+                server_is_active: srv_act,
+                server_ip: srv_ip,
+                friend_name,
+                friend_connected: friend_conn,
+                friend_ip,
+                client_is_active: client_act,
+                client_profile_name: client_prof_name,
+                client_country_flag,
+                client_remote_ip,
+                client_local_ip,
+            }
+        }
+        Err(_) => SftpVpnContext {
+            server_is_active: false,
+            server_ip: "10.100.0.1".into(),
+            friend_name: "Ami".into(),
+            friend_connected: false,
+            friend_ip: "10.100.0.2".into(),
+            client_is_active: false,
+            client_profile_name: None,
+            client_country_flag: None,
+            client_remote_ip: None,
+            client_local_ip: None,
+        },
+    }
 }
 
 #[tauri::command]
@@ -757,5 +866,17 @@ mod tests {
         assert_eq!(format_bytes(500), "500 B");
         assert_eq!(format_bytes(2048), "2.0 Ko");
         assert_eq!(format_bytes(1024 * 1024 * 5), "5.0 Mo");
+    }
+
+    #[test]
+    fn test_resolve_remote_wireguard_ip() {
+        let conf1 = "[Interface]\nAddress = 10.100.0.2/24\n[Peer]\nAllowedIPs = 10.100.0.0/24\n";
+        assert_eq!(resolve_remote_wireguard_ip("10.100.0.2/24", conf1), Some("10.100.0.1".to_string()));
+
+        let conf2 = "[Interface]\nAddress = 10.200.0.5/24\n[Peer]\nAllowedIPs = 10.200.0.1/32\n";
+        assert_eq!(resolve_remote_wireguard_ip("10.200.0.5/24", conf2), Some("10.200.0.1".to_string()));
+
+        let conf3 = "[Interface]\nAddress = 10.10.0.1/24\n[Peer]\nAllowedIPs = 10.10.0.2/32\n";
+        assert_eq!(resolve_remote_wireguard_ip("10.10.0.1/24", conf3), Some("10.10.0.2".to_string()));
     }
 }

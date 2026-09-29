@@ -138,6 +138,15 @@ fn save_store(store: &WireguardStore) {
     }
 }
 
+pub const EXEC_PATH: &str = "/run/current-system/sw/bin:/etc/profiles/per-user/chomiam/bin:/run/wrappers/bin:/bin:/usr/bin";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WireguardCountryInfo {
+    pub code: String,
+    pub name: String,
+    pub flag: String,
+}
+
 pub fn get_country_info(code: &str) -> (String, String, String) {
     let code_upper = code.to_uppercase();
     match code_upper.as_str() {
@@ -180,41 +189,146 @@ pub fn get_country_info(code: &str) -> (String, String, String) {
     }
 }
 
-pub fn detect_country_from_text(name: &str, endpoint: &str, content: &str) -> (String, String, String) {
-    let combined = format!("{} {} {}", name, endpoint, content).to_lowercase();
+pub fn extract_endpoint_host(endpoint: &str) -> String {
+    let ep = endpoint.trim();
+    if ep.is_empty() || ep == "-" {
+        return String::new();
+    }
+    // Gérer IPv6 [2a01:...]:port ou [2a01:...]
+    if ep.starts_with('[') {
+        if let Some(end_bracket) = ep.find(']') {
+            return ep[1..end_bracket].to_string();
+        }
+    }
+    // Gérer IPv4 host:port ou host
+    if let Some((host, _port)) = ep.rsplit_once(':') {
+        if !host.contains(':') {
+            return host.trim().to_string();
+        }
+    }
+    ep.to_string()
+}
 
-    let matches = [
-        ("fr", &["france", "paris", "marseille", "-fr-", ".fr", "fr1", "fr2", "fr3", "fra."][..]),
-        ("ch", &["suisse", "switzerland", "zurich", "geneve", "geneva", "basel", "-ch-", ".ch", "ch1", "ch2"][..]),
-        ("us", &["usa", "united states", "etats-unis", "new york", "los angeles", "chicago", "miami", "seattle", "-us-", ".us", "us1", "us2"][..]),
-        ("de", &["germany", "allemagne", "frankfurt", "berlin", "munich", "-de-", ".de", "de1", "de2"][..]),
-        ("nl", &["netherlands", "pays-bas", "holland", "amsterdam", "rotterdam", "-nl-", ".nl", "nl1", "nl2"][..]),
-        ("gb", &["uk", "united kingdom", "royaume-uni", "london", "manchester", "-uk-", "-gb-", ".uk", "gb1"][..]),
-        ("jp", &["japan", "japon", "tokyo", "osaka", "-jp-", ".jp", "jp1"][..]),
-        ("se", &["sweden", "suede", "stockholm", "-se-", ".se", "se1"][..]),
-        ("ca", &["canada", "montreal", "toronto", "vancouver", "-ca-", ".ca", "ca1"][..]),
-        ("es", &["spain", "espagne", "madrid", "barcelona", "-es-", ".es", "es1"][..]),
-        ("it", &["italy", "italie", "milan", "rome", "-it-", ".it", "it1"][..]),
-        ("be", &["belgium", "belgique", "brussels", "bruxelles", "-be-", ".be"][..]),
-        ("no", &["norway", "norvege", "oslo", "-no-", ".no"][..]),
-        ("fi", &["finland", "finlande", "helsinki", "-fi-", ".fi"][..]),
-        ("dk", &["denmark", "danemark", "copenhagen", "-dk-", ".dk"][..]),
-        ("is", &["iceland", "islande", "reykjavik", "-is-", ".is"][..]),
-        ("at", &["austria", "autriche", "vienna", "-at-", ".at"][..]),
-        ("pt", &["portugal", "lisbon", "-pt-", ".pt"][..]),
-        ("pl", &["poland", "pologne", "warsaw", "-pl-", ".pl"][..]),
-        ("ro", &["romania", "roumanie", "bucharest", "-ro-", ".ro"][..]),
-        ("ie", &["ireland", "irlande", "dublin", "-ie-", ".ie"][..]),
-        ("au", &["australia", "australie", "sydney", "melbourne", "-au-", ".au"][..]),
-        ("sg", &["singapore", "singapour", "-sg-", ".sg"][..]),
-        ("kr", &["korea", "coree", "seoul", "-kr-", ".kr"][..]),
-        ("br", &["brazil", "bresil", "sao paulo", "-br-", ".br"][..]),
-        ("ua", &["ukraine", "kyiv", "-ua-", ".ua"][..]),
+pub fn is_ip_private_or_local(ip_str: &str) -> bool {
+    if let Ok(ip) = ip_str.parse::<std::net::IpAddr>() {
+        match ip {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_broadcast() || v4.is_documentation()
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00 // fc00::/7 ULA
+                || (v6.segments()[0] & 0xffc0) == 0xfe80 // fe80::/10 link-local
+            }
+        }
+    } else {
+        false
+    }
+}
+
+pub fn geolocate_ip(ip_str: &str) -> Option<String> {
+    // 1. Tenter api.country.is via curl rapide (max 2s)
+    let out = Command::new("curl")
+        .env("PATH", EXEC_PATH)
+        .args(["-s", "--connect-timeout", "2", "-m", "3", &format!("https://api.country.is/{}", ip_str)])
+        .output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&o.stdout) {
+                if let Some(c) = val.get("country").and_then(|v| v.as_str()) {
+                    if !c.is_empty() && c.len() == 2 {
+                        return Some(c.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback ipwho.is
+    let out2 = Command::new("curl")
+        .env("PATH", EXEC_PATH)
+        .args(["-s", "--connect-timeout", "2", "-m", "3", &format!("https://ipwho.is/{}", ip_str)])
+        .output();
+    if let Ok(o) = out2 {
+        if o.status.success() {
+            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&o.stdout) {
+                if val.get("success").and_then(|s| s.as_bool()).unwrap_or(true) {
+                    if let Some(c) = val.get("country_code").and_then(|v| v.as_str()) {
+                        if !c.is_empty() && c.len() == 2 {
+                            return Some(c.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+pub fn detect_country_from_endpoint(endpoint: &str, name: &str) -> (String, String, String) {
+    let host = extract_endpoint_host(endpoint);
+
+    // 1. Si l'hôte est une adresse IP directe
+    if !host.is_empty() && host.parse::<std::net::IpAddr>().is_ok() {
+        if is_ip_private_or_local(&host) {
+            return get_country_info("un");
+        }
+        if let Some(cc) = geolocate_ip(&host) {
+            return get_country_info(&cc);
+        }
+    }
+
+    // 2. Si l'hôte est un nom de domaine, tenter la résolution DNS vers une IP publique
+    if !host.is_empty() && host.parse::<std::net::IpAddr>().is_err() {
+        use std::net::ToSocketAddrs;
+        if let Ok(mut addrs) = format!("{}:51820", host).to_socket_addrs() {
+            if let Some(addr) = addrs.next() {
+                let ip_str = addr.ip().to_string();
+                if !is_ip_private_or_local(&ip_str) {
+                    if let Some(cc) = geolocate_ip(&ip_str) {
+                        return get_country_info(&cc);
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback heuristique sur le nom du profil et le nom d'hôte de l'endpoint
+    // (JAMAIS sur le corps complet de la conf pour éviter les faux-positifs sur le mot français "de" ou les clés base64)
+    let target = format!("{} {}", name, host).to_lowercase();
+
+    let matches: [(&str, &[&str]); 26] = [
+        ("fr", &["france", "paris", "marseille", "lyon", "-fr-", "_fr_", ".fr.", ".fr:", ".fr/", "fr1", "fr2", "fr3"][..]),
+        ("ch", &["suisse", "switzerland", "zurich", "geneve", "geneva", "basel", "-ch-", "_ch_", ".ch.", ".ch:", "ch1", "ch2"][..]),
+        ("us", &["usa", "united states", "etats-unis", "new york", "los angeles", "chicago", "miami", "seattle", "-us-", "_us_", ".us.", "us1", "us2"][..]),
+        ("de", &["germany", "allemagne", "frankfurt", "berlin", "munich", "hamburg", ".de.", ".de:", ".de/", "de1.", "de2.", "de3."][..]),
+        ("nl", &["netherlands", "pays-bas", "holland", "amsterdam", "rotterdam", "-nl-", "_nl_", ".nl.", "nl1", "nl2"][..]),
+        ("gb", &["united kingdom", "royaume-uni", "london", "manchester", "-uk-", "-gb-", "_gb_", ".uk.", ".gb."][..]),
+        ("jp", &["japan", "japon", "tokyo", "osaka", "-jp-", "_jp_", ".jp.", "jp1"][..]),
+        ("se", &["sweden", "suede", "stockholm", "-se-", "_se_", ".se.", "se1"][..]),
+        ("ca", &["canada", "montreal", "toronto", "vancouver", "-ca-", "_ca_", ".ca.", "ca1"][..]),
+        ("es", &["spain", "espagne", "madrid", "barcelona", "-es-", "_es_", ".es.", "es1"][..]),
+        ("it", &["italy", "italie", "milan", "rome", "-it-", "_it_", ".it.", "it1"][..]),
+        ("be", &["belgium", "belgique", "brussels", "bruxelles", "-be-", "_be_", ".be."][..]),
+        ("no", &["norway", "norvege", "oslo", "-no-", "_no_", ".no."][..]),
+        ("fi", &["finland", "finlande", "helsinki", "-fi-", "_fi_", ".fi."][..]),
+        ("dk", &["denmark", "danemark", "copenhagen", "-dk-", "_dk_", ".dk."][..]),
+        ("is", &["iceland", "islande", "reykjavik", "-is-", "_is_", ".is."][..]),
+        ("at", &["austria", "autriche", "vienna", "-at-", "_at_", ".at."][..]),
+        ("pt", &["portugal", "lisbon", "-pt-", "_pt_", ".pt."][..]),
+        ("pl", &["poland", "pologne", "warsaw", "-pl-", "_pl_", ".pl."][..]),
+        ("ro", &["romania", "roumanie", "bucharest", "-ro-", "_ro_", ".ro."][..]),
+        ("ie", &["ireland", "irlande", "dublin", "-ie-", "_ie_", ".ie."][..]),
+        ("au", &["australia", "australie", "sydney", "melbourne", "-au-", "_au_", ".au."][..]),
+        ("sg", &["singapore", "singapour", "-sg-", "_sg_", ".sg."][..]),
+        ("kr", &["korea", "coree", "seoul", "-kr-", "_kr_", ".kr."][..]),
+        ("br", &["brazil", "bresil", "sao paulo", "-br-", "_br_", ".br."][..]),
+        ("ua", &["ukraine", "kyiv", "-ua-", "_ua_", ".ua."][..]),
     ];
 
     for (code, keywords) in matches {
         for kw in keywords {
-            if combined.contains(kw) {
+            if target.contains(kw) || host.ends_with(&format!(".{}", code)) || host.starts_with(&format!("{}-", code)) || host.starts_with(&format!("{}.", code)) {
                 return get_country_info(code);
             }
         }
@@ -222,6 +336,21 @@ pub fn detect_country_from_text(name: &str, endpoint: &str, content: &str) -> (S
 
     get_country_info("un")
 }
+
+pub fn detect_country_from_text(name: &str, endpoint: &str, _content: &str) -> (String, String, String) {
+    detect_country_from_endpoint(endpoint, name)
+}
+
+#[tauri::command]
+pub fn detect_wireguard_country(endpoint: String, name: String) -> WireguardCountryInfo {
+    let (code, name, flag) = detect_country_from_endpoint(&endpoint, &name);
+    WireguardCountryInfo {
+        code,
+        name,
+        flag,
+    }
+}
+
 
 fn parse_wireguard_conf(content: &str) -> (String, String, String, String) {
     let mut address = String::new();
@@ -288,7 +417,6 @@ fn get_proc_net_dev_stats() -> HashMap<String, (u64, u64)> {
     map
 }
 
-pub const EXEC_PATH: &str = "/run/current-system/sw/bin:/etc/profiles/per-user/chomiam/bin:/run/wrappers/bin:/bin:/usr/bin";
 
 pub fn get_wg_bin() -> &'static str {
     if std::path::Path::new("/run/wrappers/bin/wg").exists() {
@@ -1164,4 +1292,61 @@ pub fn open_wireguard_firewall_port() -> Result<String, String> {
     }
 
     Ok("Port UDP 51820 autorisé dans le pare-feu NixOS !".to_string())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_endpoint_host() {
+        assert_eq!(extract_endpoint_host("81.254.63.44:51820"), "81.254.63.44");
+        assert_eq!(extract_endpoint_host("[2a01:cb0c:599:3000::1]:51820"), "2a01:cb0c:599:3000::1");
+        assert_eq!(extract_endpoint_host("vpn.example.com:51820"), "vpn.example.com");
+        assert_eq!(extract_endpoint_host("81.254.63.44"), "81.254.63.44");
+    }
+
+    #[test]
+    fn test_is_ip_private_or_local() {
+        assert!(is_ip_private_or_local("127.0.0.1"));
+        assert!(is_ip_private_or_local("10.100.0.1"));
+        assert!(is_ip_private_or_local("192.168.1.1"));
+        assert!(is_ip_private_or_local("172.16.0.1"));
+        assert!(is_ip_private_or_local("::1"));
+        assert!(is_ip_private_or_local("fe80::1"));
+        assert!(!is_ip_private_or_local("81.254.63.44"));
+        assert!(!is_ip_private_or_local("1.1.1.1"));
+    }
+
+    #[test]
+    fn test_no_false_positive_on_french_de() {
+        // "profil_de_test" ne doit pas être détecté comme l'Allemagne ("de")
+        let (code, _name, _flag) = detect_country_from_endpoint("", "profil_de_test");
+        assert_ne!(code, "de", "profil_de_test ne doit pas être détecté comme Allemagne");
+        assert_eq!(code, "un");
+
+        // "chomiamos-friend (1)" ne doit pas être détecté comme l'Allemagne
+        let (code, _, _) = detect_country_from_endpoint("", "chomiamos-friend (1)");
+        assert_ne!(code, "de");
+    }
+
+    #[test]
+    fn test_german_servers_detected() {
+        let (code, _, _) = detect_country_from_endpoint("de1.vpn.net:51820", "");
+        assert_eq!(code, "de");
+
+        let (code, _, _) = detect_country_from_endpoint("frankfurt.protonvpn.net:51820", "");
+        assert_eq!(code, "de");
+    }
+
+    #[test]
+    #[ignore = "requires network access (disabled in nix sandbox)"]
+    fn test_french_ip_geolocation() {
+        // IP Orange en France
+        let (code, name, flag) = detect_country_from_endpoint("81.254.63.44:51820", "");
+        assert_eq!(code, "fr");
+        assert_eq!(name, "France");
+        assert_eq!(flag, "🇫🇷");
+    }
 }

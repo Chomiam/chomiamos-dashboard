@@ -8531,7 +8531,10 @@ function pasteFromClipboard() {
   }
 }
 
-function parseAndShowWgPreview(content, hintName) {
+let wgDetectionCounter = 0;
+
+async function parseAndShowWgPreview(content, hintName) {
+  const currentReq = ++wgDetectionCounter;
   const previewBox = document.getElementById("wg-import-preview-box");
   const epEl = document.getElementById("wg-preview-endpoint");
   const addrEl = document.getElementById("wg-preview-address");
@@ -8561,33 +8564,115 @@ function parseAndShowWgPreview(content, hintName) {
   if (epEl) epEl.textContent = endpoint;
   if (addrEl) addrEl.textContent = address;
   if (dnsEl) dnsEl.textContent = dns;
+  previewBox?.classList.remove("hidden");
 
-  // Auto-detect country code from hintName or content or endpoint
-  const targetStr = (hintName + " " + endpoint + " " + content).toLowerCase();
+  // Détection du pays si pas déjà choisi manuellement par l'utilisateur
+  if (!countrySelect || !countrySelect.value) {
+    if (countryBadge) {
+      countryBadge.textContent = "🔍 Détection pays...";
+      countryBadge.className = "badge badge-neutral";
+    }
+
+    try {
+      const detected = await invoke("detect_wireguard_country", {
+        endpoint: endpoint !== "-" ? endpoint : "",
+        name: hintName || ""
+      });
+
+      if (currentReq !== wgDetectionCounter) return;
+
+      if (detected && detected.code) {
+        if (countrySelect && !countrySelect.value) {
+          countrySelect.value = detected.code.toUpperCase();
+        }
+        if (countryBadge) {
+          countryBadge.textContent = `${detected.flag} ${detected.name}`;
+          countryBadge.className = "badge badge-accent";
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn("Échec détection pays backend :", err);
+    }
+
+    if (currentReq !== wgDetectionCounter) return;
+    applyLocalCountryFallback(endpoint, hintName);
+  }
+}
+
+function applyLocalCountryFallback(endpoint, hintName) {
+  const countryBadge = document.getElementById("wg-preview-country-badge");
+  const countrySelect = document.getElementById("wg-import-country");
+
+  let epHost = "";
+  if (endpoint && endpoint !== "-") {
+    const m = endpoint.match(/^(?:\[([a-fA-F0-9:]+)\]|([^:]+))(?::\d+)?$/);
+    epHost = m ? (m[1] || m[2] || "").trim() : endpoint.split(":")[0].trim();
+  }
+
+  const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(epHost);
+  const isIpv6 = epHost.includes(":");
+
+  if (isIpv4 || isIpv6) {
+    // Si IP locale / privée
+    if (epHost === "127.0.0.1" || epHost === "::1" || /^10\./.test(epHost) || /^192\.168\./.test(epHost) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(epHost) || /^(fc00|fd|fe80)/i.test(epHost)) {
+      if (countrySelect && !countrySelect.value) countrySelect.value = "UN";
+      if (countryBadge) {
+        countryBadge.textContent = "🌐 Réseau Privé";
+        countryBadge.className = "badge badge-secondary";
+      }
+      return;
+    }
+
+    // Tenter géolocalisation webview fetch si IP publique
+    fetch(`https://api.country.is/${epHost}`, { signal: AbortSignal.timeout(2000) })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.country) {
+          const code = data.country.toUpperCase();
+          if (countrySelect && !countrySelect.value) countrySelect.value = code;
+          if (countryBadge) {
+            const opt = countrySelect ? Array.from(countrySelect.options).find(o => o.value === code) : null;
+            countryBadge.textContent = opt ? opt.text : `🌐 ${code}`;
+            countryBadge.className = "badge badge-accent";
+          }
+        }
+      })
+      .catch(() => {
+        if (countryBadge) {
+          countryBadge.textContent = "🌐 Détection auto";
+          countryBadge.className = "badge badge-secondary";
+        }
+      });
+    return;
+  }
+
+  // Si c'est un nom d'hôte ou un nom de profil (JAMAIS le corps du fichier conf !)
+  const targetStr = ((hintName || "") + " " + epHost).toLowerCase();
   const countryMap = [
-    { code: "FR", flag: "🇫🇷", name: "France", keys: ["fr", "france", "paris", "mrs", "lyon"] },
-    { code: "CH", flag: "🇨🇭", name: "Suisse", keys: ["ch", "swiss", "switzerland", "zurich", "zrh", "geneva", "gva"] },
-    { code: "US", flag: "🇺🇸", name: "États-Unis", keys: ["us", "usa", "united states", "new york", "los angeles", "chicago", "miami"] },
-    { code: "DE", flag: "🇩🇪", name: "Allemagne", keys: ["de", "germany", "frankfurt", "fra", "berlin"] },
-    { code: "NL", flag: "🇳🇱", name: "Pays-Bas", keys: ["nl", "netherlands", "amsterdam", "ams"] },
-    { code: "GB", flag: "🇬🇧", name: "Royaume-Uni", keys: ["uk", "gb", "london", "manchester"] },
-    { code: "JP", flag: "🇯🇵", name: "Japon", keys: ["jp", "japan", "tokyo", "osaka"] },
-    { code: "SE", flag: "🇸🇪", name: "Suède", keys: ["se", "sweden", "stockholm"] },
-    { code: "CA", flag: "🇨🇦", name: "Canada", keys: ["ca", "canada", "montreal", "toronto", "vancouver"] },
-    { code: "ES", flag: "🇪🇸", name: "Espagne", keys: ["es", "spain", "madrid", "barcelona"] },
-    { code: "IT", flag: "🇮🇹", name: "Italie", keys: ["it", "italy", "milan", "rome"] },
-    { code: "BE", flag: "🇧🇪", name: "Belgique", keys: ["be", "belgium", "brussels"] },
-    { code: "NO", flag: "🇳🇴", name: "Norvège", keys: ["no", "norway", "oslo"] },
-    { code: "FI", flag: "🇫🇮", name: "Finlande", keys: ["fi", "finland", "helsinki"] },
-    { code: "DK", flag: "🇩🇰", name: "Danemark", keys: ["dk", "denmark", "copenhagen"] },
-    { code: "IS", flag: "🇮🇸", name: "Islande", keys: ["is", "iceland", "reykjavik"] },
-    { code: "SG", flag: "🇸🇬", name: "Singapour", keys: ["sg", "singapore"] },
-    { code: "AU", flag: "🇦🇺", name: "Australie", keys: ["au", "australia", "sydney", "melbourne"] },
+    { code: "FR", flag: "🇫🇷", name: "France", keys: ["france", "paris", "marseille", "lyon", "-fr-", "_fr_", ".fr.", ".fr"] },
+    { code: "CH", flag: "🇨🇭", name: "Suisse", keys: ["suisse", "switzerland", "zurich", "geneve", "geneva", "basel", "-ch-", "_ch_", ".ch.", ".ch"] },
+    { code: "US", flag: "🇺🇸", name: "États-Unis", keys: ["usa", "united states", "etats-unis", "new york", "los angeles", "chicago", "miami", "-us-", "_us_", ".us.", ".us"] },
+    { code: "DE", flag: "🇩🇪", name: "Allemagne", keys: ["germany", "allemagne", "frankfurt", "berlin", "munich", "hamburg", ".de.", ".de"] },
+    { code: "NL", flag: "🇳🇱", name: "Pays-Bas", keys: ["netherlands", "pays-bas", "holland", "amsterdam", "rotterdam", "-nl-", "_nl_", ".nl.", ".nl"] },
+    { code: "GB", flag: "🇬🇧", name: "Royaume-Uni", keys: ["united kingdom", "royaume-uni", "london", "manchester", "-uk-", "-gb-", "_gb_", ".uk.", ".gb."] },
+    { code: "JP", flag: "🇯🇵", name: "Japon", keys: ["japan", "japon", "tokyo", "osaka", "-jp-", "_jp_", ".jp.", ".jp"] },
+    { code: "SE", flag: "🇸🇪", name: "Suède", keys: ["sweden", "suede", "stockholm", "-se-", "_se_", ".se.", ".se"] },
+    { code: "CA", flag: "🇨🇦", name: "Canada", keys: ["canada", "montreal", "toronto", "vancouver", "-ca-", "_ca_", ".ca.", ".ca"] },
+    { code: "ES", flag: "🇪🇸", name: "Espagne", keys: ["spain", "espagne", "madrid", "barcelona", "-es-", "_es_", ".es.", ".es"] },
+    { code: "IT", flag: "🇮🇹", name: "Italie", keys: ["italy", "italie", "milan", "rome", "-it-", "_it_", ".it.", ".it"] },
+    { code: "BE", flag: "🇧🇪", name: "Belgique", keys: ["belgium", "belgique", "brussels", "bruxelles", "-be-", "_be_", ".be.", ".be"] },
+    { code: "NO", flag: "🇳🇴", name: "Norvège", keys: ["norway", "norvege", "oslo", "-no-", "_no_", ".no.", ".no"] },
+    { code: "FI", flag: "🇫🇮", name: "Finlande", keys: ["finland", "finlande", "helsinki", "-fi-", "_fi_", ".fi.", ".fi"] },
+    { code: "DK", flag: "🇩🇰", name: "Danemark", keys: ["denmark", "danemark", "copenhagen", "-dk-", "_dk_", ".dk.", ".dk"] },
+    { code: "IS", flag: "🇮🇸", name: "Islande", keys: ["iceland", "islande", "reykjavik", "-is-", "_is_", ".is.", ".is"] },
+    { code: "SG", flag: "🇸🇬", name: "Singapour", keys: ["singapore", "singapour", "-sg-", "_sg_", ".sg.", ".sg"] },
+    { code: "AU", flag: "🇦🇺", name: "Australie", keys: ["australia", "australie", "sydney", "melbourne", "-au-", "_au_", ".au.", ".au"] },
   ];
 
   let detected = null;
   for (const c of countryMap) {
-    if (c.keys.some(k => new RegExp(`(^|[^a-z])${k}([^a-z]|$)`, 'i').test(targetStr))) {
+    if (c.keys.some(k => targetStr.includes(k) || epHost.endsWith(k) || epHost.startsWith(`${c.code.toLowerCase()}-`) || epHost.startsWith(`${c.code.toLowerCase()}.`))) {
       detected = c;
       break;
     }
@@ -8606,9 +8691,8 @@ function parseAndShowWgPreview(content, hintName) {
       countryBadge.className = "badge badge-secondary";
     }
   }
-
-  previewBox?.classList.remove("hidden");
 }
+
 
 function onWgCountrySelectChange() {
   const sel = document.getElementById("wg-import-country");

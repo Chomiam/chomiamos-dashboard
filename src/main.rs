@@ -1196,6 +1196,7 @@ fn main() {
             cancel_ollama_pull,
             get_wireguard_overview,
             import_wireguard_profile,
+            detect_wireguard_country,
             update_wireguard_profile,
             delete_wireguard_profile,
             toggle_wireguard_profile,

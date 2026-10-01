@@ -12,6 +12,7 @@ Ce document définit les règles opérationnelles, les flux de travail et les st
    - À chaque ajout de fonctionnalité, refactorisation ou correction, incrémenter la version selon le Semantic Versioning (`MAJOR.MINOR.PATCH`) :
      - `Cargo.toml` (`[package] version = "X.Y.Z"`)
      - `tauri.conf.json` (`"version": "X.Y.Z"`)
+     - `default.nix` (`version = "X.Y.Z";`)
    - Ne jamais laisser de modifications non versionnées.
 
 2. **Commits détaillés et obligatoirement en français** :

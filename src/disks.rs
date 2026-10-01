@@ -1125,6 +1125,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "nécessite lsblk et le matériel physique hôte (inaccessible dans la sandbox Nix)"]
     fn test_list_storage_devices_with_power() {
         let devices = list_storage_devices().expect("list_storage_devices doit réussir");
         for dev in devices {

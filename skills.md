@@ -125,9 +125,28 @@ Ce document constitue la mémoire technique vivante du projet **ChomiamOS Dashbo
 
 ---
 
-## 📋 7. Journal des Évolutions Majeures
+## 🧪 7. Tests Unitaires & Herméticité de la Sandbox Nix (`nix build`)
+
+- **Contraintes de la Sandbox Nix** :
+  - Dans le workflow CI (`nix build`), l'étape de compilation Rust exécute `cargo test` dans un environnement hermétique et chrooté :
+    - Pas d'accès réseau (pas d'adresses IP distantes, pas de requêtes API).
+    - Pas d'utilitaires système hôte en dehors des `nativeBuildInputs` stricts (pas de `lsblk`, pas de `smartctl`, pas de `systemctl`).
+    - Pas d'accès aux périphériques de bloc sous `/dev` ni aux pseudo-systèmes de fichiers (`/sys/block`, `/etc/nixos`).
+- **Règle d'or pour les tests dépendant de l'hôte** :
+  - Tout test unitaire effectuant des appels à des binaires hôtes (`lsblk`, `smartctl`), au réseau (`ping`, géolocalisation IP) ou à des chemins système (`/etc/nixos`) **DOIT** être annoté avec :
+    ```rust
+    #[test]
+    #[ignore = "requires <composant> (disabled in nix sandbox)"]
+    fn test_mon_composant() { ... }
+    ```
+  - Les tests unitaires non ignorés doivent être des **tests de logique pure** (validation de parsing, sérialisation/désérialisation, calculs de conversions de minutes/timeouts, génération de configuration Nix, manipulation de structures mémoire).
+
+---
+
+## 📋 8. Journal des Évolutions Majeures
 
 | Version | Date | Description de l'évolution & Apprentissages |
 | :--- | :--- | :--- |
+| **`v0.5.11`** | 01/10/2026 | **Correction CI Sandbox Nix** : Résolution du plantage CI causé par `test_list_storage_devices_with_power` qui invoquait `lsblk` introuvable dans la sandbox hermétique Nix. Ajout de `#[ignore]` approprié et synchronisation stricte de la version à `0.5.11` sur `Cargo.toml`, `tauri.conf.json` et `default.nix`. Résolution issue [#1](https://github.com/Chomiam/chomiamos-dashboard/issues/1). |
 | **`v0.5.10`** | 01/10/2026 | **Suite de Gestion d'Énergie & Anti-Veille des Disques** : Intégration UDisks2 (`StandbyTimeout=0`, `APMLevel=255`), forçage du Runtime PM noyau Linux (`/sys/block/.../power/control`), télémétrie S.M.A.R.T. thermique et badges visuels Catppuccin Mocha. Ajout des règles d'agent `agent.md` et de la mémoire `skills.md`. |
 | **`v0.5.9`** | 01/10/2026 | Optimisation WireGuard, fiabilisation des endpoints et amélioration des partages sFTP. |

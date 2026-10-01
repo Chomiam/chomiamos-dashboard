@@ -593,6 +593,60 @@ async fn remove_missing_persistent_mount(mount_point: String, uuid: String) -> R
 }
 
 #[tauri::command]
+async fn set_disk_sleep_settings(
+    device_name: String,
+    drive_id: Option<String>,
+    disable_sleep: bool,
+    standby_timeout_minutes: Option<u32>,
+    apm_level: Option<u32>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        disks::set_disk_sleep_config(device_name, drive_id, disable_sleep, standby_timeout_minutes, apm_level)
+    })
+    .await
+    .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
+async fn reset_disk_sleep_settings(
+    device_name: String,
+    drive_id: Option<String>,
+) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        disks::reset_disk_sleep_config(device_name, drive_id)
+    })
+    .await
+    .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
+async fn set_all_disks_sleep_settings(disable_sleep: bool) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        disks::set_all_disks_sleep_config(disable_sleep)
+    })
+    .await
+    .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
+async fn test_disk_standby(device_name: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        disks::test_disk_standby(device_name)
+    })
+    .await
+    .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
+async fn wake_disk(device_name: String) -> Result<String, String> {
+    tokio::task::spawn_blocking(move || {
+        disks::wake_disk(device_name)
+    })
+    .await
+    .map_err(|e| format!("Erreur tâche asynchrone : {}", e))?
+}
+
+#[tauri::command]
 fn get_current_user() -> String {
     std::env::var("USER").unwrap_or_else(|_| "chomiam".to_string())
 }
@@ -1134,6 +1188,11 @@ fn main() {
             format_storage_device,
             check_missing_storage_devices,
             remove_missing_persistent_mount,
+            set_disk_sleep_settings,
+            reset_disk_sleep_settings,
+            set_all_disks_sleep_settings,
+            test_disk_standby,
+            wake_disk,
             open_in_file_manager,
             get_current_user,
             get_dashboard_version,

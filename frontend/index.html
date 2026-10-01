@@ -437,12 +437,17 @@
       <section id="tab-disks" class="tab-content">
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px;">
           <div>
-            <h2>Gestion des Disques & Montages Permanents</h2>
-            <p>Détection du matériel, formatage (Ext4 / Btrfs) et montage permanent dans NixOS (protégé contre les mises à jour GitHub).</p>
+            <h2>Gestion des Disques, Montages & Mise en Veille</h2>
+            <p>Détection du matériel, gestion de l'énergie (anti-veille/spindown), formatage (Ext4 / Btrfs) et montages persistants dans NixOS.</p>
           </div>
-          <button class="btn btn-outline" onclick="loadStorageDevices(true)">
-            <span>🔄</span> Rafraîchir les disques
-          </button>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-outline" id="btn-global-sleep-mode" onclick="promptAllDisksSleepModal()" title="Désactiver ou configurer la mise en veille automatique pour l'ensemble des disques de stockage">
+              <span>⚡</span> Zéro Veille (Tous)
+            </button>
+            <button class="btn btn-outline" onclick="loadStorageDevices(true)">
+              <span>🔄</span> Rafraîchir les disques
+            </button>
+          </div>
         </div>
 
         <!-- Missing/Orphan Mounts Warning Banner -->
@@ -3861,6 +3866,161 @@
   </div>
 
     <!-- ==================== MODALS DISQUES ==================== -->
+    <!-- Modal de Gestion de l'Énergie & Mise en Veille des Disques -->
+    <div id="disk-power-modal" class="modal-overlay hidden">
+      <div class="modal-card" style="max-width: 680px;">
+        <div class="modal-header">
+          <div class="modal-title-box">
+            <span class="modal-icon">⚡</span>
+            <div>
+              <h3>Gestion de l'Énergie & Mise en Veille</h3>
+              <p class="modal-subtitle">Contrôle du spindown, APM et Runtime PM permanent sous NixOS</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeDiskPowerModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Résumé du Disque Cible -->
+          <div class="mount-target-summary" style="margin-bottom: 18px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span class="summary-label">Disque :</span>
+              <strong id="power-modal-dev-name" style="color: var(--lavender); font-size: 14px;">/dev/sda</strong>
+              <span id="power-modal-model" style="color: var(--text); font-weight: 600;">Modèle</span>
+              <span id="power-modal-type-badge" class="badge badge-accent">NVMe SSD</span>
+              <span id="power-modal-temp-badge" class="badge badge-warning" style="display: none;">🌡️ --°C</span>
+              <span id="power-modal-state-badge" class="badge badge-success">Actif</span>
+            </div>
+          </div>
+
+          <!-- Interrupteur Principal 1-Clic : Empêcher la mise en veille -->
+          <div class="power-master-toggle-card">
+            <div class="power-master-toggle-left">
+              <div class="power-toggle-icon">🛡️</div>
+              <div>
+                <strong style="color: var(--text); font-size: 14.5px; display: block;">Mode Haute Disponibilité (Zéro Veille)</strong>
+                <span style="color: var(--subtext0); font-size: 12.5px;">Garde le disque constamment éveillé et prêt. Élimine les latences d'accès de 3-8 secondes et préserve la mécanique des têtes.</span>
+              </div>
+            </div>
+            <label class="switch-toggle">
+              <input type="checkbox" id="power-modal-disable-sleep-toggle" onchange="onPowerModalToggleChange(this.checked)">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <!-- Sélection des Profils d'Énergie -->
+          <div class="form-group" style="margin-top: 18px;">
+            <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Profils d'alimentation prédéfinis :</span>
+              <span id="power-current-mode-label" class="badge badge-accent">Personnalisé</span>
+            </label>
+            <div class="power-presets-grid">
+              <div class="power-preset-card active" id="power-preset-performance" onclick="selectPowerPreset('performance')">
+                <div class="preset-badge-tag">Recommandé</div>
+                <div class="preset-icon">🚀</div>
+                <strong>Performance & NAS</strong>
+                <small>Veille désactivée (0 min) & APM 255. Zéro latence, parfait pour jeux, streaming et partages Samba.</small>
+              </div>
+
+              <div class="power-preset-card" id="power-preset-balanced" onclick="selectPowerPreset('balanced')">
+                <div class="preset-icon">⚖️</div>
+                <strong>Équilibré</strong>
+                <small>Veille après 20 min d'inactivité & APM 128. Bon compromis entre silence et consommation électrique.</small>
+              </div>
+
+              <div class="power-preset-card" id="power-preset-powersave" onclick="selectPowerPreset('powersave')">
+                <div class="preset-icon">🍃</div>
+                <strong>Éco d'Énergie</strong>
+                <small>Veille rapide après 10 min & APM 127. Idéal pour disques de sauvegarde occasionnels.</small>
+              </div>
+
+              <div class="power-preset-card" id="power-preset-custom" onclick="selectPowerPreset('custom')">
+                <div class="preset-icon">🛠️</div>
+                <strong>Personnalisé</strong>
+                <small>Ajustement manuel minutieux du délai de spindown, niveau APM et gestion du bus noyau.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Paramètres Détaillés (Ajustables en Custom) -->
+          <div id="power-custom-fields" class="power-custom-box" style="margin-top: 16px;">
+            <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+              <div class="form-group">
+                <label class="form-label" for="power-timeout-select">Délai d'inactivité avant veille :</label>
+                <select id="power-timeout-select" class="form-input" onchange="onCustomFieldChange()">
+                  <option value="0">🛑 Désactivé (Toujours actif / Pas de veille)</option>
+                  <option value="5">⏱️ 5 minutes</option>
+                  <option value="10">⏱️ 10 minutes</option>
+                  <option value="15">⏱️ 15 minutes</option>
+                  <option value="20" selected>⏱️ 20 minutes (Standard)</option>
+                  <option value="30">⏱️ 30 minutes</option>
+                  <option value="60">⏱️ 1 heure</option>
+                  <option value="120">⏱️ 2 heures</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="power-apm-select">Gestion Avancée d'Énergie (APM) :</label>
+                <select id="power-apm-select" class="form-input" onchange="onCustomFieldChange()">
+                  <option value="255">🚀 255 - Désactivé / Performance Max (Zéro parcage)</option>
+                  <option value="254">⚡ 254 - Max Performance (Sans mise en veille)</option>
+                  <option value="128" selected>⚖️ 128 - Équilibré (Pas de mise en veille forcée)</option>
+                  <option value="127">🍃 127 - Économique (Veille autorisée)</option>
+                  <option value="1">🌱 1 - Économie Maximale (Veille agressive)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 12px;">
+              <label class="form-label" for="power-kernel-pm-select">Runtime PM du Noyau Linux (/sys/block/.../power/control) :</label>
+              <select id="power-kernel-pm-select" class="form-input" onchange="onCustomFieldChange()">
+                <option value="on">🔒 "on" — Forcer l'éveil permanent du contrôleur bus (Anti-autosuspend)</option>
+                <option value="auto">🔄 "auto" — Laisser le noyau gérer la suspension à chaud</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Diagnostics & Tests Manuels -->
+          <div class="power-test-card" style="margin-top: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <strong style="color: var(--text); font-size: 13px; display: block;">🧪 Diagnostic & Tests Manuels en Direct</strong>
+                <span style="color: var(--subtext0); font-size: 12px;">Vérifiez immédiatement la réaction mécanique du disque (spindown / wake).</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="btn btn-sm btn-outline" onclick="triggerTestDiskStandby()" title="Envoie une commande immédiate de mise en veille">
+                  <span>🌙</span> Tester mise en veille
+                </button>
+                <button type="button" class="btn btn-sm btn-outline" onclick="triggerWakeDisk()" title="Force le disque à se réveiller et tourner">
+                  <span>⚡</span> Réveiller
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alerte de Persistance Système -->
+          <div class="info-alert" style="margin-top: 16px;">
+            <span style="font-size: 20px;">💾</span>
+            <div>
+              <strong>Persistance Permanente Garantie</strong> : La configuration est stockée dans <code>/etc/udisks2/</code> et réappliquée automatiquement par le système Linux au démarrage, lors des reconnexions et après chaque veille.
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <button class="btn btn-danger-outline" onclick="triggerResetDiskPowerSettings()" title="Réinitialiser les réglages aux valeurs par défaut">
+            <span>🔄</span> Réinitialiser
+          </button>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-outline" onclick="closeDiskPowerModal()">Annuler</button>
+            <button class="btn btn-primary" onclick="saveDiskPowerSettings()">
+              <span>💾</span> Enregistrer & Appliquer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal de Montage Permanent -->
     <div id="mount-modal" class="modal-overlay hidden">
       <div class="modal-card">

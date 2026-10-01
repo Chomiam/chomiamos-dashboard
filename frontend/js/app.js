@@ -1261,6 +1261,18 @@ async function loadStorageDevices(manualRefresh = false) {
     const devices = await invoke("get_storage_devices");
     currentStorageDevices = devices || [];
     renderStorageDevices(currentStorageDevices);
+
+    const globalBtn = document.getElementById("btn-global-sleep-mode");
+    if (globalBtn && currentStorageDevices.length > 0) {
+      const allDisabled = currentStorageDevices.every(d => d.power?.is_sleep_disabled);
+      if (allDisabled) {
+        globalBtn.innerHTML = `<span>🟢</span> Zéro Veille (Actif partout)`;
+        globalBtn.className = "btn btn-success";
+      } else {
+        globalBtn.innerHTML = `<span>⚡</span> Zéro Veille (Tous)`;
+        globalBtn.className = "btn btn-outline";
+      }
+    }
   } catch (err) {
     console.error("Erreur lors de la récupération des disques :", err);
     container.innerHTML = `
@@ -1422,18 +1434,68 @@ function renderStorageDevices(devices) {
     const devPath = escapeHtml(dev.path);
     const devSize = escapeHtml(dev.size);
 
+    const isRotational = !!dev.power?.is_rotational;
+    const mediaType = dev.power?.media_type || (isRotational ? "HDD" : "SSD");
+    const isSleepDisabled = !!dev.power?.is_sleep_disabled;
+    const driveId = dev.power?.drive_id || "";
+    const jsonDriveId = driveId ? `'${escapeHtml(driveId)}'` : "null";
+    const jsonDev = JSON.stringify(dev).replace(/"/g, '&quot;');
+
+    let diskIcon = "💽";
+    let mediaBadge = "";
+    if (mediaType.includes("NVMe")) {
+      diskIcon = "⚡";
+      mediaBadge = `<span class="badge badge-accent" title="SSD NVMe ultra-rapide">⚡ NVMe SSD</span>`;
+    } else if (isRotational) {
+      diskIcon = "💽";
+      const rpmText = dev.power?.rotation_rate ? ` • ${dev.power.rotation_rate} RPM` : "";
+      mediaBadge = `<span class="badge badge-warning" title="Disque dur mécanique rotatif">💽 HDD${rpmText}</span>`;
+    } else {
+      diskIcon = "💿";
+      mediaBadge = `<span class="badge badge-accent" title="SSD SATA Solid State">💿 SATA SSD</span>`;
+    }
+
+    let tempBadge = "";
+    if (dev.power?.temperature_c != null) {
+      tempBadge = `<span class="badge badge-surface" title="Température S.M.A.R.T. du disque">🌡️ ${dev.power.temperature_c}°C</span>`;
+    }
+
+    let sleepBadge = "";
+    if (isSleepDisabled) {
+      sleepBadge = `<span class="badge badge-success" title="Mise en veille automatique désactivée : disque constamment en éveil">🟢 Toujours actif</span>`;
+    } else if (dev.power?.standby_timeout_minutes) {
+      sleepBadge = `<span class="badge badge-muted" title="Mise en veille après inactivité">🌙 Veille : ${dev.power.standby_timeout_minutes} min</span>`;
+    } else {
+      sleepBadge = `<span class="badge badge-muted" title="Gestion automatique du système">🌙 Veille : Auto</span>`;
+    }
+
     html += `
       <div class="disk-card">
         <div class="disk-card-header">
           <div class="disk-header-left">
-            <span class="disk-icon">💽</span>
+            <span class="disk-icon">${diskIcon}</span>
             <div>
               <div class="disk-title-row">
                 <h3 class="disk-name">${devName}</h3>
                 <span class="disk-path">${devPath}</span>
+                ${mediaBadge}
+                ${tempBadge}
+                ${sleepBadge}
               </div>
               <p class="disk-model">${modelText} — <strong style="color: var(--text);">${devSize}</strong></p>
             </div>
+          </div>
+          <div class="disk-header-right">
+            <div class="disk-power-quick-toggle" title="Empêcher ou autoriser la mise en veille automatique">
+              <span class="quick-toggle-text">⚡ Anti-veille</span>
+              <label class="switch-toggle switch-sm">
+                <input type="checkbox" ${isSleepDisabled ? "checked" : ""} onchange="toggleDiskSleep('${devName}', ${jsonDriveId}, this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <button class="btn btn-sm btn-outline" onclick="openDiskPowerModal(${jsonDev})" title="Configurer le délai de mise en veille, l'APM et tester le moteur">
+              <span>⚙️</span> Énergie & Veille
+            </button>
           </div>
         </div>
 
@@ -1844,6 +1906,281 @@ async function openFileManager(path) {
   }
 }
 
+// ==========================================================================
+// 6b. Storage Sleep & Power Management Controller
+// ==========================================================================
+
+let selectedPowerDev = null;
+let currentPowerPreset = "performance";
+
+async function toggleDiskSleep(devName, driveId, disableSleep) {
+  try {
+    showToast(disableSleep ? `Désactivation de la mise en veille pour /dev/${devName}...` : `Réactivation de la gestion de veille pour /dev/${devName}...`, "info");
+    const res = await invoke("set_disk_sleep_settings", {
+      deviceName: devName,
+      driveId: driveId || null,
+      disableSleep: disableSleep,
+      standbyTimeoutMinutes: disableSleep ? 0 : 20,
+      apmLevel: disableSleep ? 255 : 128,
+    });
+    showToast(res || (disableSleep ? "Veille automatique désactivée avec succès !" : "Gestion de veille réactivée !"), "success");
+    await loadStorageDevices();
+  } catch (err) {
+    console.error("Erreur toggleDiskSleep :", err);
+    showToast("Erreur lors du changement de veille : " + err, "error");
+    await loadStorageDevices();
+  }
+}
+
+function openDiskPowerModal(dev) {
+  selectedPowerDev = dev;
+  const modal = document.getElementById("disk-power-modal");
+  if (!modal) return;
+
+  const devNameEl = document.getElementById("power-modal-dev-name");
+  const modelEl = document.getElementById("power-modal-model");
+  const typeBadge = document.getElementById("power-modal-type-badge");
+  const tempBadge = document.getElementById("power-modal-temp-badge");
+  const stateBadge = document.getElementById("power-modal-state-badge");
+  const toggleInput = document.getElementById("power-modal-disable-sleep-toggle");
+  const timeoutSelect = document.getElementById("power-timeout-select");
+  const apmSelect = document.getElementById("power-apm-select");
+  const kernelPmSelect = document.getElementById("power-kernel-pm-select");
+
+  if (devNameEl) devNameEl.textContent = dev.path || `/dev/${dev.name}`;
+  if (modelEl) modelEl.textContent = dev.model || "Disque de stockage";
+
+  const isRotational = !!dev.power?.is_rotational;
+  const mediaType = dev.power?.media_type || (isRotational ? "HDD" : "SSD");
+  if (typeBadge) {
+    typeBadge.textContent = mediaType + (dev.power?.rotation_rate ? ` (${dev.power.rotation_rate} RPM)` : "");
+    typeBadge.className = isRotational ? "badge badge-warning" : "badge badge-accent";
+  }
+
+  if (tempBadge) {
+    if (dev.power?.temperature_c != null) {
+      tempBadge.textContent = `🌡️ ${dev.power.temperature_c}°C`;
+      tempBadge.style.display = "inline-flex";
+    } else {
+      tempBadge.style.display = "none";
+    }
+  }
+
+  const isSleepDisabled = !!dev.power?.is_sleep_disabled;
+  if (stateBadge) {
+    if (isSleepDisabled) {
+      stateBadge.textContent = "🟢 Veille désactivée (Toujours actif)";
+      stateBadge.className = "badge badge-success";
+    } else if (dev.power?.standby_timeout_minutes) {
+      stateBadge.textContent = `🌙 Veille programmée (${dev.power.standby_timeout_minutes} min)`;
+      stateBadge.className = "badge badge-warning";
+    } else {
+      stateBadge.textContent = "🔄 Veille automatique (Système)";
+      stateBadge.className = "badge badge-muted";
+    }
+  }
+
+  if (toggleInput) {
+    toggleInput.checked = isSleepDisabled;
+  }
+
+  const currentTimeout = dev.power?.standby_timeout_minutes ?? (isSleepDisabled ? 0 : 20);
+  const currentApm = dev.power?.apm_level ?? (isSleepDisabled ? 255 : 128);
+  const currentKernelPm = dev.power?.kernel_pm_control ?? (isSleepDisabled ? "on" : "auto");
+
+  if (timeoutSelect) timeoutSelect.value = String(currentTimeout);
+  if (apmSelect) apmSelect.value = String(currentApm);
+  if (kernelPmSelect) kernelPmSelect.value = currentKernelPm;
+
+  if (isSleepDisabled || (currentTimeout === 0 && currentApm >= 254)) {
+    selectPowerPreset("performance");
+  } else if (currentTimeout === 20 && currentApm === 128) {
+    selectPowerPreset("balanced");
+  } else if (currentTimeout === 10 && currentApm === 127) {
+    selectPowerPreset("powersave");
+  } else {
+    selectPowerPreset("custom");
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeDiskPowerModal() {
+  const modal = document.getElementById("disk-power-modal");
+  if (modal) modal.classList.add("hidden");
+  selectedPowerDev = null;
+}
+
+function selectPowerPreset(preset) {
+  currentPowerPreset = preset;
+  ["performance", "balanced", "powersave", "custom"].forEach(p => {
+    const card = document.getElementById(`power-preset-${p}`);
+    if (card) {
+      if (p === preset) card.classList.add("active");
+      else card.classList.remove("active");
+    }
+  });
+
+  const modeLabel = document.getElementById("power-current-mode-label");
+  const toggleInput = document.getElementById("power-modal-disable-sleep-toggle");
+  const timeoutSelect = document.getElementById("power-timeout-select");
+  const apmSelect = document.getElementById("power-apm-select");
+  const kernelPmSelect = document.getElementById("power-kernel-pm-select");
+
+  if (preset === "performance") {
+    if (modeLabel) { modeLabel.textContent = "🚀 Performance & NAS"; modeLabel.className = "badge badge-success"; }
+    if (toggleInput) toggleInput.checked = true;
+    if (timeoutSelect) timeoutSelect.value = "0";
+    if (apmSelect) apmSelect.value = "255";
+    if (kernelPmSelect) kernelPmSelect.value = "on";
+  } else if (preset === "balanced") {
+    if (modeLabel) { modeLabel.textContent = "⚖️ Équilibré (20 min)"; modeLabel.className = "badge badge-accent"; }
+    if (toggleInput) toggleInput.checked = false;
+    if (timeoutSelect) timeoutSelect.value = "20";
+    if (apmSelect) apmSelect.value = "128";
+    if (kernelPmSelect) kernelPmSelect.value = "auto";
+  } else if (preset === "powersave") {
+    if (modeLabel) { modeLabel.textContent = "🍃 Éco d'Énergie (10 min)"; modeLabel.className = "badge badge-warning"; }
+    if (toggleInput) toggleInput.checked = false;
+    if (timeoutSelect) timeoutSelect.value = "10";
+    if (apmSelect) apmSelect.value = "127";
+    if (kernelPmSelect) kernelPmSelect.value = "auto";
+  } else {
+    if (modeLabel) { modeLabel.textContent = "🛠️ Manuel / Personnalisé"; modeLabel.className = "badge badge-muted"; }
+  }
+}
+
+function onPowerModalToggleChange(checked) {
+  if (checked) {
+    selectPowerPreset("performance");
+  } else {
+    selectPowerPreset("balanced");
+  }
+}
+
+function onCustomFieldChange() {
+  const timeoutSelect = document.getElementById("power-timeout-select");
+  const apmSelect = document.getElementById("power-apm-select");
+  const toggleInput = document.getElementById("power-modal-disable-sleep-toggle");
+
+  const tVal = timeoutSelect ? parseInt(timeoutSelect.value, 10) : 20;
+  const aVal = apmSelect ? parseInt(apmSelect.value, 10) : 128;
+
+  if (tVal === 0 && aVal >= 254) {
+    if (toggleInput) toggleInput.checked = true;
+    selectPowerPreset("performance");
+  } else if (tVal === 20 && aVal === 128) {
+    if (toggleInput) toggleInput.checked = false;
+    selectPowerPreset("balanced");
+  } else if (tVal === 10 && aVal === 127) {
+    if (toggleInput) toggleInput.checked = false;
+    selectPowerPreset("powersave");
+  } else {
+    if (toggleInput) toggleInput.checked = (tVal === 0);
+    selectPowerPreset("custom");
+  }
+}
+
+async function saveDiskPowerSettings() {
+  if (!selectedPowerDev) return;
+  const toggleInput = document.getElementById("power-modal-disable-sleep-toggle");
+  const timeoutSelect = document.getElementById("power-timeout-select");
+  const apmSelect = document.getElementById("power-apm-select");
+
+  const disableSleep = !!toggleInput?.checked;
+  const timeoutMins = timeoutSelect ? parseInt(timeoutSelect.value, 10) : 20;
+  const apmVal = apmSelect ? parseInt(apmSelect.value, 10) : 128;
+
+  try {
+    showToast(`Application des paramètres d'énergie pour /dev/${selectedPowerDev.name}...`, "info");
+    const res = await invoke("set_disk_sleep_settings", {
+      deviceName: selectedPowerDev.name,
+      driveId: selectedPowerDev.power?.drive_id || null,
+      disableSleep: disableSleep,
+      standbyTimeoutMinutes: disableSleep ? 0 : timeoutMins,
+      apmLevel: disableSleep ? 255 : apmVal,
+    });
+    showToast(res || "Paramètres d'énergie enregistrés et appliqués !", "success");
+    closeDiskPowerModal();
+    await loadStorageDevices();
+  } catch (err) {
+    console.error("Erreur saveDiskPowerSettings :", err);
+    showToast("Échec de l'application : " + err, "error");
+  }
+}
+
+async function triggerResetDiskPowerSettings() {
+  if (!selectedPowerDev) return;
+  try {
+    showToast(`Réinitialisation des paramètres d'énergie pour /dev/${selectedPowerDev.name}...`, "info");
+    const res = await invoke("reset_disk_sleep_settings", {
+      deviceName: selectedPowerDev.name,
+      driveId: selectedPowerDev.power?.drive_id || null,
+    });
+    showToast(res || "Paramètres réinitialisés avec succès !", "success");
+    closeDiskPowerModal();
+    await loadStorageDevices();
+  } catch (err) {
+    showToast("Erreur de réinitialisation : " + err, "error");
+  }
+}
+
+async function triggerTestDiskStandby() {
+  if (!selectedPowerDev) return;
+  try {
+    showToast(`Envoi de la commande de mise en veille à /dev/${selectedPowerDev.name}...`, "info");
+    const res = await invoke("test_disk_standby", { deviceName: selectedPowerDev.name });
+    showToast(res || "Commande de mise en veille envoyée !", "info");
+  } catch (err) {
+    showToast("Erreur test mise en veille : " + err, "error");
+  }
+}
+
+async function triggerWakeDisk() {
+  if (!selectedPowerDev) return;
+  try {
+    showToast(`Envoi de la commande de réveil à /dev/${selectedPowerDev.name}...`, "info");
+    const res = await invoke("wake_disk", { deviceName: selectedPowerDev.name });
+    showToast(res || "Disque réveillé avec succès !", "success");
+  } catch (err) {
+    showToast("Erreur réveil disque : " + err, "error");
+  }
+}
+
+async function promptAllDisksSleepModal() {
+  const allDisabled = currentStorageDevices.length > 0 && currentStorageDevices.every(d => d.power?.is_sleep_disabled);
+  const targetAction = !allDisabled;
+
+  const confirmed = await showConfirmModal({
+    title: targetAction ? "Désactiver la mise en veille sur TOUS les disques ?" : "Réactiver la gestion normale de veille sur tous les disques ?",
+    subtitle: targetAction ? "Mode Haute Disponibilité & Performance Maximale" : "Retour à la veille automatique standard",
+    icon: "⚡",
+    message: targetAction
+      ? "Souhaitez-vous désactiver la mise en veille automatique (spindown) sur l'intégralité des disques de stockage détectés ? Vos disques resteront actifs en permanence, éliminant tout temps d'attente d'accès et protégeant la mécanique des têtes de lecture."
+      : "Souhaitez-vous réactiver la gestion automatique d'énergie et de mise en veille pour l'ensemble de vos disques de stockage ?",
+    details: `Disques concernés (${currentStorageDevices.length}) :
+${currentStorageDevices.map(d => `• /dev/${d.name} (${d.model || 'Inconnu'}) - ${d.size}`).join('\n')}
+
+Les paramètres sont persistés de manière permanente dans /etc/udisks2/.`,
+    confirmText: targetAction ? "Zéro Veille (Toujours Actif)" : "Réactiver la veille",
+    confirmIcon: targetAction ? "⚡" : "🔄",
+    confirmClass: "btn-primary",
+    cancelText: "Annuler",
+    isDanger: false,
+  });
+
+  if (confirmed) {
+    try {
+      showToast(targetAction ? "Désactivation de la mise en veille globale..." : "Réactivation de la veille globale...", "info");
+      const res = await invoke("set_all_disks_sleep_settings", { disableSleep: targetAction });
+      showToast(res || "Configuration globale appliquée avec succès !", "success");
+      await loadStorageDevices();
+    } catch (err) {
+      showToast("Erreur lors de la configuration globale : " + err, "error");
+    }
+  }
+}
+
 // Window bindings for HTML event handlers
 window.loadStorageDevices = loadStorageDevices;
 window.openMountModal = openMountModal;
@@ -1860,6 +2197,18 @@ window.submitFormat = submitFormat;
 window.openFileManager = openFileManager;
 window.checkMissingPersistentMounts = checkMissingPersistentMounts;
 window.promptRemoveMissingMountsModal = promptRemoveMissingMountsModal;
+
+window.toggleDiskSleep = toggleDiskSleep;
+window.openDiskPowerModal = openDiskPowerModal;
+window.closeDiskPowerModal = closeDiskPowerModal;
+window.selectPowerPreset = selectPowerPreset;
+window.onPowerModalToggleChange = onPowerModalToggleChange;
+window.onCustomFieldChange = onCustomFieldChange;
+window.saveDiskPowerSettings = saveDiskPowerSettings;
+window.triggerResetDiskPowerSettings = triggerResetDiskPowerSettings;
+window.triggerTestDiskStandby = triggerTestDiskStandby;
+window.triggerWakeDisk = triggerWakeDisk;
+window.promptAllDisksSleepModal = promptAllDisksSleepModal;
 
 // ==========================================================================
 // 3b. Generations Selection & Management

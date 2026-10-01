@@ -21,6 +21,21 @@ pub struct PartitionInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiskPowerConfig {
+    pub drive_id: Option<String>,
+    pub is_rotational: bool,
+    pub media_type: String, // "NVMe SSD", "SATA SSD", "HDD", "SSD"
+    pub rotation_rate: Option<u32>, // 0 pour SSD, 5400/7200 pour HDD
+    pub standby_timeout_minutes: Option<u32>, // 0 = désactivé, 10, 20, 30, etc.
+    pub standby_timeout_raw: Option<u32>,
+    pub apm_level: Option<u32>, // 1..255 (255 = désactivé/max perf)
+    pub is_sleep_disabled: bool,
+    pub kernel_pm_control: Option<String>, // "on", "auto"
+    pub temperature_c: Option<i32>,
+    pub power_state: String, // "active", "standby", "unknown"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiskDevice {
     pub name: String,
     pub path: String,
@@ -28,6 +43,7 @@ pub struct DiskDevice {
     pub size: String,
     pub size_bytes: u64,
     pub partitions: Vec<PartitionInfo>,
+    pub power: DiskPowerConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,6 +248,211 @@ fn parse_size_bytes(val: &Option<serde_json::Value>) -> u64 {
     }
 }
 
+pub fn minutes_to_standby_timeout(minutes: u32) -> u32 {
+    if minutes == 0 {
+        0
+    } else if minutes <= 20 {
+        ((minutes * 60) / 5).clamp(1, 240)
+    } else if minutes <= 330 {
+        240 + ((minutes + 15) / 30).clamp(1, 11)
+    } else {
+        244
+    }
+}
+
+pub fn standby_timeout_to_minutes(val: u32) -> Option<u32> {
+    match val {
+        0 => Some(0),
+        1..=240 => Some((val * 5) / 60),
+        241..=251 => Some((val - 240) * 30),
+        252 => Some(21),
+        253 => Some(480),
+        255 => Some(21),
+        _ => None,
+    }
+}
+
+pub fn get_disk_power_info(dev_name: &str) -> DiskPowerConfig {
+    let is_rotational = fs::read_to_string(format!("/sys/block/{}/queue/rotational", dev_name))
+        .map(|s| s.trim() == "1")
+        .unwrap_or(false);
+
+    let media_type = if dev_name.starts_with("nvme") {
+        "NVMe SSD".to_string()
+    } else if is_rotational {
+        "HDD".to_string()
+    } else if dev_name.starts_with("sd") || dev_name.starts_with("hd") {
+        "SATA SSD".to_string()
+    } else {
+        "SSD".to_string()
+    };
+
+    let kernel_pm_control = fs::read_to_string(format!("/sys/block/{}/device/power/control", dev_name))
+        .or_else(|_| fs::read_to_string(format!("/sys/block/{}/power/control", dev_name)))
+        .map(|s| s.trim().to_string())
+        .ok();
+
+    let mut drive_id = None;
+    let mut drive_obj_name = None;
+    let mut rotation_rate = if is_rotational { Some(7200) } else { Some(0) };
+    let mut standby_timeout_raw = None;
+    let mut apm_level = None;
+    let mut temperature_c = None;
+
+    // 1. Interroger udisksctl pour le block device
+    if let Ok(output) = Command::new("udisksctl")
+        .args(["info", "-b", &format!("/dev/{}", dev_name)])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("Drive:") {
+                    let parts: Vec<&str> = trimmed.split('\'').collect();
+                    if parts.len() >= 2 {
+                        let path = parts[1];
+                        if let Some(obj_name) = path.strip_prefix("/org/freedesktop/UDisks2/drives/") {
+                            drive_obj_name = Some(obj_name.to_string());
+                        }
+                    }
+                } else if trimmed.starts_with("SmartTemperature:") {
+                    if let Some(val_str) = trimmed.strip_prefix("SmartTemperature:") {
+                        if let Ok(kelvin) = val_str.trim().parse::<i32>() {
+                            if kelvin > 200 && kelvin < 400 {
+                                temperature_c = Some(kelvin - 273);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Si un objet Drive a été trouvé, interroger udisksctl info -d <drive_obj_name>
+    if let Some(ref obj_name) = drive_obj_name {
+        if let Ok(output) = Command::new("udisksctl")
+            .args(["info", "-d", obj_name])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("Id:") {
+                        let id_val = trimmed.strip_prefix("Id:").unwrap_or("").trim();
+                        if !id_val.is_empty() {
+                            drive_id = Some(id_val.to_string());
+                        }
+                    } else if trimmed.starts_with("RotationRate:") {
+                        if let Some(val_str) = trimmed.strip_prefix("RotationRate:") {
+                            if let Ok(r) = val_str.trim().parse::<u32>() {
+                                rotation_rate = Some(r);
+                            }
+                        }
+                    } else if trimmed.starts_with("SmartTemperature:") && temperature_c.is_none() {
+                        if let Some(val_str) = trimmed.strip_prefix("SmartTemperature:") {
+                            if let Ok(kelvin) = val_str.trim().parse::<i32>() {
+                                if kelvin > 200 && kelvin < 400 {
+                                    temperature_c = Some(kelvin - 273);
+                                }
+                            }
+                        }
+                    } else if trimmed.starts_with("Configuration:") {
+                        if let Some(pos) = trimmed.find("'ata-pm-standby': <") {
+                            let sub = &trimmed[pos + "'ata-pm-standby': <".len()..];
+                            if let Some(end) = sub.find('>') {
+                                if let Ok(val) = sub[..end].trim().parse::<u32>() {
+                                    standby_timeout_raw = Some(val);
+                                }
+                            }
+                        }
+                        if let Some(pos) = trimmed.find("'ata-apm-level': <") {
+                            let sub = &trimmed[pos + "'ata-apm-level': <".len()..];
+                            if let Some(end) = sub.find('>') {
+                                if let Ok(val) = sub[..end].trim().parse::<u32>() {
+                                    apm_level = Some(val);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Fallback drive_id via udevadm si non trouvé
+    if drive_id.is_none() {
+        if let Ok(output) = Command::new("udevadm")
+            .args(["info", "--query=property", &format!("--name=/dev/{}", dev_name)])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some(serial) = line.strip_prefix("ID_SERIAL=") {
+                        drive_id = Some(serial.trim().replace('_', "-"));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Vérifier si un fichier .conf existe dans /etc/udisks2/
+    if let Some(ref id) = drive_id {
+        let conf_path = format!("/etc/udisks2/{}.conf", id);
+        if let Ok(content) = fs::read_to_string(&conf_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if let Some(val_str) = trimmed.strip_prefix("StandbyTimeout=") {
+                    if let Ok(val) = val_str.trim().parse::<u32>() {
+                        standby_timeout_raw = Some(val);
+                    }
+                } else if let Some(val_str) = trimmed.strip_prefix("APMLevel=") {
+                    if let Ok(val) = val_str.trim().parse::<u32>() {
+                        apm_level = Some(val);
+                    }
+                }
+            }
+        }
+    }
+
+    let standby_timeout_minutes = standby_timeout_raw.and_then(standby_timeout_to_minutes);
+
+    let is_sleep_disabled = match (standby_timeout_raw, apm_level) {
+        (Some(0), Some(apm)) if apm >= 254 => true,
+        (Some(0), _) => true,
+        _ => {
+            if kernel_pm_control.as_deref() == Some("on") && standby_timeout_raw == Some(0) {
+                true
+            } else {
+                false
+            }
+        }
+    };
+
+    let power_state = if is_sleep_disabled {
+        "active".to_string()
+    } else {
+        "auto".to_string()
+    };
+
+    DiskPowerConfig {
+        drive_id,
+        is_rotational,
+        media_type,
+        rotation_rate,
+        standby_timeout_minutes,
+        standby_timeout_raw,
+        apm_level,
+        is_sleep_disabled,
+        kernel_pm_control,
+        temperature_c,
+        power_state,
+    }
+}
+
 pub fn list_storage_devices() -> Result<Vec<DiskDevice>, String> {
     let output = Command::new("lsblk")
         .args([
@@ -368,6 +589,8 @@ pub fn list_storage_devices() -> Result<Vec<DiskDevice>, String> {
             }
         }
 
+        let power = get_disk_power_info(&b.name);
+
         devices.push(DiskDevice {
             name: b.name.clone(),
             path: format!("/dev/{}", b.name),
@@ -375,6 +598,7 @@ pub fn list_storage_devices() -> Result<Vec<DiskDevice>, String> {
             size: format_bytes(disk_size_bytes),
             size_bytes: disk_size_bytes,
             partitions,
+            power,
         });
     }
 
@@ -638,9 +862,276 @@ pub fn remove_persistent_mount(mount_point: &str, uuid: &str) -> Result<String, 
     Ok(format!("La déclaration du point de montage '{}' a été retirée de mount.nix.", clean_mount))
 }
 
+/// Configure ou désactive la mise en veille automatique d'un disque de stockage.
+/// Écrit la configuration de manière permanente dans /etc/udisks2/<DriveId>.conf,
+/// applique le Runtime PM au niveau du noyau (/sys/block/<dev>/power/control)
+/// et applique directement la commande firmware ATA si hdparm est disponible.
+pub fn set_disk_sleep_config(
+    device_name: String,
+    drive_id: Option<String>,
+    disable_sleep: bool,
+    timeout_minutes: Option<u32>,
+    apm_level: Option<u32>,
+) -> Result<String, String> {
+    let clean_dev = device_name.trim().trim_start_matches("/dev/").to_string();
+
+    let target_drive_id = if let Some(id) = drive_id {
+        id
+    } else {
+        let power_info = get_disk_power_info(&clean_dev);
+        power_info.drive_id.unwrap_or_else(|| clean_dev.clone())
+    };
+
+    let (standby_val, apm_val, kernel_pm) = if disable_sleep {
+        (0, 255, "on")
+    } else {
+        let mins = timeout_minutes.unwrap_or(20);
+        let s_val = minutes_to_standby_timeout(mins);
+        let a_val = apm_level.unwrap_or(128);
+        (s_val, a_val, "auto")
+    };
+
+    let conf_content = format!(
+r#"[ATA]
+StandbyTimeout={}
+APMLevel={}
+"#,
+        standby_val, apm_val
+    );
+
+    let script = format!(
+r#"mkdir -p /etc/udisks2 && cat << 'EOF' > '/etc/udisks2/{id}.conf'
+{conf}EOF
+chmod 644 '/etc/udisks2/{id}.conf'
+
+if [ -f "/sys/block/{dev}/device/power/control" ]; then
+    echo "{kpm}" > "/sys/block/{dev}/device/power/control" 2>/dev/null || true
+fi
+if [ -f "/sys/block/{dev}/power/control" ]; then
+    echo "{kpm}" > "/sys/block/{dev}/power/control" 2>/dev/null || true
+fi
+
+if command -v hdparm >/dev/null 2>&1; then
+    hdparm -S {standby} -B {apm} "/dev/{dev}" 2>/dev/null || true
+fi
+"#,
+        id = target_drive_id,
+        conf = conf_content,
+        dev = clean_dev,
+        kpm = kernel_pm,
+        standby = standby_val,
+        apm = apm_val
+    );
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
+        .output()
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Échec de l'application de la gestion d'énergie : {}", err_msg.trim()));
+    }
+
+    // Notifier udisks2 via D-Bus pour recharger instantanément la configuration
+    let _ = Command::new("gdbus")
+        .args([
+            "call",
+            "--system",
+            "--dest",
+            "org.freedesktop.UDisks2",
+            "--object-path",
+            &format!("/org/freedesktop/UDisks2/drives/{}", target_drive_id.replace('-', "_")),
+            "--method",
+            "org.freedesktop.UDisks2.Drive.SetConfiguration",
+            &format!("{{'ata-pm-standby': <{}>, 'ata-apm-level': <{}>}}", standby_val, apm_val),
+            "{}",
+        ])
+        .output();
+
+    if disable_sleep {
+        Ok(format!(
+            "Mise en veille automatique DÉSACTIVÉE avec succès pour /dev/{} (Disque toujours actif et prêt sans latence).",
+            clean_dev
+        ))
+    } else {
+        let mins_desc = if standby_val == 0 {
+            "Désactivée".to_string()
+        } else {
+            format!("{} minutes", timeout_minutes.unwrap_or(20))
+        };
+        Ok(format!(
+            "Gestion de l'énergie configurée pour /dev/{} (Veille après {}, APM niveau {}).",
+            clean_dev, mins_desc, apm_val
+        ))
+    }
+}
+
+/// Réinitialise les paramètres de mise en veille d'un disque aux valeurs système par défaut.
+pub fn reset_disk_sleep_config(
+    device_name: String,
+    drive_id: Option<String>,
+) -> Result<String, String> {
+    let clean_dev = device_name.trim().trim_start_matches("/dev/").to_string();
+
+    let target_drive_id = if let Some(id) = drive_id {
+        id
+    } else {
+        let power_info = get_disk_power_info(&clean_dev);
+        power_info.drive_id.unwrap_or_else(|| clean_dev.clone())
+    };
+
+    let script = format!(
+r#"rm -f '/etc/udisks2/{id}.conf'
+if [ -f "/sys/block/{dev}/device/power/control" ]; then
+    echo "auto" > "/sys/block/{dev}/device/power/control" 2>/dev/null || true
+fi
+if [ -f "/sys/block/{dev}/power/control" ]; then
+    echo "auto" > "/sys/block/{dev}/power/control" 2>/dev/null || true
+fi
+"#,
+        id = target_drive_id,
+        dev = clean_dev
+    );
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
+        .output()
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Échec de la réinitialisation : {}", err_msg.trim()));
+    }
+
+    let _ = Command::new("gdbus")
+        .args([
+            "call",
+            "--system",
+            "--dest",
+            "org.freedesktop.UDisks2",
+            "--object-path",
+            &format!("/org/freedesktop/UDisks2/drives/{}", target_drive_id.replace('-', "_")),
+            "--method",
+            "org.freedesktop.UDisks2.Drive.SetConfiguration",
+            "{}",
+            "{}",
+        ])
+        .output();
+
+    Ok(format!("Paramètres d'énergie réinitialisés aux valeurs par défaut pour /dev/{}.", clean_dev))
+}
+
+/// Applique ou désactive la veille pour l'ensemble des disques de stockage détectés.
+pub fn set_all_disks_sleep_config(disable_sleep: bool) -> Result<String, String> {
+    let devices = list_storage_devices()?;
+    let mut modified = 0;
+
+    for dev in &devices {
+        if dev.name.starts_with("loop") || dev.name.starts_with("ram") || dev.name.starts_with("zram") {
+            continue;
+        }
+
+        let _ = set_disk_sleep_config(
+            dev.name.clone(),
+            dev.power.drive_id.clone(),
+            disable_sleep,
+            None,
+            None,
+        );
+        modified += 1;
+    }
+
+    if disable_sleep {
+        Ok(format!(
+            "Mise en veille automatique désactivée pour tous les disques ({} disques configurés en mode Toujours Actif).",
+            modified
+        ))
+    } else {
+        Ok(format!(
+            "Gestion d'énergie réinitialisée pour l'ensemble des {} disques de stockage.",
+            modified
+        ))
+    }
+}
+
+/// Teste la mise en veille mécanique immédiate d'un disque (spindown).
+pub fn test_disk_standby(device_name: String) -> Result<String, String> {
+    let clean_dev = device_name.trim().trim_start_matches("/dev/").to_string();
+    let script = format!(
+        "hdparm -y '/dev/{dev}' 2>/dev/null || smartctl -s standby,now '/dev/{dev}' 2>/dev/null || true",
+        dev = clean_dev
+    );
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
+        .output()
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Échec du test de mise en veille : {}", err_msg.trim()));
+    }
+
+    Ok(format!("Commande de mise en veille envoyée à /dev/{}.", clean_dev))
+}
+
+/// Réveille immédiatement un disque endormi en forçant une lecture de bloc de test.
+pub fn wake_disk(device_name: String) -> Result<String, String> {
+    let clean_dev = device_name.trim().trim_start_matches("/dev/").to_string();
+    let script = format!("dd if='/dev/{}' of=/dev/null count=1 bs=512 2>/dev/null || true", clean_dev);
+
+    let output = Command::new("pkexec")
+        .args(["sh", "-c", &script])
+        .output()
+        .map_err(|e| format!("Erreur d'élévation pkexec : {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Échec de la commande de réveil : {}", err_msg.trim()));
+    }
+
+    Ok(format!("Commande de réveil envoyée à /dev/{} (lecture de test effectuée).", clean_dev))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_standby_timeout_conversions() {
+        assert_eq!(minutes_to_standby_timeout(0), 0);
+        assert_eq!(standby_timeout_to_minutes(0), Some(0));
+
+        // 10 minutes -> 120 (120 * 5s = 600s = 10 min)
+        assert_eq!(minutes_to_standby_timeout(10), 120);
+        assert_eq!(standby_timeout_to_minutes(120), Some(10));
+
+        // 20 minutes -> 240
+        assert_eq!(minutes_to_standby_timeout(20), 240);
+        assert_eq!(standby_timeout_to_minutes(240), Some(20));
+
+        // 30 minutes -> 241
+        assert_eq!(minutes_to_standby_timeout(30), 241);
+        assert_eq!(standby_timeout_to_minutes(241), Some(30));
+
+        // 1 heure (60 min) -> 242
+        assert_eq!(minutes_to_standby_timeout(60), 242);
+        assert_eq!(standby_timeout_to_minutes(242), Some(60));
+
+        // 2 heures (120 min) -> 244
+        assert_eq!(minutes_to_standby_timeout(120), 244);
+        assert_eq!(standby_timeout_to_minutes(244), Some(120));
+    }
+
+    #[test]
+    fn test_list_storage_devices_with_power() {
+        let devices = list_storage_devices().expect("list_storage_devices doit réussir");
+        for dev in devices {
+            assert!(!dev.name.is_empty());
+            assert!(!dev.power.media_type.is_empty());
+        }
+    }
 
     #[test]
     fn test_generate_mount_nix_adds_gvfs_show() {

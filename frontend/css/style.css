@@ -1242,6 +1242,171 @@ body {
   color: var(--lavender);
 }
 
+/* Disk Header Right & Sleep Controls */
+.disk-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.disk-power-quick-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(17, 17, 27, 0.6);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--surface0);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.disk-power-quick-toggle:hover {
+  border-color: var(--surface2);
+  background: rgba(24, 24, 37, 0.8);
+}
+
+.quick-toggle-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--subtext0);
+  white-space: nowrap;
+}
+
+/* Small Switch Variant */
+.switch-toggle.switch-sm {
+  width: 36px;
+  height: 20px;
+}
+
+.switch-toggle.switch-sm::after {
+  width: 14px;
+  height: 14px;
+  top: 3px;
+  left: 3px;
+}
+
+.switch-toggle.switch-sm:has(input:checked)::after {
+  transform: translateX(16px);
+}
+
+/* Master Toggle Card in Modal */
+.power-master-toggle-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(166, 227, 161, 0.08), rgba(137, 180, 250, 0.08));
+  border: 1px solid rgba(166, 227, 161, 0.25);
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  transition: all var(--transition-fast);
+}
+
+.power-master-toggle-card:hover {
+  border-color: rgba(166, 227, 161, 0.5);
+  box-shadow: 0 4px 16px rgba(166, 227, 161, 0.08);
+}
+
+.power-master-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.power-toggle-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Presets Grid */
+.power-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .power-presets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.power-preset-card {
+  position: relative;
+  background: var(--mantle);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 16px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.power-preset-card:hover {
+  border-color: var(--surface2);
+  background: var(--surface0);
+  transform: translateY(-2px);
+}
+
+.power-preset-card.active {
+  border-color: var(--lavender);
+  background: rgba(180, 190, 254, 0.08);
+  box-shadow: 0 0 12px rgba(180, 190, 254, 0.15);
+}
+
+.power-preset-card .preset-icon {
+  font-size: 22px;
+  margin-bottom: 2px;
+}
+
+.power-preset-card strong {
+  font-size: 13.5px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.power-preset-card small {
+  font-size: 11px;
+  color: var(--subtext0);
+  line-height: 1.35;
+}
+
+.preset-badge-tag {
+  position: absolute;
+  top: -8px;
+  right: 10px;
+  background: var(--green);
+  color: var(--crust);
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+}
+
+/* Custom Settings Box */
+.power-custom-box {
+  background: rgba(17, 17, 27, 0.5);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 16px;
+}
+
+/* Test Card */
+.power-test-card {
+  background: rgba(24, 24, 37, 0.6);
+  border: 1px solid var(--surface0);
+  border-radius: var(--radius-md);
+  padding: 14px 18px;
+}
+
 .partitions-table-wrap {
   overflow-x: auto;
 }
